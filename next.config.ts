@@ -1,7 +1,52 @@
 import type { NextConfig } from "next";
 
+const isProd = process.env.NODE_ENV === "production";
+
+// Security headers applied to every response. The strict Content-Security
+// Policy is production-only so it doesn't interfere with the dev server's
+// hot-reload (which needs eval and websockets).
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+  },
+  ...(isProd
+    ? [
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=31536000; includeSubDomains",
+        },
+        {
+          key: "Content-Security-Policy",
+          value: [
+            "default-src 'self'",
+            // Inline scripts (theme, JSON-LD) and Google Analytics.
+            "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+            "style-src 'self' 'unsafe-inline'",
+            // Thumbnails come from many external CDNs.
+            "img-src 'self' data: https:",
+            "font-src 'self' data:",
+            "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+          ].join("; "),
+        },
+      ]
+    : []),
+];
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Produces a self-contained server bundle for easy VPS/Docker deployment.
+  output: "standalone",
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
 };
 
 export default nextConfig;

@@ -11,11 +11,17 @@ specific extractor.
 
 ## Getting started
 
-The app shells out to `bin/yt-dlp.exe` and `bin/ffmpeg.exe`, which aren't
-committed to git (they are large binaries). Fetch them once:
+The app shells out to `yt-dlp` and `ffmpeg` in `bin/`, which aren't committed
+to git (they are large, OS-specific binaries). Fetch them once:
 
 ```powershell
+# Windows
 powershell -ExecutionPolicy Bypass -File scripts/setup-bin.ps1
+```
+
+```bash
+# Linux / macOS
+bash scripts/setup-bin.sh
 ```
 
 Copy the environment template and fill it in:
@@ -32,6 +38,8 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+To put this on a public server, see [DEPLOY.md](DEPLOY.md).
 
 ## Environment variables
 

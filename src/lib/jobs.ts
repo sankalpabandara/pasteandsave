@@ -108,6 +108,7 @@ export function startJob(opts: StartJobOptions): string {
           ...EXTRACTOR_ARGS,
           "-o",
           outputTemplate,
+          "--",
           opts.url,
         ]
       : [
@@ -121,6 +122,7 @@ export function startJob(opts: StartJobOptions): string {
           ...EXTRACTOR_ARGS,
           "-o",
           outputTemplate,
+          "--",
           opts.url,
         ];
 

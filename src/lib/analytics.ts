@@ -9,6 +9,13 @@ import path from "node:path";
 const DATA_DIR = path.join(process.cwd(), "data");
 const EVENTS_FILE = path.join(DATA_DIR, "events.jsonl");
 
+// Keep the events log bounded so it can't grow without limit on a busy site.
+// When it exceeds MAX_EVENTS_BYTES we rewrite it with only the most recent
+// KEEP_EVENTS lines.
+const MAX_EVENTS_BYTES = 8 * 1024 * 1024; // ~8 MB
+const KEEP_EVENTS = 50_000;
+let appendsSinceCheck = 0;
+
 export type EventType = "pageview" | "lookup" | "download";
 
 export type AnalyticsEvent = {
@@ -27,11 +34,27 @@ function ensureDir() {
   dirReady = true;
 }
 
+async function trimIfLarge(): Promise<void> {
+  // Only stat the file every so often to avoid a syscall on every event.
+  if (appendsSinceCheck++ < 500) return;
+  appendsSinceCheck = 0;
+  try {
+    const { size } = await fsp.stat(EVENTS_FILE);
+    if (size < MAX_EVENTS_BYTES) return;
+    const raw = await fsp.readFile(EVENTS_FILE, "utf8");
+    const kept = raw.split("\n").filter(Boolean).slice(-KEEP_EVENTS);
+    await fsp.writeFile(EVENTS_FILE, kept.join("\n") + "\n", "utf8");
+  } catch {
+    // best effort
+  }
+}
+
 export async function logEvent(ev: Omit<AnalyticsEvent, "t">): Promise<void> {
   try {
     ensureDir();
     const line = JSON.stringify({ t: Date.now(), ...ev }) + "\n";
     await fsp.appendFile(EVENTS_FILE, line, "utf8");
+    await trimIfLarge();
   } catch {
     // Analytics must never break a user request.
   }
