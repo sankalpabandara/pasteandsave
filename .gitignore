@@ -30,12 +30,19 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (keep the example, ignore real secrets)
 .env*
+!.env.example
 
 # vercel
 .vercel
 
+# first-party analytics data
+/data
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# yt-dlp / ffmpeg binaries — large, fetched by scripts/setup-bin.ps1
+/bin/*.exe
