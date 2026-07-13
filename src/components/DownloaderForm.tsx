@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { detectPlatform } from "@/lib/platforms";
+import { useAdGate } from "@/components/ads/AdProvider";
 
 type FormatOption = {
   formatId: string;
@@ -66,6 +67,7 @@ export default function DownloaderForm({
   const [result, setResult] = useState<InfoResult | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
   const sourcesRef = useRef<Record<string, EventSource>>({});
+  const { gate } = useAdGate();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -74,12 +76,16 @@ export default function DownloaderForm({
     setError(null);
     setResult(null);
     setJobs({});
+    // Kick off the lookup and show the ad gate at the same time, so the ad
+    // overlaps the existing wait instead of adding delay.
+    const infoPromise = fetch("/api/info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: url.trim() }),
+    });
     try {
-      const res = await fetch("/api/info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
-      });
+      await gate();
+      const res = await infoPromise;
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Something went wrong.");
@@ -161,20 +167,26 @@ export default function DownloaderForm({
   }
 
   function downloadFormat(f: FormatOption) {
-    startJob(f.formatId, {
-      url: url.trim(),
-      mode: "video",
-      formatId: f.formatId,
-      title: result?.title ?? "download",
-    });
+    // Gate resolves instantly if the interstitial was shown recently, so this
+    // rarely fires a second ad right after the lookup gate.
+    gate().then(() =>
+      startJob(f.formatId, {
+        url: url.trim(),
+        mode: "video",
+        formatId: f.formatId,
+        title: result?.title ?? "download",
+      }),
+    );
   }
 
   function downloadAudio() {
-    startJob("__audio__", {
-      url: url.trim(),
-      mode: "audio",
-      title: result?.title ?? "download",
-    });
+    gate().then(() =>
+      startJob("__audio__", {
+        url: url.trim(),
+        mode: "audio",
+        title: result?.title ?? "download",
+      }),
+    );
   }
 
   return (

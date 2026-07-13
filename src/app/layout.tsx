@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import ThemeScript from "@/components/ThemeScript";
 import TermsGate from "@/components/TermsGate";
 import Analytics from "@/components/Analytics";
+import { AdProvider } from "@/components/ads/AdProvider";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -61,7 +62,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-white dark:bg-neutral-950">
         <ThemeScript />
-        {children}
+        <AdProvider>{children}</AdProvider>
         <TermsGate />
         <Analytics />
       </body>

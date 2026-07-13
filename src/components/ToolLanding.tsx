@@ -3,6 +3,7 @@ import DownloaderForm from "@/components/DownloaderForm";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
+import AdSlot from "@/components/ads/AdSlot";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { TOOL_PAGES, type ToolPage } from "@/lib/seo-pages";
 
@@ -78,6 +79,10 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
+        <div className="px-4 py-6">
+          <AdSlot slot="toolTop" />
+        </div>
+
         <section className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
           <h2 className="text-center text-xl font-bold sm:text-2xl dark:text-white">
             {`Why use the ${SITE_NAME} ${tool.h1}?`}
@@ -126,6 +131,10 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
+        <div className="px-4 py-8">
+          <AdSlot slot="toolMid" />
+        </div>
+
         <section id="faq" className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
           <h2 className="text-center text-xl font-bold sm:text-2xl dark:text-white">
             Frequently asked questions
@@ -165,6 +174,10 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
             ))}
           </div>
         </section>
+
+        <div className="px-4 pb-10">
+          <AdSlot slot="toolBottom" />
+        </div>
       </main>
       <Footer />
     </>

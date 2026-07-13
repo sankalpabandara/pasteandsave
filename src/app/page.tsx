@@ -6,6 +6,7 @@ import HowItWorks from "@/components/HowItWorks";
 import Faq from "@/components/Faq";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
+import AdSlot from "@/components/ads/AdSlot";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
@@ -67,8 +68,14 @@ export default function Home() {
             ))}
           </div>
         </section>
+        <div className="px-4 py-6">
+          <AdSlot slot="homeTop" />
+        </div>
         <Platforms />
         <HowItWorks />
+        <div className="px-4 py-8">
+          <AdSlot slot="homeMid" />
+        </div>
         <section className="bg-neutral-50 py-12 sm:py-16 dark:bg-neutral-900/40">
           <div className="mx-auto max-w-3xl space-y-4 px-4 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
             <h2 className="text-center text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
@@ -101,6 +108,9 @@ export default function Home() {
           </div>
         </section>
         <Faq />
+        <div className="px-4 pb-10">
+          <AdSlot slot="homeBottom" />
+        </div>
       </main>
       <Footer />
     </>
