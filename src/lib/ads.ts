@@ -31,7 +31,8 @@ export type AdPlacement = {
   height: number;
   /** Max width in px (banner shape). Full width up to this on smaller screens. */
   maxWidth: number;
-  /** Optional A-ADS size hint passed to the embed, e.g. "728x90", "300x250". */
+  /** Which A-ADS unit size to create for this slot, e.g. "728x90" or
+   *  "Adaptive". A reference for you when making units; not sent to A-ADS. */
   size?: string;
 };
 

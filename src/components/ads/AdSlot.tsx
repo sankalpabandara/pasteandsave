@@ -61,7 +61,7 @@ export default function AdSlot({
           <iframe
             title="Advertisement"
             data-aa={cfg.unitId}
-            src={`//acceptable.a-ads.com/${cfg.unitId}${cfg.size ? `?size=${cfg.size}` : ""}`}
+            src={`//acceptable.a-ads.com/${cfg.unitId}`}
             loading="lazy"
             referrerPolicy="no-referrer"
             style={{

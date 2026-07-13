@@ -30,8 +30,9 @@ const securityHeaders = [
             "img-src 'self' data: https:",
             "font-src 'self' data:",
             "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com",
-            // A-ADS banner ads are embedded as iframes.
-            "frame-src 'self' https://a-ads.com https://*.a-ads.com",
+            // A-ADS banner ads are embedded as iframes (served from
+            // acceptable.a-ads.com; aads.com is their newer domain).
+            "frame-src 'self' https://*.a-ads.com https://a-ads.com https://*.aads.com https://aads.com",
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",

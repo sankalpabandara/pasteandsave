@@ -114,7 +114,7 @@ export function AdProvider({ children }: { children: ReactNode }) {
               <iframe
                 title="Advertisement"
                 data-aa={cfg.unitId}
-                src={`//acceptable.a-ads.com/${cfg.unitId}${cfg.size ? `?size=${cfg.size}` : ""}`}
+                src={`//acceptable.a-ads.com/${cfg.unitId}`}
                 referrerPolicy="no-referrer"
                 style={{
                   border: 0,
