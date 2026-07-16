@@ -81,7 +81,7 @@ export function startJob(opts: StartJobOptions): string {
   };
 
   const id = randomUUID();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "snapgrab-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pasteandsave-"));
   const job: Job = {
     id,
     status: "starting",

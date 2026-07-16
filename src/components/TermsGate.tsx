@@ -41,7 +41,7 @@ export default function TermsGate() {
           Before you continue
         </h2>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-          SnapGrab is meant for content you have the right to download. You
+          PasteAndSave is meant for content you have the right to download. You
           are responsible for what you save and how you use it. Please read
           our{" "}
           <a href="/terms" target="_blank" className="font-medium text-violet-600 underline dark:text-violet-400">

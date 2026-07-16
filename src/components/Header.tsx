@@ -6,7 +6,7 @@ const NAV_TOOLS = [
   { label: "Instagram", href: "/instagram-video-downloader" },
   { label: "Facebook", href: "/facebook-video-downloader" },
   { label: "YouTube", href: "/youtube-video-downloader" },
-  { label: "YouTube MP3", href: "/youtube-to-mp3" },
+  { label: "MP3 Converter", href: "/video-to-mp3-converter" },
 ];
 
 export default function Header() {
@@ -15,10 +15,10 @@ export default function Header() {
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4">
         <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-extrabold dark:text-white">
           <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-sm text-white">
-            SG
+            PS
           </span>
           <span>
-            Snap<span className="text-violet-600 dark:text-violet-400">Grab</span>
+            PasteAnd<span className="text-violet-600 dark:text-violet-400">Save</span>
           </span>
         </Link>
         <nav className="flex min-w-0 gap-4 overflow-x-auto text-xs font-medium text-neutral-600 sm:gap-5 sm:text-sm dark:text-neutral-400">

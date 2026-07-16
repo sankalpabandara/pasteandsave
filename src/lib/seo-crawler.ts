@@ -97,7 +97,7 @@ async function auditPath(path: string): Promise<CrawledPage> {
   let html = "";
   try {
     const res = await fetch(url, {
-      headers: { "user-agent": "SnapGrabSEOBot/1.0" },
+      headers: { "user-agent": "PasteAndSaveSEOBot/1.0" },
       cache: "no-store",
     });
     status = res.status;

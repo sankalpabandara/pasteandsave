@@ -3,9 +3,9 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - SnapGrab Video Downloader",
+  title: "Terms of Service - PasteAndSave Video Downloader",
   description:
-    "Read the SnapGrab Terms of Service: acceptable use, your responsibilities, our copyright and DMCA policy, disclaimers, and the rules for using the video downloader.",
+    "Read the PasteAndSave Terms of Service: acceptable use, your responsibilities, our copyright and DMCA policy, disclaimers, and the rules for using the video downloader.",
 };
 
 const LAST_UPDATED = "July 11, 2026";
@@ -52,7 +52,7 @@ export default function TermsPage() {
           <p>
             These Terms of Service (&quot;Terms&quot;) form a binding
             agreement between you (&quot;you&quot; or &quot;User&quot;) and
-            SnapGrab (&quot;SnapGrab,&quot; &quot;we,&quot; &quot;us,&quot; or
+            PasteAndSave (&quot;PasteAndSave,&quot; &quot;we,&quot; &quot;us,&quot; or
             &quot;the Service&quot;). By accessing or using the Service, you
             agree to be bound by these Terms. If you do not agree, do not use
             the Service.
@@ -61,9 +61,9 @@ export default function TermsPage() {
 
         <Section title="2. What the Service Does">
           <p>
-            SnapGrab lets you paste a public link and retrieve available
+            PasteAndSave lets you paste a public link and retrieve available
             download formats for that content using third-party, open-source
-            tooling. SnapGrab does not host, store, curate, or claim any
+            tooling. PasteAndSave does not host, store, curate, or claim any
             ownership over the content you download. All content remains the
             property of its respective owners and is subject to the terms of
             the site it came from.
@@ -86,7 +86,7 @@ export default function TermsPage() {
             </li>
             <li>
               You are solely responsible for how you use any content you
-              download. SnapGrab is not responsible for, and takes no part
+              download. PasteAndSave is not responsible for, and takes no part
               in, that decision.
             </li>
             <li>
@@ -126,7 +126,7 @@ export default function TermsPage() {
 
         <Section title="5. No Affiliation">
           <p>
-            SnapGrab is an independent tool and is not affiliated with,
+            PasteAndSave is an independent tool and is not affiliated with,
             endorsed by, or sponsored by any of the third-party platforms it
             can retrieve links from. All trademarks and platform names
             referenced are the property of their respective owners.
@@ -135,7 +135,7 @@ export default function TermsPage() {
 
         <Section title="6. Copyright Complaints / Takedown Requests">
           <p>
-            SnapGrab respects the intellectual property rights of others. If
+            PasteAndSave respects the intellectual property rights of others. If
             you believe content accessible through the Service infringes
             your copyright, or that the Service itself is being used to
             facilitate infringement of your work, contact us at{" "}
@@ -187,7 +187,7 @@ export default function TermsPage() {
 
         <Section title="9. Indemnification">
           <p>
-            You agree to indemnify, defend, and hold harmless SnapGrab, its
+            You agree to indemnify, defend, and hold harmless PasteAndSave, its
             operators, and affiliates from and against any claims,
             liabilities, damages, losses, and expenses (including reasonable
             legal fees) arising out of or in any way connected with: (a) your

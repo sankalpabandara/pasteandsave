@@ -26,7 +26,7 @@ const JSON_LD = [
     operatingSystem: "Any",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
     description:
-      "Free online video downloader for TikTok, Instagram, Facebook, YouTube, X and more than 1,200 other sites. Saves HD MP4 video or MP3 audio.",
+      "Free online video downloader for TikTok, Instagram, Facebook, YouTube, X and more than 1,200 other sites. Download video from a link as MP4 or MP3.",
   },
 ];
 
@@ -48,9 +48,9 @@ export default function Home() {
               </span>
             </h1>
             <p className="mx-auto mt-4 max-w-lg text-neutral-600 dark:text-neutral-400">
-              Save videos in HD from TikTok, Instagram, Facebook, YouTube, X
-              and more than 1,200 other sites. Download MP4 video or MP3
-              audio for free, without signing up.
+              Paste a video link from TikTok, Instagram, Facebook, YouTube, X
+              or any of 1,200+ other sites and download it as MP4 or MP3.
+              Free, in HD, with no signup and no software to install.
             </p>
           </div>
           <div className="mt-8 sm:mt-10">
@@ -79,27 +79,34 @@ export default function Home() {
         <section className="bg-neutral-50 py-12 sm:py-16 dark:bg-neutral-900/40">
           <div className="mx-auto max-w-3xl space-y-4 px-4 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
             <h2 className="text-center text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
-              Download videos from any website in HD
+              Download video from a link, from any social media site
             </h2>
             <p>
-              {SITE_NAME} is an online video downloader that works with more
-              than 1,200 websites. Paste a public link from TikTok, Instagram,
-              Facebook, YouTube, X, Pinterest, Reddit, Vimeo, SoundCloud,
-              Twitch or one of the smaller platforms. The site is detected for
-              you, and every available quality shows up in a list, from small
-              SD files up to full HD 1080p. Files save as normal MP4s that
-              play on any device.
+              {SITE_NAME} is a free online video downloader that works with
+              more than 1,200 websites. Paste a public link from TikTok,
+              Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn,
+              Threads, Vimeo, SoundCloud or one of the smaller platforms. The
+              site is detected for you, so there is no menu to pick from.
+              Every available quality shows up in a list, from small SD files
+              up to full HD and, where the source offers it, 4K. Files save
+              as normal MP4s that play on any device, no separate MP4
+              downloader software needed.
             </p>
             <p>
-              If you only need the audio, each page here can extract it. One
-              button converts the video to an MP3 at the best quality the
-              source offers. People use this to save TikTok sounds, YouTube
-              music and voice clips from Reels.
+              If you only need the audio, each page here doubles as an MP3
+              downloader. One button converts the video to MP3, encoded at
+              the best bitrate the source offers, up to 320kbps. People use
+              this to save TikTok sounds, YouTube music, podcasts and voice
+              clips from Reels. There is also a dedicated{" "}
+              <Link href="/video-to-mp3-converter" className="underline hover:text-neutral-900 dark:hover:text-white">
+                video to MP3 converter
+              </Link>{" "}
+              for pasting a link straight to audio.
             </p>
             <p>
               The whole tool runs in the browser on iPhone, Android, Windows
-              and Mac. Please only download content you own or have
-              permission to use. Our{" "}
+              and Mac, with no login and no registration. Please only
+              download content you own or have permission to use. Our{" "}
               <Link href="/terms" className="underline hover:text-neutral-900 dark:hover:text-white">
                 Terms of Service
               </Link>{" "}

@@ -1,8 +1,8 @@
-# Deploying SnapGrab
+# Deploying PasteAndSave
 
 ## What kind of host you need
 
-SnapGrab is **not** a static site and **cannot run on serverless/edge**
+PasteAndSave is **not** a static site and **cannot run on serverless/edge**
 platforms (Vercel Functions, Netlify Functions, Cloudflare Workers). It needs a
 **persistent Node.js process on a Linux server** (a VPS such as Hetzner, DigitalOcean,
 Fly.io, Railway, a Docker container, etc.) because it:
@@ -17,7 +17,7 @@ Requirements: **Node.js 20+**, a Linux x86_64 server, and outbound internet.
 ## 1. Get the code and binaries
 
 ```bash
-git clone <your-repo> snapgrab && cd snapgrab
+git clone <your-repo> pasteandsave && cd pasteandsave
 npm ci
 bash scripts/setup-bin.sh      # downloads Linux yt-dlp + ffmpeg into ./bin
 ```
@@ -55,7 +55,7 @@ Keep it alive with a process manager (pick one):
 
 ```bash
 # pm2
-pm2 start npm --name snapgrab -- run start
+pm2 start npm --name pasteandsave -- run start
 
 # or a systemd unit running `npm run start` with Restart=always
 ```

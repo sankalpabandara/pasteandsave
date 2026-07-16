@@ -1,6 +1,9 @@
 // Copy for the per-platform landing pages. Written to read like a person
 // wrote it: short sentences, no em dashes, no stacked "no X, no Y, no Z"
 // constructions. Keep it that way when editing.
+//
+// Title/description length targets (checked by the SEO crawler in
+// src/lib/seo-crawler.ts): titles 30-62 chars, descriptions 110-165 chars.
 
 export type Faq = { q: string; a: string };
 
@@ -27,17 +30,20 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "tiktok-video-downloader",
     navLabel: "TikTok",
-    title: "TikTok Video Downloader - Save TikTok Videos Without Watermark",
+    title: "TikTok Video Downloader - Save Videos Without Watermark",
     description:
-      "Save TikTok videos without the watermark in HD. Paste the link and download MP4 video or MP3 audio for free. Works on iPhone, Android and PC.",
+      "Free TikTok video downloader without watermark. Paste a link and save TikTok videos in HD MP4, or convert TikTok to MP3. No login, no app, no registration.",
     keywords: [
       "tiktok video downloader",
+      "tiktok downloader",
       "download tiktok video",
       "tiktok downloader without watermark",
+      "download tiktok video without watermark",
       "tiktok no watermark",
       "save tiktok video",
-      "tiktok to mp3",
-      "tiktok mp4 download",
+      "tiktok mp3 downloader",
+      "tiktok audio downloader",
+      "tiktok video download hd",
     ],
     h1: "TikTok Video Downloader",
     tagline:
@@ -115,13 +121,15 @@ export const TOOL_PAGES: ToolPage[] = [
     navLabel: "Instagram",
     title: "Instagram Video Downloader - Save Reels, Stories, Photos HD",
     description:
-      "Download Instagram videos, Reels, Stories and photos in HD. Free online Instagram downloader that works on iPhone, Android and PC. No login needed.",
+      "Download Instagram videos, Reels, Stories, photos and audio in HD. Free online Instagram downloader that works on iPhone, Android and PC. No login needed.",
     keywords: [
       "instagram video downloader",
       "download instagram video",
       "instagram reels download",
       "instagram story downloader",
       "instagram photo downloader",
+      "instagram audio downloader",
+      "instagram reels to mp3",
       "save instagram video",
       "ig video download",
     ],
@@ -171,6 +179,10 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "Copy the Reel's link from the Share menu, paste it in the box above and choose an MP4 quality. The Reel saves as a normal video file.",
       },
       {
+        q: "Do Instagram Reels have a watermark?",
+        a: "Instagram does not add a watermark to Reels, and this tool never adds one either. The file downloads exactly as Instagram serves it.",
+      },
+      {
         q: "Can I download Instagram Stories?",
         a: "Public Stories work while they are live. Paste the story link the same way. Stories from private accounts are not reachable.",
       },
@@ -183,8 +195,8 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "Paste a photo post link and you get the image in full resolution.",
       },
       {
-        q: "Is there a limit on downloads?",
-        a: "No. The tool is free and there are no daily caps.",
+        q: "Can I extract just the audio from a Reel?",
+        a: "Yes. Use the Save as MP3 button after pasting the link to get only the sound track.",
       },
       {
         q: "Can I save Instagram videos on iPhone?",
@@ -201,14 +213,17 @@ export const TOOL_PAGES: ToolPage[] = [
     navLabel: "Reels",
     title: "Instagram Reels Downloader - Save Reels as HD MP4 Free",
     description:
-      "Download Instagram Reels as HD MP4 files for free. Paste the Reel link and save it to your phone or computer. No login and no app required.",
+      "Download Instagram Reels as HD MP4 files for free, or convert Reels to MP3. Paste the Reel link and save it to your phone or computer. No login required.",
     keywords: [
       "instagram reels downloader",
+      "instagram reel download",
       "download reels",
       "reels video download",
       "save instagram reels",
       "reels to mp4",
       "reels to mp3",
+      "instagram reels to mp3",
+      "download instagram reels without watermark",
     ],
     h1: "Instagram Reels Downloader",
     tagline:
@@ -280,15 +295,17 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "facebook-video-downloader",
     navLabel: "Facebook",
-    title: "Facebook Video Downloader - Download FB Videos in HD 1080p",
+    title: "Facebook Video Downloader - Download FB Videos in HD",
     description:
-      "Free Facebook video downloader. Save Facebook videos, Reels and Watch clips as HD 1080p MP4 files. Works on iPhone, Android and PC without a login.",
+      "Free Facebook video downloader online. Save Facebook videos, Reels, Stories and Watch clips as HD 1080p MP4 files. Works on iPhone, Android and PC.",
     keywords: [
       "facebook video downloader",
       "download facebook video",
       "fb video download",
-      "facebook video download hd",
+      "facebook video download online",
+      "facebook video downloader hd",
       "facebook reels download",
+      "facebook story downloader",
       "save facebook video",
       "fb downloader",
     ],
@@ -342,6 +359,10 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "Yes. Short fb.watch links and full facebook.com links are both fine.",
       },
       {
+        q: "Can I download Facebook Stories?",
+        a: "Public Stories work while they are live, the same way as a normal video link. Stories from private accounts are not reachable.",
+      },
+      {
         q: "Can I download videos from private groups or friends-only posts?",
         a: "No. Only videos that are publicly visible can be downloaded.",
       },
@@ -364,18 +385,96 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
   },
   {
+    slug: "facebook-reels-downloader",
+    navLabel: "FB Reels",
+    title: "Facebook Reels Downloader - Save Reels in HD Free",
+    description:
+      "Download Facebook Reels in HD MP4 for free. Paste the Reel link and save it straight to your phone or computer. No login, no watermark, no app needed.",
+    keywords: [
+      "facebook reels downloader",
+      "download facebook reels",
+      "facebook reel to mp4",
+      "save facebook reels",
+      "facebook reels download hd",
+    ],
+    h1: "Facebook Reels Downloader",
+    tagline:
+      "Save Facebook Reels as HD MP4 files. Paste the link and the download is ready in seconds.",
+    placeholder: "Paste a Facebook Reel link here",
+    badge: { label: "FB Reels", color: "from-blue-500 to-indigo-500" },
+    features: [
+      {
+        title: "HD MP4 Reels",
+        body: "Facebook Reels save in their original quality as a normal MP4 file.",
+      },
+      {
+        title: "Audio as MP3",
+        body: "Pull just the sound from a Reel as an MP3 if that is all you need.",
+      },
+      {
+        title: "No login needed",
+        body: "Public Reels download without signing in to Facebook.",
+      },
+      {
+        title: "Free and fast",
+        body: "No account, no limits, and the file is ready in a few seconds.",
+      },
+    ],
+    stepsHeading: "How to download a Facebook Reel",
+    steps: [
+      {
+        title: "Copy the Reel link",
+        body: "Tap Share on the Reel and choose Copy Link.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the MP4",
+        body: "Pick a quality and the Reel downloads to your device.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser. Nothing to install.",
+    faqs: [
+      {
+        q: "How do I download a Facebook Reel?",
+        a: "Copy the Reel's link from the Share menu, paste it above and pick an MP4 quality. The file saves to your device.",
+      },
+      {
+        q: "Is there a watermark on the downloaded file?",
+        a: "No. The Reel saves exactly as Facebook serves it, with no watermark added.",
+      },
+      {
+        q: "Can I get just the audio from a Reel?",
+        a: "Yes, use the Save as MP3 button after pasting the link.",
+      },
+      {
+        q: "Can I download Reels from private profiles?",
+        a: "No. Only Reels that are publicly visible will work.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no signup and no limits.",
+      },
+    ],
+  },
+  {
     slug: "youtube-video-downloader",
     navLabel: "YouTube",
-    title: "YouTube Video Downloader - Save YouTube Videos as HD MP4",
+    title: "YouTube Video Downloader - Save Videos as HD MP4",
     description:
-      "Download YouTube videos as HD MP4 files. Free online YouTube downloader with a full list of quality options. Shorts links work too. No registration.",
+      "Free YouTube video downloader online. Save YouTube videos and Shorts as HD MP4 with a full list of quality options. No registration, no software.",
     keywords: [
       "youtube video downloader",
       "download youtube video",
+      "youtube downloader online",
       "youtube downloader hd",
       "youtube to mp4",
+      "youtube mp4 downloader",
       "save youtube video",
-      "youtube shorts download",
+      "download youtube shorts",
     ],
     h1: "YouTube Video Downloader",
     tagline:
@@ -431,6 +530,10 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "YouTube stores its highest resolutions as video-only streams. Options marked with audio are ready to watch. The video-only files suit editing work.",
       },
       {
+        q: "Can I download a whole playlist at once?",
+        a: "Not yet. Paste one video link at a time and each downloads on its own.",
+      },
+      {
         q: "Can I download age-restricted or private videos?",
         a: "No. Only videos you could watch in a browser without signing in will work.",
       },
@@ -447,16 +550,18 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "youtube-to-mp3",
     navLabel: "YouTube MP3",
-    title: "YouTube to MP3 Converter - Free High Quality MP3 Downloads",
+    title: "YouTube to MP3 Converter - Free High Quality Downloads",
     description:
-      "Convert YouTube videos to MP3 for free. Paste the link and download the audio in high quality within seconds. No registration and no software.",
+      "Convert YouTube to MP3 free online. Paste the link and download the audio at up to 320kbps within seconds. No registration and no software to install.",
     keywords: [
       "youtube to mp3",
-      "youtube mp3 converter",
+      "youtube to mp3 converter",
+      "youtube mp3 downloader",
       "youtube audio download",
-      "convert youtube to mp3",
+      "convert youtube video to mp3",
       "yt to mp3",
       "youtube to mp3 320kbps",
+      "youtube to mp4",
     ],
     h1: "YouTube to MP3 Converter",
     tagline:
@@ -466,7 +571,7 @@ export const TOOL_PAGES: ToolPage[] = [
     features: [
       {
         title: "Best available bitrate",
-        body: "The converter takes YouTube's best audio stream and encodes the MP3 at the highest quality setting.",
+        body: "The converter takes YouTube's best audio stream and encodes the MP3 at the highest quality setting, up to 320kbps.",
       },
       {
         title: "One button",
@@ -505,7 +610,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         q: "What audio quality do I get?",
-        a: "The tool takes the best audio stream YouTube has for that video and encodes it at the highest MP3 setting.",
+        a: "The tool takes the best audio stream YouTube has for that video and encodes it at up to 320kbps MP3.",
       },
       {
         q: "Is there a video length limit?",
@@ -526,11 +631,102 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
   },
   {
+    slug: "video-to-mp3-converter",
+    navLabel: "MP3 Converter",
+    title: "Video to MP3 Converter - Free Online MP3 Downloader",
+    description:
+      "Free online MP3 downloader. Paste a link from any supported site and convert video to MP3 at up to 320kbps. Unlimited, no registration, no ads on the file.",
+    keywords: [
+      "free mp3 downloader",
+      "mp3 downloader online",
+      "online mp3 downloader",
+      "free online mp3 downloader",
+      "video to mp3 converter",
+      "online video to mp3 converter",
+      "link to mp3 converter",
+      "url to mp3 converter",
+      "convert link to mp3",
+      "audio downloader online",
+      "mp3 converter online",
+      "mp3 downloader 320kbps",
+      "high quality mp3 downloader",
+      "unlimited mp3 downloader",
+      "mp3 downloader without registration",
+      "mp3 downloader no ads",
+    ],
+    h1: "Video to MP3 Converter",
+    tagline:
+      "Paste any video link and get back a clean MP3. Works with TikTok, Instagram, Facebook, YouTube and hundreds of other sites.",
+    placeholder: "Paste any video link to convert to MP3",
+    badge: { label: "MP3", color: "from-green-500 to-emerald-500" },
+    features: [
+      {
+        title: "Any supported site",
+        body: "This is not limited to one platform. Paste a link from TikTok, Instagram, Facebook, YouTube, SoundCloud or any of the 1,200+ sites this tool supports.",
+      },
+      {
+        title: "Up to 320kbps",
+        body: "Audio encodes at the best quality the source offers, up to 320kbps MP3.",
+      },
+      {
+        title: "No ads on the file",
+        body: "The MP3 you get is clean audio only. Nothing is added to the file itself.",
+      },
+      {
+        title: "Free and unlimited",
+        body: "No account, no registration and no daily limit on conversions.",
+      },
+    ],
+    stepsHeading: "How to convert a video link to MP3",
+    steps: [
+      {
+        title: "Copy the link",
+        body: "Copy the share link of the video from any supported site or app.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Press Save as MP3",
+        body: "The audio converts and downloads to your device once it is ready.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac. The conversion runs on the server, so there is nothing to install.",
+    faqs: [
+      {
+        q: "How do I convert a video link to MP3?",
+        a: "Paste the link into the box above, wait for it to look the video up, then press Save as MP3 instead of picking a video quality.",
+      },
+      {
+        q: "Which sites work with this MP3 converter?",
+        a: "Any of the 1,200+ sites this tool supports, including TikTok, Instagram, Facebook, YouTube, X and SoundCloud.",
+      },
+      {
+        q: "What is the maximum MP3 quality?",
+        a: "Audio converts at the best bitrate the source video offers, up to 320kbps.",
+      },
+      {
+        q: "Do I need to register or sign up?",
+        a: "No. There is no account and no signup required.",
+      },
+      {
+        q: "Is there a limit on how many files I can convert?",
+        a: "No. The converter is free and unlimited.",
+      },
+      {
+        q: "Does the MP3 have ads or a watermark?",
+        a: "No. The file is the plain audio track only, nothing is added to it.",
+      },
+    ],
+  },
+  {
     slug: "twitter-video-downloader",
     navLabel: "X / Twitter",
-    title: "Twitter Video Downloader - Save X Videos and GIFs in HD",
+    title: "Twitter Video Downloader - Save X Videos and GIFs HD",
     description:
-      "Download videos and GIFs from X, formerly Twitter, as HD MP4 files. Paste the tweet link and save the video for free. No login and no app.",
+      "Download videos and GIFs from X, formerly Twitter, as HD MP4 files. Paste the tweet link and save the video for free. No login and no app required.",
     keywords: [
       "twitter video downloader",
       "x video downloader",
@@ -679,6 +875,413 @@ export const TOOL_PAGES: ToolPage[] = [
       {
         q: "Is this Pinterest downloader free?",
         a: "Yes, with no limits and no signup.",
+      },
+    ],
+  },
+  {
+    slug: "reddit-video-downloader",
+    navLabel: "Reddit",
+    title: "Reddit Video Downloader - Save Videos with Audio",
+    description:
+      "Free Reddit video downloader. Paste a post link and save Reddit videos as MP4 with sound included. Works on iPhone, Android and PC, no login needed.",
+    keywords: [
+      "reddit video downloader",
+      "download reddit video",
+      "save reddit video",
+      "reddit video with audio",
+      "reddit video download mp4",
+      "reddit downloader online",
+    ],
+    h1: "Reddit Video Downloader",
+    tagline:
+      "Save Reddit videos as MP4 files with the audio included. Paste the post link and download.",
+    placeholder: "Paste a Reddit post link here",
+    badge: { label: "Reddit", color: "from-orange-500 to-orange-600" },
+    features: [
+      {
+        title: "Audio included",
+        body: "Reddit stores video and sound separately. This tool merges them so the MP4 plays with audio.",
+      },
+      {
+        title: "Works with v.redd.it links",
+        body: "Paste the post link or the direct video link, both work the same way.",
+      },
+      {
+        title: "No account needed",
+        body: "Public posts download without signing in to Reddit.",
+      },
+      {
+        title: "Free to use",
+        body: "No limits and no signup. Paste a link and download.",
+      },
+    ],
+    stepsHeading: "How to download a Reddit video",
+    steps: [
+      {
+        title: "Copy the post link",
+        body: "Tap Share on the Reddit post and choose Copy Link.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the MP4",
+        body: "Pick a quality and the video downloads with sound.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser.",
+    faqs: [
+      {
+        q: "Why do some Reddit downloaders have no sound?",
+        a: "Reddit hosts a video's picture and its audio as two separate files. This tool combines them automatically so the download plays with sound.",
+      },
+      {
+        q: "How do I download a Reddit video?",
+        a: "Copy the post link, paste it above and choose an MP4 quality. The video and audio download together.",
+      },
+      {
+        q: "Can I download from private subreddits?",
+        a: "No. Only posts that are publicly visible can be downloaded.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no account and no download limit.",
+      },
+    ],
+  },
+  {
+    slug: "linkedin-video-downloader",
+    navLabel: "LinkedIn",
+    title: "LinkedIn Video Downloader - Save Videos in HD Free",
+    description:
+      "Free LinkedIn video downloader. Paste a post link and save LinkedIn videos in HD MP4 to your phone or computer. No login and no software to install.",
+    keywords: [
+      "linkedin video downloader",
+      "download linkedin video",
+      "save linkedin video",
+      "linkedin video download mp4",
+    ],
+    h1: "LinkedIn Video Downloader",
+    tagline:
+      "Save LinkedIn videos in HD MP4. Paste the post link and download straight to your device.",
+    placeholder: "Paste a LinkedIn post link here",
+    badge: { label: "LinkedIn", color: "from-blue-700 to-blue-600" },
+    features: [
+      {
+        title: "HD MP4 quality",
+        body: "Videos save in the best quality LinkedIn offers for that post.",
+      },
+      {
+        title: "No login required",
+        body: "Public LinkedIn posts download without signing in.",
+      },
+      {
+        title: "Free to use",
+        body: "No account and no limit on how many videos you save.",
+      },
+      {
+        title: "Works everywhere",
+        body: "Use it on desktop or mobile, in any modern browser.",
+      },
+    ],
+    stepsHeading: "How to download a LinkedIn video",
+    steps: [
+      {
+        title: "Copy the post link",
+        body: "Click Share on the LinkedIn post and choose Copy Link.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the video",
+        body: "Pick a quality and the MP4 downloads to your device.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser.",
+    faqs: [
+      {
+        q: "How do I download a LinkedIn video?",
+        a: "Copy the post's link, paste it above and choose an MP4 quality to save it.",
+      },
+      {
+        q: "Can I download videos from a private LinkedIn profile?",
+        a: "No. Only posts that are publicly visible can be downloaded.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no login and no limit on downloads.",
+      },
+    ],
+  },
+  {
+    slug: "threads-video-downloader",
+    navLabel: "Threads",
+    title: "Threads Video Downloader - Save Videos Free Online",
+    description:
+      "Free Threads video downloader. Paste a Threads post link and save the video as HD MP4. No login, no app, no watermark added to the file.",
+    keywords: [
+      "threads video downloader",
+      "download threads video",
+      "save threads video",
+      "threads video download mp4",
+    ],
+    h1: "Threads Video Downloader",
+    tagline:
+      "Save Threads videos as HD MP4 files. Paste the post link and download in seconds.",
+    placeholder: "Paste a Threads post link here",
+    badge: { label: "Threads", color: "from-neutral-900 to-black" },
+    features: [
+      {
+        title: "HD MP4 quality",
+        body: "Threads videos download in the best quality available for that post.",
+      },
+      {
+        title: "No login needed",
+        body: "Public Threads posts download without signing in.",
+      },
+      {
+        title: "No watermark added",
+        body: "The file saves exactly as Threads serves it.",
+      },
+      {
+        title: "Free to use",
+        body: "No account, no limits, ready in a few seconds.",
+      },
+    ],
+    stepsHeading: "How to download a Threads video",
+    steps: [
+      {
+        title: "Copy the post link",
+        body: "Tap the share icon on the Threads post and choose Copy Link.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the video",
+        body: "Pick a quality and the MP4 downloads to your device.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser.",
+    faqs: [
+      {
+        q: "How do I download a video from Threads?",
+        a: "Copy the post's link, paste it above and pick an MP4 quality to save it.",
+      },
+      {
+        q: "Can I download from private Threads accounts?",
+        a: "No. Only public posts are reachable.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no signup and no limit on downloads.",
+      },
+    ],
+  },
+  {
+    slug: "vimeo-video-downloader",
+    navLabel: "Vimeo",
+    title: "Vimeo Video Downloader - Save Videos in HD Free",
+    description:
+      "Free Vimeo video downloader online. Paste a Vimeo link and save the video in HD MP4 to your phone or computer. No login and no software required.",
+    keywords: [
+      "vimeo video downloader",
+      "download vimeo video",
+      "save vimeo video",
+      "vimeo to mp4",
+      "vimeo downloader online",
+    ],
+    h1: "Vimeo Video Downloader",
+    tagline:
+      "Save Vimeo videos in HD MP4. Paste the link and download straight to your device.",
+    placeholder: "Paste a Vimeo video link here",
+    badge: { label: "Vimeo", color: "from-sky-500 to-cyan-500" },
+    features: [
+      {
+        title: "HD quality",
+        body: "Videos download in the best quality that Vimeo makes available for that link.",
+      },
+      {
+        title: "No login required",
+        body: "Public Vimeo videos download without signing in.",
+      },
+      {
+        title: "Free to use",
+        body: "No account and no limit on downloads.",
+      },
+      {
+        title: "Any device",
+        body: "Works on iPhone, Android, Windows and Mac in the browser.",
+      },
+    ],
+    stepsHeading: "How to download a Vimeo video",
+    steps: [
+      {
+        title: "Copy the video link",
+        body: "Copy the Vimeo page URL from your browser's address bar or the Share option.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the video",
+        body: "Pick a quality and the MP4 downloads to your device.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser.",
+    faqs: [
+      {
+        q: "How do I download a Vimeo video?",
+        a: "Paste the video's link above and choose an MP4 quality to save it.",
+      },
+      {
+        q: "Can I download password-protected Vimeo videos?",
+        a: "No. Only videos that are publicly viewable without a password can be downloaded.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no login and no download limit.",
+      },
+    ],
+  },
+  {
+    slug: "dailymotion-video-downloader",
+    navLabel: "Dailymotion",
+    title: "Dailymotion Video Downloader - Save Videos Free",
+    description:
+      "Free Dailymotion video downloader. Paste a Dailymotion link and save the video as MP4 in the best available quality. No login, no app, no cost.",
+    keywords: [
+      "dailymotion video downloader",
+      "download dailymotion video",
+      "dailymotion to mp4",
+      "save dailymotion video",
+    ],
+    h1: "Dailymotion Video Downloader",
+    tagline:
+      "Save Dailymotion videos as MP4 files. Paste the link and download in seconds.",
+    placeholder: "Paste a Dailymotion video link here",
+    badge: { label: "Dailymotion", color: "from-sky-600 to-blue-600" },
+    features: [
+      {
+        title: "Best available quality",
+        body: "Videos download in the highest resolution Dailymotion offers for that link.",
+      },
+      {
+        title: "No login needed",
+        body: "Public videos download without signing in to Dailymotion.",
+      },
+      {
+        title: "Free to use",
+        body: "No account and no limits on downloads.",
+      },
+      {
+        title: "Works everywhere",
+        body: "Use it on desktop or mobile in any modern browser.",
+      },
+    ],
+    stepsHeading: "How to download a Dailymotion video",
+    steps: [
+      {
+        title: "Copy the video link",
+        body: "Copy the Dailymotion page URL from your browser's address bar.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the video",
+        body: "Pick a quality and the MP4 downloads to your device.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser.",
+    faqs: [
+      {
+        q: "How do I download a Dailymotion video?",
+        a: "Paste the video's link above and choose an MP4 quality to save it.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no signup and no limit on downloads.",
+      },
+    ],
+  },
+  {
+    slug: "soundcloud-mp3-downloader",
+    navLabel: "SoundCloud",
+    title: "SoundCloud MP3 Downloader - Save Tracks Free",
+    description:
+      "Free SoundCloud MP3 downloader. Paste a track link and save SoundCloud audio as MP3, up to 320kbps, straight to your phone or computer. No login needed.",
+    keywords: [
+      "soundcloud mp3 downloader",
+      "download soundcloud mp3",
+      "soundcloud downloader online",
+      "soundcloud to mp3",
+      "free music downloader",
+      "download mp3 free",
+    ],
+    h1: "SoundCloud MP3 Downloader",
+    tagline:
+      "Save SoundCloud tracks as MP3 files. Paste the track link and download in seconds.",
+    placeholder: "Paste a SoundCloud track link here",
+    badge: { label: "SoundCloud", color: "from-orange-400 to-amber-500" },
+    features: [
+      {
+        title: "Up to 320kbps",
+        body: "Tracks download at the best audio quality SoundCloud offers for that link.",
+      },
+      {
+        title: "No login needed",
+        body: "Public tracks download without signing in to SoundCloud.",
+      },
+      {
+        title: "Free to use",
+        body: "No account, no limits, and no ads added to the file.",
+      },
+      {
+        title: "Any device",
+        body: "Works on iPhone, Android, Windows and Mac in the browser.",
+      },
+    ],
+    stepsHeading: "How to download a SoundCloud track",
+    steps: [
+      {
+        title: "Copy the track link",
+        body: "Tap Share on the SoundCloud track and choose Copy Link.",
+      },
+      {
+        title: "Paste it here",
+        body: "Put the link in the box at the top of this page and press Download.",
+      },
+      {
+        title: "Save the MP3",
+        body: "The track downloads as an MP3 file to your device.",
+      },
+    ],
+    deviceNote:
+      "Works on iPhone, Android, Windows and Mac in any browser.",
+    faqs: [
+      {
+        q: "How do I download a SoundCloud track as MP3?",
+        a: "Paste the track's link above and press Download. The MP3 saves to your device once it is ready.",
+      },
+      {
+        q: "Can I download private or unavailable tracks?",
+        a: "No. Only tracks that are publicly streamable on SoundCloud can be downloaded.",
+      },
+      {
+        q: "Is this free?",
+        a: "Yes, with no login and no limit on downloads.",
       },
     ],
   },

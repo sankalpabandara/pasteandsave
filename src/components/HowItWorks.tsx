@@ -9,7 +9,7 @@ const STEPS = [
   },
   {
     title: "Pick a quality",
-    body: "SnapGrab lists every available resolution. Choose one and save the file.",
+    body: "PasteAndSave lists every available resolution. Choose one and save the file.",
   },
 ];
 

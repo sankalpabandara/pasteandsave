@@ -1,4 +1,4 @@
-# SnapGrab
+# PasteAndSave
 
 A video and audio downloader for 1,200+ sites (TikTok, Instagram, Facebook,
 YouTube, X, Pinterest and more), built on [Next.js](https://nextjs.org) and

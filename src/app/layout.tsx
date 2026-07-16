@@ -20,31 +20,37 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title:
-    "Free Video Downloader - TikTok, Instagram & YouTube Videos",
+    "Free Online Video Downloader - Download MP4 & MP3 from Any Link",
   description:
-    "Free online video downloader for TikTok, Instagram, Facebook, YouTube, X and more than 1,200 other sites. Save HD MP4 video or MP3 audio. No signup needed.",
+    "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites. Free video downloader with HD MP4 and MP3 output, no login and no software to install.",
   keywords: [
-    "video downloader",
+    "free video downloader",
     "online video downloader",
-    "download video",
-    "video downloader free",
+    "video downloader online",
+    "free online video downloader",
+    "download video from link",
+    "download video online",
+    "social media video downloader",
     "mp4 downloader",
-    "video to mp3",
+    "free mp3 downloader",
+    "video to mp3 converter",
+    "hd video downloader",
+    "video downloader no login",
   ],
   alternates: { canonical: "/" },
   openGraph: {
-    title: `${SITE_NAME} | Free Online Video Downloader`,
+    title: `${SITE_NAME} - Free Online Video Downloader`,
     description:
-      "Save videos in HD from TikTok, Instagram, Facebook, YouTube, X and more than 1,200 other sites. Free, with no login.",
+      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites. Free, HD, no login required.",
     url: "/",
     siteName: SITE_NAME,
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} | Free Online Video Downloader`,
+    title: `${SITE_NAME} - Free Online Video Downloader`,
     description:
-      "Save videos in HD from TikTok, Instagram, Facebook, YouTube, X and more than 1,200 other sites.",
+      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites.",
   },
   robots: { index: true, follow: true },
 };

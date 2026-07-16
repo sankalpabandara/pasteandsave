@@ -8,7 +8,7 @@ export default function Footer() {
         <div className="grid gap-8 sm:grid-cols-3">
           <div>
             <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-              SnapGrab
+              PasteAndSave
             </p>
             <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
               A free online video downloader that works with more than 1,200
@@ -51,11 +51,11 @@ export default function Footer() {
         </div>
         <div className="mt-8 border-t border-black/5 pt-6 text-center text-xs text-neutral-500 dark:border-white/10 dark:text-neutral-400">
           <p>
-            SnapGrab is an independent tool and isn&apos;t affiliated with any
-            of the platforms it supports. Only download content you have the
-            rights to use.
+            PasteAndSave is an independent tool and isn&apos;t affiliated with
+            any of the platforms it supports. Only download content you have
+            the rights to use.
           </p>
-          <p className="mt-2">&copy; {new Date().getFullYear()} SnapGrab</p>
+          <p className="mt-2">&copy; {new Date().getFullYear()} PasteAndSave</p>
         </div>
       </div>
     </footer>

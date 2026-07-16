@@ -7,7 +7,7 @@ const FAQS = [
   },
   {
     q: "Can I download private posts?",
-    a: "No. SnapGrab can only fetch content that is publicly accessible, the same as opening it in a browser without logging in.",
+    a: "No. PasteAndSave can only fetch content that is publicly accessible, the same as opening it in a browser without logging in.",
   },
   {
     q: "Which sites are supported?",
@@ -16,6 +16,14 @@ const FAQS = [
   {
     q: "What am I allowed to download?",
     a: "Content you own, content you have permission to use, and material that is licensed for reuse. Respect the people who make the videos.",
+  },
+  {
+    q: "How do I download a video from a link?",
+    a: "Copy the share link from the site or app, paste it into the box at the top of this page, and press Download. Every available quality shows up in a list a few seconds later.",
+  },
+  {
+    q: "Can I convert a video link straight to MP3?",
+    a: "Yes. After you paste a link and look it up, use the Save as MP3 button instead of picking a video quality. Only the audio track downloads.",
   },
 ];
 
