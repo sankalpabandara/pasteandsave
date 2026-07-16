@@ -12,16 +12,46 @@ type SimpleFormat = {
   label: string;
   hasAudio: boolean;
   hasVideo: boolean;
+  isImage: boolean;
   filesize: number | null;
 };
 
+// Image posts (photo posts, TikTok slideshow frames, Pinterest images) come
+// back from yt-dlp with no video and no audio codec, so they used to be
+// filtered out. These extensions mark a format as an image instead.
+const IMAGE_EXTS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "heic",
+  "bmp",
+  "tiff",
+  "avif",
+]);
+
+function isImageFormat(f: { ext?: string; vcodec?: string; acodec?: string }): boolean {
+  const ext = (f.ext ?? "").toLowerCase();
+  if (IMAGE_EXTS.has(ext)) return true;
+  // Some extractors leave ext blank but mark both codecs "none" and give a
+  // resolution; treat those as images too rather than dropping them.
+  return f.vcodec === "none" && f.acodec === "none" && ext === "";
+}
+
 function humanLabel(f: {
   height?: number;
+  width?: number;
   vcodec?: string;
   acodec?: string;
   ext: string;
   format_note?: string;
 }): string {
+  if (isImageFormat(f)) {
+    const kind = f.ext ? `Photo (${f.ext.toUpperCase()})` : "Photo";
+    if (f.width && f.height) return `${kind} ${f.width}x${f.height}`;
+    return kind;
+  }
   if (f.vcodec === "none") return `Audio only (${f.ext.toUpperCase()})`;
   if (f.height) return `${f.height}p ${f.ext.toUpperCase()}`;
   return f.format_note ? `${f.format_note} (${f.ext.toUpperCase()})` : f.ext.toUpperCase();
@@ -66,17 +96,19 @@ export async function POST(request: NextRequest) {
 
     const seen = new Set<string>();
     const formats: SimpleFormat[] = (info.formats ?? [])
-      .filter((f) => f.vcodec !== "none" || f.acodec !== "none")
+      // Keep anything with video or audio, plus image formats (photo posts).
+      .filter((f) => f.vcodec !== "none" || f.acodec !== "none" || isImageFormat(f))
       .map((f) => ({
         formatId: f.format_id,
         ext: f.ext,
         label: humanLabel(f),
         hasAudio: f.acodec !== "none" && !!f.acodec,
         hasVideo: f.vcodec !== "none" && !!f.vcodec,
+        isImage: isImageFormat(f),
         filesize: f.filesize ?? f.filesize_approx ?? null,
       }))
       .filter((f) => {
-        const key = `${f.label}-${f.hasAudio}-${f.hasVideo}`;
+        const key = `${f.label}-${f.hasAudio}-${f.hasVideo}-${f.isImage}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;

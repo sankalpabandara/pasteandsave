@@ -10,6 +10,7 @@ type FormatOption = {
   label: string;
   hasAudio: boolean;
   hasVideo: boolean;
+  isImage: boolean;
   filesize: number | null;
 };
 
@@ -257,23 +258,28 @@ export default function DownloaderForm({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
-              <button
-                type="button"
-                onClick={downloadAudio}
-                disabled={
-                  jobs.__audio__ &&
-                  jobs.__audio__.status !== "error"
-                }
-                className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-              >
-                {jobs.__audio__ && jobs.__audio__.status !== "error"
-                  ? statusLabel(jobs.__audio__)
-                  : "Save as MP3"}
-              </button>
-              {jobs.__audio__?.status === "error" && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                  {jobs.__audio__.message}
-                </p>
+              {/* Hide the MP3 button for photo-only posts, which have no audio. */}
+              {!(result.formats.length > 0 && result.formats.every((f) => f.isImage)) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={downloadAudio}
+                    disabled={
+                      jobs.__audio__ &&
+                      jobs.__audio__.status !== "error"
+                    }
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+                  >
+                    {jobs.__audio__ && jobs.__audio__.status !== "error"
+                      ? statusLabel(jobs.__audio__)
+                      : "Save as MP3"}
+                  </button>
+                  {jobs.__audio__?.status === "error" && (
+                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+                      {jobs.__audio__.message}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
