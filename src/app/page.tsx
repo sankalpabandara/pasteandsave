@@ -6,6 +6,7 @@ import HowItWorks from "@/components/HowItWorks";
 import Faq from "@/components/Faq";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
+import Bookmarklet from "@/components/Bookmarklet";
 import AdSlot from "@/components/ads/AdSlot";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -73,6 +74,7 @@ export default function Home() {
         </div>
         <Platforms />
         <HowItWorks />
+        <Bookmarklet />
         <div className="px-4 py-8">
           <AdSlot slot="homeMid" />
         </div>

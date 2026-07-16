@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { detectPlatform } from "@/lib/platforms";
 import { useAdGate } from "@/components/ads/AdProvider";
 
@@ -68,36 +68,61 @@ export default function DownloaderForm({
   const [result, setResult] = useState<InfoResult | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
   const sourcesRef = useRef<Record<string, EventSource>>({});
+  const autoRanRef = useRef(false);
   const { gate } = useAdGate();
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!url.trim()) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setJobs({});
-    // Kick off the lookup and show the ad gate at the same time, so the ad
-    // overlaps the existing wait instead of adding delay.
-    const infoPromise = fetch("/api/info", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: url.trim() }),
-    });
-    try {
-      await gate();
-      const res = await infoPromise;
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
-        return;
+  const runLookup = useCallback(
+    async (target: string) => {
+      const trimmed = target.trim();
+      if (!trimmed) return;
+      setUrl(trimmed);
+      setLoading(true);
+      setError(null);
+      setResult(null);
+      setJobs({});
+      // Kick off the lookup and show the ad gate at the same time, so the ad
+      // overlaps the existing wait instead of adding delay.
+      const infoPromise = fetch("/api/info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      try {
+        await gate();
+        const res = await infoPromise;
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error ?? "Something went wrong.");
+          return;
+        }
+        setResult(data);
+      } catch {
+        setError("Couldn't reach the server. Try again.");
+      } finally {
+        setLoading(false);
       }
-      setResult(data);
-    } catch {
-      setError("Couldn't reach the server. Try again.");
-    } finally {
-      setLoading(false);
-    }
+    },
+    [gate],
+  );
+
+  // Deep link / bookmarklet support: a ?url= (or ?u=) query prefills the box
+  // and starts the lookup automatically, so shareable download links and the
+  // one-click bookmarklet work.
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const shared = params.get("url") ?? params.get("u");
+    if (!shared) return;
+    autoRanRef.current = true;
+    // Defer a tick so the lookup's state updates don't run synchronously
+    // inside the effect.
+    const t = setTimeout(() => void runLookup(shared), 0);
+    return () => clearTimeout(t);
+  }, [runLookup]);
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    void runLookup(url);
   }
 
   async function handlePaste() {
