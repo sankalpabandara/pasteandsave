@@ -164,3 +164,68 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     release();
   }
 }
+
+// Cap on how many videos a single playlist request will list/handle. Keeps
+// one person pasting a giant channel from overloading the server.
+export const MAX_PLAYLIST_ITEMS = 25;
+
+export type PlaylistEntry = {
+  title: string;
+  url: string;
+  duration: number | null;
+};
+
+export type PlaylistInfo = {
+  title: string;
+  entries: PlaylistEntry[];
+  truncated: boolean;
+};
+
+type RawFlatEntry = {
+  title?: string;
+  url?: string;
+  webpage_url?: string;
+  id?: string;
+  duration?: number;
+};
+
+// Lists the videos in a playlist without extracting each one fully. This uses
+// --flat-playlist, which reads the playlist page and is far more reliable than
+// full extraction (it keeps working even when a site blocks video downloads).
+// Returns null when the URL isn't actually a playlist.
+export async function fetchPlaylist(url: string): Promise<PlaylistInfo | null> {
+  const release = await lookupLimiter.acquire();
+  try {
+    const stdout = await runYtDlp([
+      "--flat-playlist",
+      "--dump-single-json",
+      "--no-warnings",
+      ...EXTRACTOR_ARGS,
+      "--playlist-end",
+      String(MAX_PLAYLIST_ITEMS + 1),
+      "--",
+      url,
+    ]);
+    const data = JSON.parse(stdout) as {
+      _type?: string;
+      title?: string;
+      entries?: RawFlatEntry[];
+    };
+    if (data._type !== "playlist" || !Array.isArray(data.entries)) return null;
+
+    const all = data.entries.filter(Boolean);
+    const truncated = all.length > MAX_PLAYLIST_ITEMS;
+    const entries: PlaylistEntry[] = all
+      .slice(0, MAX_PLAYLIST_ITEMS)
+      .map((e) => ({
+        title: e.title || e.id || "Untitled",
+        url: e.url || e.webpage_url || "",
+        duration: typeof e.duration === "number" ? e.duration : null,
+      }))
+      .filter((e) => e.url);
+
+    return { title: data.title || "Playlist", entries, truncated };
+  } finally {
+    release();
+  }
+}

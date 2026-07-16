@@ -23,6 +23,25 @@ type InfoResult = {
   formats: FormatOption[];
 };
 
+type PlaylistEntry = { title: string; url: string; duration: number | null };
+type PlaylistInfo = { title: string; entries: PlaylistEntry[]; truncated: boolean };
+
+// A pure playlist link (playlist page, a SoundCloud set, or a ?list= without a
+// specific video). A normal watch?v=...&list=... link stays a single video.
+function isPlaylistUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const path = u.pathname.toLowerCase();
+    if (path.includes("/playlist") || path.includes("/sets/") || path.includes("/album")) {
+      return true;
+    }
+    if (u.searchParams.has("list") && !u.searchParams.has("v")) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 type JobState =
   | { status: "idle" }
   | { status: "starting" | "downloading" | "converting"; percent: number }
@@ -66,20 +85,24 @@ export default function DownloaderForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<InfoResult | null>(null);
+  const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
+  const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
   const sourcesRef = useRef<Record<string, EventSource>>({});
   const autoRanRef = useRef(false);
   const { gate } = useAdGate();
 
-  const runLookup = useCallback(
-    async (target: string) => {
+  // Look up one video and show its download options. Used both for the search
+  // box and when a playlist item is clicked (which leaves the list in place).
+  const lookupSingle = useCallback(
+    async (target: string, fromPlaylist = false) => {
       const trimmed = target.trim();
       if (!trimmed) return;
-      setUrl(trimmed);
       setLoading(true);
       setError(null);
       setResult(null);
       setJobs({});
+      if (fromPlaylist) setSelectedUrl(trimmed);
       // Kick off the lookup and show the ad gate at the same time, so the ad
       // overlaps the existing wait instead of adding delay.
       const infoPromise = fetch("/api/info", {
@@ -103,6 +126,54 @@ export default function DownloaderForm({
       }
     },
     [gate],
+  );
+
+  const lookupPlaylist = useCallback(
+    async (target: string) => {
+      const trimmed = target.trim();
+      if (!trimmed) return;
+      setLoading(true);
+      setError(null);
+      setPlaylist(null);
+      const promise = fetch("/api/playlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      try {
+        await gate();
+        const res = await promise;
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error ?? "Couldn't read that playlist.");
+          return;
+        }
+        setPlaylist(data);
+      } catch {
+        setError("Couldn't reach the server. Try again.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [gate],
+  );
+
+  const runLookup = useCallback(
+    async (target: string) => {
+      const trimmed = target.trim();
+      if (!trimmed) return;
+      setUrl(trimmed);
+      setResult(null);
+      setPlaylist(null);
+      setSelectedUrl(null);
+      setJobs({});
+      if (isPlaylistUrl(trimmed)) {
+        await lookupPlaylist(trimmed);
+      } else {
+        await lookupSingle(trimmed);
+      }
+    },
+    [lookupSingle, lookupPlaylist],
   );
 
   // Deep link / bookmarklet support: a ?url= (or ?u=) query prefills the box
@@ -251,6 +322,44 @@ export default function DownloaderForm({
         <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
+      )}
+
+      {playlist && (
+        <div className="mt-6 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-neutral-900">
+          <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3 dark:border-white/10">
+            <div className="min-w-0">
+              <p className="line-clamp-1 font-medium text-neutral-900 dark:text-white">
+                {playlist.title}
+              </p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                {playlist.entries.length} videos
+                {playlist.truncated ? ` (showing the first ${playlist.entries.length})` : ""}{" "}
+                · pick one to download
+              </p>
+            </div>
+          </div>
+          <ol className="max-h-80 divide-y divide-black/5 overflow-y-auto dark:divide-white/10">
+            {playlist.entries.map((entry, i) => (
+              <li key={entry.url}>
+                <button
+                  type="button"
+                  onClick={() => lookupSingle(entry.url, true)}
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-white/5 ${
+                    selectedUrl === entry.url ? "bg-violet-50 dark:bg-violet-900/20" : ""
+                  }`}
+                >
+                  <span className="w-5 shrink-0 text-xs text-neutral-400">{i + 1}</span>
+                  <span className="line-clamp-1 flex-1 text-neutral-800 dark:text-neutral-200">
+                    {entry.title}
+                  </span>
+                  <span className="shrink-0 text-xs text-neutral-400">
+                    {formatDuration(entry.duration)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
 
       {result && (

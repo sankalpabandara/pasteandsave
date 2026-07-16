@@ -479,6 +479,7 @@ export const TOOL_PAGES: ToolPage[] = [
       "youtube mp4 downloader",
       "save youtube video",
       "download youtube shorts",
+      "youtube playlist downloader",
     ],
     h1: "YouTube Video Downloader",
     tagline:
@@ -534,8 +535,8 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "YouTube stores its highest resolutions as video-only streams. Options marked with audio are ready to watch. The video-only files suit editing work.",
       },
       {
-        q: "Can I download a whole playlist at once?",
-        a: "Not yet. Paste one video link at a time and each downloads on its own.",
+        q: "Can I download a whole playlist?",
+        a: "Yes. Paste a playlist link and the tool lists its videos so you can download any of them without copying each link. Large playlists are shown up to a set limit.",
       },
       {
         q: "Can I download age-restricted or private videos?",
@@ -621,8 +622,8 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "No fixed limit. A long video takes more time to convert, that is all.",
       },
       {
-        q: "Can I convert playlists?",
-        a: "One video at a time for now. Paste each link on its own.",
+        q: "Can I convert a playlist to MP3?",
+        a: "Paste a playlist link and the tool lists its videos, then convert any of them to MP3 without copying each link one by one.",
       },
       {
         q: "Is YouTube to MP3 conversion legal?",
