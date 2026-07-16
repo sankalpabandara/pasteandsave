@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import JsonLd from "@/components/JsonLd";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Terms of Service - PasteAndSave Video Downloader",
   description:
-    "Read the PasteAndSave Terms of Service: acceptable use, your responsibilities, our copyright and DMCA policy, disclaimers, and the rules for using the video downloader.",
+    "PasteAndSave Terms of Service: acceptable use, your responsibilities, copyright and DMCA policy, disclaimers, and the rules for using the downloader.",
+  alternates: { canonical: "/terms" },
 };
 
 const LAST_UPDATED = "July 11, 2026";
@@ -32,9 +35,24 @@ function Section({
 export default function TermsPage() {
   return (
     <>
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: "Terms of Service",
+          description:
+            "PasteAndSave Terms of Service: acceptable use, responsibilities, copyright and DMCA policy, and the rules for using the downloader.",
+          url: `${SITE_URL.replace(/\/$/, "")}/terms`,
+          isPartOf: {
+            "@type": "WebSite",
+            name: SITE_NAME,
+            url: SITE_URL,
+          },
+        }}
+      />
       <Header />
       <main className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
-        <h1 className="text-2xl font-extrabold text-neutral-900 sm:text-3xl dark:text-white">
+        <h1 className="font-display text-2xl font-extrabold text-neutral-900 sm:text-3xl dark:text-white">
           Terms of Service
         </h1>
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
@@ -173,7 +191,7 @@ export default function TermsPage() {
 
         <Section title="8. Limitation of Liability">
           <p>
-            TO THE MAXIMUM EXTENT PERMITTED BY LAW, SNAPGRAB AND ITS
+            TO THE MAXIMUM EXTENT PERMITTED BY LAW, PASTEANDSAVE AND ITS
             OPERATORS WILL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL,
             SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF
             DATA, PROFITS, OR GOODWILL, ARISING FROM YOUR USE OF THE

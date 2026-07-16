@@ -27,9 +27,9 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title:
-    "Free Online Video Downloader - Download MP4 & MP3 from Any Link",
+    "Free Online Video Downloader - MP4 & MP3 from Any Link",
   description:
-    "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites. Free video downloader with HD MP4 and MP3 output, no login and no software to install.",
+    "Paste a link to save video or audio from TikTok, Instagram, Facebook, X and 1,200+ other sites. Free HD MP4 and MP3, no login, nothing to install.",
   keywords: [
     "free video downloader",
     "online video downloader",
