@@ -1,16 +1,15 @@
 import Link from "next/link";
+import Logo from "./Logo";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 
 export default function Footer() {
   return (
-    <footer className="mt-auto border-t border-black/5 bg-white dark:border-white/10 dark:bg-neutral-950">
+    <footer className="glass glass-hairline mt-auto rounded-t-3xl">
       <div className="mx-auto max-w-5xl px-4 py-10">
         <div className="grid gap-8 sm:grid-cols-3">
           <div>
-            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-              PasteAndSave
-            </p>
-            <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+            <Logo />
+            <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
               A free online video downloader that works with more than 1,200
               sites. Paste a link, pick a quality and save the file.
             </p>

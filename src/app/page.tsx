@@ -39,16 +39,20 @@ export default function Home() {
       ))}
       <Header />
       <main>
-        <section className="bg-gradient-to-b from-violet-50 to-white px-4 pb-14 pt-12 sm:pb-20 sm:pt-24 dark:from-violet-950/30 dark:to-neutral-950">
+        <section className="px-4 pb-14 pt-14 sm:pb-20 sm:pt-20">
           <div className="mx-auto max-w-2xl text-center">
-            <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-5xl dark:text-white">
+            <span className="glass glass-hairline inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              1,200+ sites · HD · MP3 · no signup
+            </span>
+            <h1 className="font-display mt-5 text-4xl font-bold tracking-tight text-neutral-900 sm:text-6xl dark:text-white">
               Free Online
               <br />
-              <span className="text-violet-600 dark:text-violet-400">
+              <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-sky-500 bg-clip-text text-transparent">
                 Video Downloader
               </span>
             </h1>
-            <p className="mx-auto mt-4 max-w-lg text-neutral-600 dark:text-neutral-400">
+            <p className="mx-auto mt-5 max-w-lg text-neutral-600 dark:text-neutral-300">
               Paste a video link from TikTok, Instagram, Facebook, YouTube, X
               or any of 1,200+ other sites and download it as MP4 or MP3.
               Free, in HD, with no signup and no software to install.
@@ -62,7 +66,7 @@ export default function Home() {
               <Link
                 key={t.slug}
                 href={`/${t.slug}`}
-                className="rounded-full border border-black/10 bg-white/70 px-4 py-2 text-sm font-medium text-neutral-700 backdrop-blur transition hover:border-violet-400 hover:text-violet-700 dark:border-white/10 dark:bg-neutral-900/70 dark:text-neutral-300 dark:hover:text-violet-300"
+                className="glass glass-hairline rounded-full px-4 py-2 text-sm font-medium text-neutral-700 transition hover:text-violet-700 dark:text-neutral-200 dark:hover:text-violet-300"
               >
                 {t.navLabel}
               </Link>
@@ -78,9 +82,9 @@ export default function Home() {
         <div className="px-4 py-8">
           <AdSlot slot="homeMid" />
         </div>
-        <section className="bg-neutral-50 py-12 sm:py-16 dark:bg-neutral-900/40">
-          <div className="mx-auto max-w-3xl space-y-4 px-4 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-            <h2 className="text-center text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
+        <section className="px-4 py-12 sm:py-16">
+          <div className="glass glass-hairline mx-auto max-w-3xl space-y-4 rounded-3xl p-6 text-sm leading-relaxed text-neutral-600 sm:p-8 dark:text-neutral-300">
+            <h2 className="font-display text-center text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
               Download video from a link, from any social media site
             </h2>
             <p>

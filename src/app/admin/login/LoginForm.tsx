@@ -41,7 +41,7 @@ export default function LoginForm() {
         onChange={(e) => setPassword(e.target.value)}
         placeholder="Password"
         autoFocus
-        className="w-full rounded-xl border border-black/10 px-4 py-3 text-sm outline-none focus:border-violet-500 dark:border-white/10 dark:bg-neutral-950 dark:text-white"
+        className="w-full rounded-xl border border-black/10 bg-white/70 px-4 py-3 text-sm outline-none focus:border-violet-500 dark:border-white/10 dark:bg-black/30 dark:text-white"
       />
       {error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">

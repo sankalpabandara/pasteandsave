@@ -3,8 +3,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #eef0f7;
+  --foreground: #14121c;
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --glass-shadow: 0 10px 30px -12px rgba(30, 27, 75, 0.18);
+  --hairline: rgba(20, 18, 28, 0.08);
 }
 
 @theme inline {
@@ -12,15 +17,92 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
 }
 
 .dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: #07060c;
+  --foreground: #ecebf3;
+  --glass-bg: rgba(24, 22, 34, 0.5);
+  --glass-bg-strong: rgba(28, 26, 40, 0.66);
+  --glass-border: rgba(255, 255, 255, 0.09);
+  --glass-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.6);
+  --hairline: rgba(255, 255, 255, 0.08);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  position: relative;
+  min-height: 100vh;
+}
+
+/* Aurora background: soft colour fields behind the glass, fixed on scroll. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(42rem 42rem at 12% 8%, rgba(139, 92, 246, 0.22), transparent 60%),
+    radial-gradient(38rem 38rem at 88% 12%, rgba(236, 72, 153, 0.16), transparent 60%),
+    radial-gradient(46rem 46rem at 50% 108%, rgba(56, 189, 248, 0.16), transparent 62%);
+}
+.dark body::before {
+  background:
+    radial-gradient(44rem 44rem at 10% 6%, rgba(124, 58, 237, 0.3), transparent 60%),
+    radial-gradient(40rem 40rem at 90% 10%, rgba(219, 39, 119, 0.2), transparent 60%),
+    radial-gradient(50rem 50rem at 50% 110%, rgba(14, 165, 233, 0.18), transparent 62%);
+}
+
+/* Glass surfaces */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(18px) saturate(170%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.glass-hairline {
+  border-color: var(--hairline);
+}
+
+/* A subtle top highlight edge for a more convincing glass look. */
+.glass-sheen {
+  position: relative;
+}
+.glass-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.35),
+    rgba(255, 255, 255, 0) 40%
+  );
+  opacity: 0.6;
+  mix-blend-mode: overlay;
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Respect reduced transparency / motion preferences. */
+@media (prefers-reduced-transparency: reduce) {
+  .glass,
+  .glass-strong {
+    backdrop-filter: none;
+    background: var(--glass-bg-strong);
+  }
 }

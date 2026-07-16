@@ -14,8 +14,8 @@ export default function Bookmarklet() {
 
   return (
     <section className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
-      <div className="rounded-2xl border border-black/5 bg-white p-6 text-center sm:p-8 dark:border-white/10 dark:bg-neutral-900">
-        <h2 className="text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
+      <div className="glass glass-hairline glass-sheen rounded-3xl p-6 text-center sm:p-8">
+        <h2 className="font-display text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
           Download from any page in one click
         </h2>
         <p className="mx-auto mt-2 max-w-lg text-sm text-neutral-600 dark:text-neutral-400">

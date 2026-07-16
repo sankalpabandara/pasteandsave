@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Logo from "./Logo";
 import ThemeToggle from "./ThemeToggle";
 
 const NAV_TOOLS = [
@@ -11,29 +12,24 @@ const NAV_TOOLS = [
 
 export default function Header() {
   return (
-    <header className="sticky top-0 z-20 border-b border-black/5 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-neutral-950/80">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4">
-        <Link href="/" className="flex shrink-0 items-center gap-2 text-lg font-extrabold dark:text-white">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-500 text-sm text-white">
-            PS
-          </span>
-          <span>
-            PasteAnd<span className="text-violet-600 dark:text-violet-400">Save</span>
-          </span>
+    <div className="sticky top-0 z-30 px-3 pt-3">
+      <header className="glass glass-hairline mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-2xl px-4 py-2.5">
+        <Link href="/" className="shrink-0">
+          <Logo />
         </Link>
-        <nav className="flex min-w-0 gap-4 overflow-x-auto text-xs font-medium text-neutral-600 sm:gap-5 sm:text-sm dark:text-neutral-400">
+        <nav className="flex min-w-0 gap-4 overflow-x-auto text-xs font-medium text-neutral-600 sm:gap-5 sm:text-sm dark:text-neutral-300">
           {NAV_TOOLS.map((t) => (
             <Link
               key={t.href}
               href={t.href}
-              className="shrink-0 hover:text-neutral-900 dark:hover:text-white"
+              className="shrink-0 transition-colors hover:text-violet-600 dark:hover:text-violet-300"
             >
               {t.label}
             </Link>
           ))}
         </nav>
         <ThemeToggle />
-      </div>
-    </header>
+      </header>
+    </div>
   );
 }

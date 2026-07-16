@@ -41,7 +41,7 @@ export default async function SeoAuditPage() {
     <main className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-neutral-900 dark:text-white">
+          <h1 className="font-display text-2xl font-bold text-neutral-900 dark:text-white">
             SEO audit
           </h1>
           <Link
@@ -55,14 +55,14 @@ export default async function SeoAuditPage() {
       </div>
 
       {!report ? (
-        <p className="mt-6 rounded-2xl border border-black/5 bg-white p-5 text-sm text-neutral-600 dark:border-white/10 dark:bg-neutral-900 dark:text-neutral-400">
+        <p className="glass glass-hairline mt-6 rounded-2xl p-5 text-sm text-neutral-600 dark:text-neutral-400">
           No audit has run yet. Click “Run audit now”, or wait for the weekly
           run.
         </p>
       ) : (
         <>
           <div className="mt-6 grid grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-black/5 bg-white p-5 text-center dark:border-white/10 dark:bg-neutral-900">
+            <div className="glass glass-hairline rounded-2xl p-5 text-center">
               <p className={`text-3xl font-bold ${scoreColor(report.score)}`}>
                 {report.score}
               </p>
@@ -70,7 +70,7 @@ export default async function SeoAuditPage() {
                 Overall score
               </p>
             </div>
-            <div className="rounded-2xl border border-black/5 bg-white p-5 text-center dark:border-white/10 dark:bg-neutral-900">
+            <div className="glass glass-hairline rounded-2xl p-5 text-center">
               <p className="text-3xl font-bold text-red-600 dark:text-red-400">
                 {report.errors}
               </p>
@@ -78,7 +78,7 @@ export default async function SeoAuditPage() {
                 Errors
               </p>
             </div>
-            <div className="rounded-2xl border border-black/5 bg-white p-5 text-center dark:border-white/10 dark:bg-neutral-900">
+            <div className="glass glass-hairline rounded-2xl p-5 text-center">
               <p className="text-3xl font-bold text-amber-600 dark:text-amber-400">
                 {report.warnings}
               </p>
@@ -98,7 +98,7 @@ export default async function SeoAuditPage() {
           </p>
 
           {history.length > 1 && (
-            <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+            <section className="mt-6 glass glass-hairline rounded-2xl p-5">
               <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 Score over time
               </h2>
@@ -124,7 +124,7 @@ export default async function SeoAuditPage() {
         </>
       )}
 
-      <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+      <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
             Search Console — real search queries
@@ -222,7 +222,7 @@ export default async function SeoAuditPage() {
           {report.pages.map((page) => (
             <section
               key={page.path}
-              className="rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900"
+              className="glass glass-hairline rounded-2xl p-5"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">

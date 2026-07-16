@@ -15,16 +15,16 @@ const STEPS = [
 
 export default function HowItWorks() {
   return (
-    <section id="how" className="bg-neutral-50 py-12 sm:py-16 dark:bg-neutral-900/40">
+    <section id="how" className="py-12 sm:py-16">
       <div className="mx-auto max-w-5xl px-4">
-        <h2 className="text-center text-xl font-bold sm:text-3xl dark:text-white">
+        <h2 className="font-display text-center text-xl font-bold sm:text-3xl dark:text-white">
           How it works
         </h2>
         <div className="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-3 sm:gap-6">
           {STEPS.map((s, i) => (
             <div
               key={s.title}
-              className="rounded-2xl border border-black/5 bg-white p-6 dark:border-white/10 dark:bg-neutral-900"
+              className="glass glass-hairline rounded-2xl p-6"
             >
               <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 text-sm font-bold text-white">
                 {i + 1}

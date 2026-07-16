@@ -290,7 +290,7 @@ export default function DownloaderForm({
     <div id="top" className="mx-auto max-w-2xl px-4">
       <form
         onSubmit={handleSubmit}
-        className="flex flex-col gap-3 rounded-2xl border border-black/5 bg-white p-3 shadow-lg shadow-violet-900/5 sm:flex-row dark:border-white/10 dark:bg-neutral-900"
+        className="glass-strong glass-sheen flex flex-col gap-3 rounded-2xl p-3 sm:flex-row"
       >
         <input
           value={url}
@@ -298,7 +298,7 @@ export default function DownloaderForm({
           type="url"
           inputMode="url"
           placeholder={placeholder}
-          className="min-w-0 flex-1 rounded-xl border border-black/10 px-4 py-3 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-neutral-950 dark:text-white dark:placeholder:text-neutral-500"
+          className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/70 px-4 py-3 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-black/30 dark:text-white dark:placeholder:text-neutral-400"
         />
         <div className="flex gap-2">
           <button
@@ -325,7 +325,7 @@ export default function DownloaderForm({
       )}
 
       {playlist && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-neutral-900">
+        <div className="glass glass-hairline mt-6 overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3 dark:border-white/10">
             <div className="min-w-0">
               <p className="line-clamp-1 font-medium text-neutral-900 dark:text-white">
@@ -363,7 +363,7 @@ export default function DownloaderForm({
       )}
 
       {result && (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm dark:border-white/10 dark:bg-neutral-900">
+        <div className="glass glass-hairline mt-6 overflow-hidden rounded-2xl">
           <div className="flex gap-4 p-4">
             {result.thumbnail && (
               // eslint-disable-next-line @next/next/no-img-element

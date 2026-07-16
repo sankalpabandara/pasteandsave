@@ -16,12 +16,12 @@ const PLATFORMS: { name: string; color: string; initial: string; href?: string }
 ];
 
 const tileClass =
-  "flex flex-col items-center gap-3 rounded-2xl border border-black/5 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-6 dark:border-white/10 dark:bg-neutral-900";
+  "glass glass-hairline flex flex-col items-center gap-3 rounded-2xl p-5 transition hover:-translate-y-0.5 hover:shadow-lg sm:p-6";
 
 export default function Platforms() {
   return (
     <section id="platforms" className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
-      <h2 className="text-center text-xl font-bold sm:text-3xl dark:text-white">
+      <h2 className="font-display text-center text-xl font-bold sm:text-3xl dark:text-white">
         Works with more than 1,200 sites
       </h2>
       <p className="mx-auto mt-2 max-w-xl text-center text-sm text-neutral-600 sm:text-base dark:text-neutral-400">

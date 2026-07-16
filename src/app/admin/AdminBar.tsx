@@ -22,7 +22,7 @@ export default function AdminBar({ generatedAt }: { generatedAt: number }) {
       <button
         type="button"
         onClick={() => router.refresh()}
-        className="rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/5"
+        className="glass glass-hairline rounded-lg px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:-translate-y-0.5 dark:text-neutral-300"
       >
         Refresh
       </button>

@@ -27,7 +27,7 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+    <div className="glass glass-hairline rounded-2xl p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {label}
       </p>
@@ -58,7 +58,7 @@ export default async function AdminDashboard() {
     <main className="mx-auto max-w-5xl px-4 py-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-neutral-900 dark:text-white">
+          <h1 className="font-display text-2xl font-bold text-neutral-900 dark:text-white">
             Dashboard
           </h1>
           <div className="flex gap-3 text-sm">
@@ -102,7 +102,7 @@ export default async function AdminDashboard() {
         />
       </div>
 
-      <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+      <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
           Last 14 days
         </h2>
@@ -142,7 +142,7 @@ export default async function AdminDashboard() {
       </section>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+        <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
             Top sites downloaded
           </h2>
@@ -168,7 +168,7 @@ export default async function AdminDashboard() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+        <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
             Top pages
           </h2>
@@ -193,7 +193,7 @@ export default async function AdminDashboard() {
         </section>
       </div>
 
-      <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+      <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
             Google Analytics
@@ -284,7 +284,7 @@ export default async function AdminDashboard() {
         )}
       </section>
 
-      <section className="mt-6 rounded-2xl border border-black/5 bg-white p-5 dark:border-white/10 dark:bg-neutral-900">
+      <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
           Recent activity
         </h2>

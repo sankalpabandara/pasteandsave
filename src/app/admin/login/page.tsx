@@ -8,9 +8,9 @@ export const metadata: Metadata = {
 
 export default function AdminLoginPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 dark:bg-neutral-950">
-      <div className="w-full max-w-sm rounded-2xl border border-black/5 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-        <h1 className="text-lg font-bold text-neutral-900 dark:text-white">
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <div className="glass glass-strong glass-sheen w-full max-w-sm rounded-3xl p-6">
+        <h1 className="font-display text-xl font-bold text-neutral-900 dark:text-white">
           Admin sign in
         </h1>
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
