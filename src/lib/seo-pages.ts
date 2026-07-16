@@ -364,7 +364,11 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         q: "Can I download videos from private groups or friends-only posts?",
-        a: "No. Only videos that are publicly visible can be downloaded.",
+        a: "No. This tool works like a logged-out browser, so it can only reach videos that are set to public. It cannot tell who owns a video, only whether the link is publicly viewable.",
+      },
+      {
+        q: "How do I download my own private Facebook videos?",
+        a: "Use Facebook's own export tool instead: Settings, then Your Information, then Download Your Information. It gives you everything you have posted, at any privacy level, straight from Facebook. No third-party site should ever ask for your Facebook login to do this.",
       },
       {
         q: "Can I download Facebook Reels?",
