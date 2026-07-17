@@ -41,6 +41,15 @@ header {
   color: #a78bfa;
 }
 
+.shortcut {
+  margin-left: auto;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
 main {
   padding: 14px 16px;
 }
@@ -70,13 +79,78 @@ main {
   color: rgba(255, 255, 255, 0.75);
 }
 
-.section-title {
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin: 16px 0 8px;
+}
+
+.section-title {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.save-all {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.save-all:hover {
+  background: rgba(124, 58, 237, 0.4);
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.filter {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.filter.active {
+  background: rgba(124, 58, 237, 0.5);
+  border-color: rgba(167, 139, 250, 0.5);
+  color: #fff;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.icon-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 #media-list {
@@ -162,8 +236,10 @@ main {
 }
 
 footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 16px 13px;
-  text-align: center;
 }
 footer a {
   font-size: 11px;
@@ -172,4 +248,20 @@ footer a {
 }
 footer a:hover {
   color: #a78bfa;
+}
+
+.min-size {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.min-size select {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 6px;
+  font-size: 10px;
+  padding: 2px 4px;
 }

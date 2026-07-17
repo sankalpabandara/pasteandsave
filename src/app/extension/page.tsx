@@ -28,6 +28,14 @@ const FEATURES = [
     title: "Right-click anywhere",
     body: "Every page, link, video and audio element gets a Save with PasteAndSave entry in the right-click menu. Handy when you want to grab something without opening the popup.",
   },
+  {
+    title: "Filters, Save all and MP3",
+    body: "Narrow the list to video, audio or streams with one tap. Save all grabs every plain file at once, and the note button fetches just the audio of any video as an MP3.",
+  },
+  {
+    title: "Keyboard shortcut",
+    body: "Press Alt+Shift+S on any page and it opens here with the link already loaded. You can also set your own minimum file size so tiny clips never clutter the list.",
+  },
 ];
 
 const CHROME_STEPS = [

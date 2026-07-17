@@ -15,6 +15,22 @@ Works in Chrome, Edge, Brave, Opera (Chromium) and Firefox from one codebase.
 - Streams (HLS/DASH, YouTube, Instagram, TikTok and other protected hosts)
   open on PasteAndSave with the link already loaded
 - Right-click any page, link, video or audio to send it to PasteAndSave
+- Filter the list by video, audio or streams; Save all downloads every
+  plain file at once
+- Per-item copy-link button, and a note button that fetches just the
+  audio of a video as MP3 through the site
+- Alt+Shift+S sends the current page to PasteAndSave from anywhere
+- Adjustable minimum file size (50 KB / 200 KB / 1 MB) keeps tiny clips
+  out of the list; the choice syncs across your browsers
+
+## Tests
+
+`node test/background.test.mjs` runs the worker against synthetic network
+traffic: detection, classification, sizes from range responses, per-tab
+isolation, navigation clearing, the item cap, settings, shortcut and menu
+handling. Set `API_STYLE=firefox` to exercise the Firefox `browser` global.
+`test/popup-harness.html` runs the real popup against fixture data in a
+plain browser tab.
 
 ## Install in Chrome / Edge / Brave
 

@@ -31,6 +31,12 @@
     "service_worker": "background.js",
     "scripts": ["background.js"]
   },
+  "commands": {
+    "send-page": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Send the current page to PasteAndSave"
+    }
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "extension@pasteandsave.com",

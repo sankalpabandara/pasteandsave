@@ -15,7 +15,17 @@ const STREAM_URL = /\.(m3u8|mpd)([?#]|$)/i;
 // Hosts that serve media in protected or split form; direct saving of their
 // raw streams does not produce a usable file, so those go through the site.
 const STREAM_HOSTS = /(^|\.)(googlevideo\.com|youtube\.com|ytimg\.com|fbcdn\.net|cdninstagram\.com|tiktokcdn\S*\.com|twimg\.com)$/i;
-const MIN_BYTES = 200 * 1024; // ignore tiny blips like preview thumbnails
+const DEFAULT_MIN_BYTES = 200 * 1024; // ignore tiny blips like preview clips
+
+// Minimum size is user-adjustable from the popup and cached here.
+let minBytes = DEFAULT_MIN_BYTES;
+try {
+  api.storage.sync.get({ minBytes: DEFAULT_MIN_BYTES }, (v) => {
+    if (v && Number.isFinite(v.minBytes)) minBytes = v.minBytes;
+  });
+} catch {
+  // sync storage unavailable; the default stands
+}
 
 // tabId -> Map(key -> item). Mirrored to storage.session because MV3
 // workers get shut down between events.
@@ -108,42 +118,44 @@ async function restore(tabId) {
   }
 }
 
-api.webRequest.onResponseStarted.addListener(
-  (details) => {
-    const { tabId, url, type, responseHeaders, statusCode } = details;
-    if (tabId < 0 || statusCode >= 400) return;
-    const contentType = contentTypeOf(responseHeaders);
-    const kind = classify(url, type, contentType);
-    if (!kind) return;
+function recordResponse(details) {
+  const { tabId, url, type, responseHeaders, statusCode } = details;
+  if (tabId < 0 || statusCode >= 400) return;
+  const contentType = contentTypeOf(responseHeaders);
+  const kind = classify(url, type, contentType);
+  if (!kind) return;
 
-    const bytes = totalBytes(responseHeaders);
-    if (kind === "file" && bytes > 0 && bytes < MIN_BYTES) return;
+  const bytes = totalBytes(responseHeaders);
+  if (kind === "file" && bytes > 0 && bytes < minBytes) return;
 
-    restore(tabId).then(() => {
-      if (!tabMedia.has(tabId)) tabMedia.set(tabId, new Map());
-      const items = tabMedia.get(tabId);
-      const key = mediaKey(url);
-      const existing = items.get(key);
-      // Keep the largest size seen; range requests report chunks.
-      const size = Math.max(bytes, existing?.size ?? 0);
-      items.set(key, {
-        key,
-        url,
-        kind,
-        size,
-        contentType,
-        filename: filenameFrom(url, contentType),
-        foundAt: existing?.foundAt ?? Date.now(),
-      });
-      // Cap the list so a long session cannot grow without limit.
-      if (items.size > 40) {
-        const oldest = [...items.values()].sort((a, b) => a.foundAt - b.foundAt)[0];
-        items.delete(oldest.key);
-      }
-      updateBadge(tabId);
-      persist(tabId);
+  return restore(tabId).then(() => {
+    if (!tabMedia.has(tabId)) tabMedia.set(tabId, new Map());
+    const items = tabMedia.get(tabId);
+    const key = mediaKey(url);
+    const existing = items.get(key);
+    // Keep the largest size seen; range requests report chunks.
+    const size = Math.max(bytes, existing?.size ?? 0);
+    items.set(key, {
+      key,
+      url,
+      kind,
+      size,
+      contentType,
+      filename: filenameFrom(url, contentType),
+      foundAt: existing?.foundAt ?? Date.now(),
     });
-  },
+    // Cap the list so a long session cannot grow without limit.
+    if (items.size > 40) {
+      const oldest = [...items.values()].sort((a, b) => a.foundAt - b.foundAt)[0];
+      items.delete(oldest.key);
+    }
+    updateBadge(tabId);
+    persist(tabId);
+  });
+}
+
+api.webRequest.onResponseStarted.addListener(
+  recordResponse,
   { urls: ["<all_urls>"], types: ["media", "xmlhttprequest", "other"] },
   ["responseHeaders"],
 );
@@ -163,6 +175,10 @@ api.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === "loading" && changeInfo.url) clearTab(tabId);
 });
 api.tabs.onRemoved.addListener((tabId) => clearTab(tabId));
+
+function openOnSite(target) {
+  api.tabs.create({ url: `${SITE}/?url=${encodeURIComponent(target)}` });
+}
 
 // Right-click entries: page, link, or the media element itself.
 function setupMenus() {
@@ -189,8 +205,16 @@ api.runtime.onStartup?.addListener(setupMenus);
 
 api.contextMenus.onClicked.addListener((info) => {
   const target = info.srcUrl || info.linkUrl || info.pageUrl;
-  if (!target) return;
-  api.tabs.create({ url: `${SITE}/?url=${encodeURIComponent(target)}` });
+  if (target) openOnSite(target);
+});
+
+// Keyboard shortcut: send the current page to the site without the popup.
+api.commands?.onCommand.addListener((command) => {
+  if (command !== "send-page") return;
+  api.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    const url = tabs?.[0]?.url;
+    if (url && /^https?:/i.test(url)) openOnSite(url);
+  });
 });
 
 // Popup requests.
@@ -199,7 +223,7 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     restore(msg.tabId).then(() => {
       const items = [...(tabMedia.get(msg.tabId)?.values() ?? [])];
       items.sort((a, b) => b.size - a.size || a.foundAt - b.foundAt);
-      sendResponse({ items });
+      sendResponse({ items, minBytes });
     });
     return true; // async response
   }
@@ -209,6 +233,19 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       () => sendResponse({ ok: !api.runtime.lastError }),
     );
     return true;
+  }
+  if (msg?.type === "setMinBytes") {
+    const n = Number(msg.minBytes);
+    if (Number.isFinite(n) && n >= 0) {
+      minBytes = n;
+      try {
+        api.storage.sync.set({ minBytes: n });
+      } catch {
+        // keep the in-memory value
+      }
+    }
+    sendResponse({ ok: true, minBytes });
+    return false;
   }
   return false;
 });

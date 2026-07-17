@@ -90,6 +90,7 @@ export default function DownloaderForm({
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
   const sourcesRef = useRef<Record<string, EventSource>>({});
   const autoRanRef = useRef(false);
+  const mp3PrefRef = useRef(false);
   const { gate } = useAdGate();
 
   // Look up one video and show its download options. Used both for the search
@@ -185,6 +186,9 @@ export default function DownloaderForm({
     const shared = params.get("url") ?? params.get("u");
     if (!shared) return;
     autoRanRef.current = true;
+    // ?mp3=1 (used by the browser extension) means the visitor already chose
+    // audio, so the MP3 job starts as soon as the lookup lands.
+    if (params.get("mp3") === "1") mp3PrefRef.current = true;
     // Defer a tick so the lookup's state updates don't run synchronously
     // inside the effect.
     const t = setTimeout(() => void runLookup(shared), 0);
@@ -285,6 +289,16 @@ export default function DownloaderForm({
       }),
     );
   }
+
+  // Extension deep links with ?mp3=1 skip the extra click: the MP3 job starts
+  // as soon as the lookup lands, unless the post turned out to be photos only.
+  useEffect(() => {
+    if (!mp3PrefRef.current || !result) return;
+    if (result.formats.length > 0 && result.formats.every((f) => f.isImage)) return;
+    mp3PrefRef.current = false;
+    downloadAudio();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   return (
     <div id="top" className="mx-auto max-w-2xl px-4">

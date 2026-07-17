@@ -2,7 +2,51 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="../popup.css" />
+    <script>
+      // Mock extension API with fixture data so the real popup.js can run in
+      // a plain browser tab. Mirrors the shapes background.js produces.
+      const FIXTURE_ITEMS = [
+        {
+          key: "a", url: "https://cdn.example.com/videos/big-trailer.mp4",
+          kind: "file", size: 52428800, contentType: "video/mp4",
+          filename: "big-trailer.mp4", foundAt: 1,
+        },
+        {
+          key: "b", url: "https://cdn.example.com/audio/podcast-episode.mp3",
+          kind: "file", size: 4200000, contentType: "audio/mpeg",
+          filename: "podcast-episode.mp3", foundAt: 2,
+        },
+        {
+          key: "c", url: "https://video.example.com/live/master.m3u8",
+          kind: "stream", size: 0, contentType: "application/vnd.apple.mpegurl",
+          filename: "master.m3u8", foundAt: 3,
+        },
+        {
+          key: "d", url: "https://cdn.example.com/videos/second-clip.webm",
+          kind: "file", size: 9000000, contentType: "video/webm",
+          filename: "second-clip.webm", foundAt: 4,
+        },
+      ];
+      window.__log = [];
+      window.chrome = {
+        tabs: {
+          query: async () => [{ id: 1, url: "https://vimeo.com/123456789" }],
+          create: (opts) => window.__log.push("tab:" + opts.url),
+        },
+        runtime: {
+          sendMessage: (msg, cb) => {
+            window.__log.push("msg:" + msg.type);
+            if (msg.type === "getMedia") cb({ items: FIXTURE_ITEMS, minBytes: 204800 });
+            else if (msg.type === "download") setTimeout(() => cb({ ok: true }), 30);
+            else cb({ ok: true });
+          },
+          lastError: null,
+        },
+      };
+      // window.close is a no-op here so assertions can still run.
+      window.close = () => window.__log.push("closed");
+    </script>
   </head>
   <body>
     <header>
@@ -57,6 +101,6 @@
       </a>
     </footer>
 
-    <script src="popup.js"></script>
+    <script src="../popup.js"></script>
   </body>
 </html>
