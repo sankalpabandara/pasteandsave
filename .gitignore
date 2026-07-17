@@ -46,3 +46,6 @@ next-env.d.ts
 
 # yt-dlp / ffmpeg binaries — large, fetched by scripts/setup-bin.ps1
 /bin/*.exe
+
+# local editor/agent tooling
+/.claude/
