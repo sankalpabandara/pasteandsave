@@ -150,7 +150,7 @@ export default function TermsPage() {
             you believe content accessible through the Service infringes
             your copyright, or that the Service itself is being used to
             facilitate infringement of your work, contact us at{" "}
-            <span className="font-medium">sankalpabandara09@gmail.com</span>{" "}
+            <span className="font-medium">sankethperera@proton.me</span>{" "}
             with:
           </p>
           <ul className="list-disc space-y-2 pl-5">
@@ -248,8 +248,8 @@ export default function TermsPage() {
 
         <Section title="14. Contact">
           <p>
-            Questions about these Terms can be sent to{" "}
-            <span className="font-medium">sankalpabandara09@gmail.com</span>.
+            Questions about these Terms can be sent to Sanketh Perera at{" "}
+            <span className="font-medium">sankethperera@proton.me</span>.
           </p>
         </Section>
       </main>

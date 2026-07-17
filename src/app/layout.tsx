@@ -45,6 +45,9 @@ export const metadata: Metadata = {
     "video downloader no login",
   ],
   alternates: { canonical: "/" },
+  authors: [{ name: "Sanketh Perera" }],
+  creator: "Sanketh Perera",
+  publisher: SITE_NAME,
   openGraph: {
     title: `${SITE_NAME} - Free Online Video Downloader`,
     description:
