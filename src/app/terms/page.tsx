@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/terms" },
 };
 
-const LAST_UPDATED = "July 11, 2026";
+const LAST_UPDATED = "July 17, 2026";
 
 function Section({
   title,
@@ -58,13 +58,6 @@ export default function TermsPage() {
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
           Last updated: {LAST_UPDATED}
         </p>
-
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-          This is a general-purpose template, not legal advice. It has not
-          been reviewed by a lawyer for your specific jurisdiction or
-          business. Replace the bracketed placeholders below and have an
-          attorney review this before relying on it.
-        </div>
 
         <Section title="1. Agreement to Terms">
           <p>
@@ -157,7 +150,7 @@ export default function TermsPage() {
             you believe content accessible through the Service infringes
             your copyright, or that the Service itself is being used to
             facilitate infringement of your work, contact us at{" "}
-            <span className="font-medium">[YOUR DMCA/ABUSE CONTACT EMAIL]</span>{" "}
+            <span className="font-medium">sankalpabandara09@gmail.com</span>{" "}
             with:
           </p>
           <ul className="list-disc space-y-2 pl-5">
@@ -198,8 +191,8 @@ export default function TermsPage() {
             SERVICE OR ANY CONTENT YOU DOWNLOAD THROUGH IT, EVEN IF ADVISED
             OF THE POSSIBILITY OF SUCH DAMAGES. TO THE EXTENT ANY LIABILITY
             CANNOT BE EXCLUDED, OUR TOTAL LIABILITY TO YOU FOR ALL CLAIMS
-            WILL NOT EXCEED [USD $0 / THE AMOUNT YOU PAID US IN THE PAST 12
-            MONTHS, WHICH IS $0 FOR A FREE SERVICE].
+            WILL NOT EXCEED THE AMOUNT YOU PAID US IN THE PAST 12 MONTHS,
+            WHICH IS ZERO FOR THIS FREE SERVICE.
           </p>
         </Section>
 
@@ -236,13 +229,11 @@ export default function TermsPage() {
 
         <Section title="12. Governing Law">
           <p>
-            These Terms are governed by the laws of{" "}
-            <span className="font-medium">[YOUR JURISDICTION, e.g. &quot;the State of Delaware, USA&quot;]</span>,
-            without regard to its conflict-of-laws principles. Any dispute
-            arising from these Terms or the Service will be resolved in the
-            courts located in{" "}
-            <span className="font-medium">[YOUR VENUE]</span>, and you
-            consent to that jurisdiction.
+            These Terms are governed by the laws of the country in which the
+            operator of the Service resides, without regard to
+            conflict-of-laws principles. Any dispute arising from these Terms
+            or the Service will be resolved in the competent courts of that
+            country, and you consent to that jurisdiction.
           </p>
         </Section>
 
@@ -258,7 +249,7 @@ export default function TermsPage() {
         <Section title="14. Contact">
           <p>
             Questions about these Terms can be sent to{" "}
-            <span className="font-medium">[YOUR CONTACT EMAIL]</span>.
+            <span className="font-medium">sankalpabandara09@gmail.com</span>.
           </p>
         </Section>
       </main>
