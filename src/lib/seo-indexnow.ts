@@ -61,7 +61,7 @@ async function saveState(state: IndexNowState) {
 
 export function allSiteUrls(): string[] {
   const base = SITE_URL.replace(/\/$/, "");
-  return ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/terms"].map(
+  return ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/extension", "/terms"].map(
     (p) => `${base}${p === "/" ? "" : p}`,
   );
 }

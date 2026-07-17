@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "PasteAndSave - Video Downloader",
+  "version": "1.0.0",
+  "description": "Spots downloadable video and audio on the page you are on. Save files directly, or send any page to PasteAndSave for MP4 and MP3.",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "downloads",
+    "webRequest",
+    "storage"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Save with PasteAndSave",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "extension@pasteandsave.com",
+      "strict_min_version": "115.0"
+    }
+  }
+}

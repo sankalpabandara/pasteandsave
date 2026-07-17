@@ -8,6 +8,7 @@ const NAV_TOOLS = [
   { label: "Facebook", href: "/facebook-video-downloader" },
   { label: "YouTube", href: "/youtube-video-downloader" },
   { label: "MP3 Converter", href: "/video-to-mp3-converter" },
+  { label: "Extension", href: "/extension" },
 ];
 
 export default function Header() {

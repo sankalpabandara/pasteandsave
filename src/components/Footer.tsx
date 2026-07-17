@@ -41,6 +41,11 @@ export default function Footer() {
                 </li>
               ))}
               <li>
+                <Link href="/extension" className="hover:text-neutral-900 dark:hover:text-white">
+                  Browser Extension
+                </Link>
+              </li>
+              <li>
                 <Link href="/terms" className="hover:text-neutral-900 dark:hover:text-white">
                   Terms of Service
                 </Link>

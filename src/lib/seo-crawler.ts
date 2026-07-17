@@ -277,7 +277,7 @@ async function auditPath(path: string): Promise<CrawledPage> {
 }
 
 export async function crawlSite(): Promise<CrawlReport> {
-  const paths = ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/terms"];
+  const paths = ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/extension", "/terms"];
   const pages = await Promise.all(paths.map(auditPath));
 
   // Flag pages that share a title or meta description with another page, then
