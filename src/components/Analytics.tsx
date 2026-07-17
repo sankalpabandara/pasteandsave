@@ -14,15 +14,20 @@ function useTracking() {
 
   useEffect(() => {
     if (!pathname || last.current === pathname) return;
+    const isLanding = last.current === null;
     last.current = pathname;
 
     // Don't track the admin area.
     if (pathname.startsWith("/admin")) return;
 
+    // Referrer is only useful on the landing pageview; after an internal
+    // navigation it would just be our own host.
+    const ref = isLanding && document.referrer ? document.referrer : "";
+
     fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: pathname }),
+      body: JSON.stringify({ path: pathname, ref }),
       keepalive: true,
     }).catch(() => {});
 

@@ -25,6 +25,8 @@ export type AnalyticsEvent = {
   mode?: "video" | "audio";
   ok?: boolean;
   path?: string;
+  /** External referrer hostname, only set when the visit came from another site. */
+  ref?: string;
 };
 
 let dirReady = false;
@@ -101,6 +103,40 @@ export type Stats = {
   recent: AnalyticsEvent[];
   generatedAt: number;
 };
+
+export type Backlink = {
+  domain: string;
+  hits: number;
+  firstSeen: number;
+  lastSeen: number;
+};
+
+/**
+ * Backlink discovery from first-party traffic: every pageview that arrived
+ * with an external referrer is evidence of a live link to us somewhere on
+ * that domain. Search engines and common portals are filtered out so the
+ * list shows genuine referring sites, newest activity first.
+ */
+const SEARCH_ENGINE_HOSTS =
+  /(^|\.)(google|bing|yahoo|duckduckgo|yandex|baidu|ecosia|brave|startpage|qwant)\./i;
+
+export async function getBacklinks(): Promise<Backlink[]> {
+  const events = await readEvents();
+  const map = new Map<string, Backlink>();
+  for (const ev of events) {
+    if (ev.type !== "pageview" || !ev.ref) continue;
+    if (SEARCH_ENGINE_HOSTS.test(ev.ref)) continue;
+    const b = map.get(ev.ref);
+    if (b) {
+      b.hits++;
+      b.lastSeen = Math.max(b.lastSeen, ev.t);
+      b.firstSeen = Math.min(b.firstSeen, ev.t);
+    } else {
+      map.set(ev.ref, { domain: ev.ref, hits: 1, firstSeen: ev.t, lastSeen: ev.t });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.lastSeen - a.lastSeen).slice(0, 50);
+}
 
 export async function getStats(): Promise<Stats> {
   const events = await readEvents();

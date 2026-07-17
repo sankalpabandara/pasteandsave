@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, verifySession } from "@/lib/auth";
-import { runAudit } from "@/lib/seo-history";
+import { runAutopilotCycle } from "@/lib/seo-autopilot";
 
 export const runtime = "nodejs";
 // Crawling several pages can take a few seconds.
@@ -25,13 +25,17 @@ export async function POST(request: NextRequest) {
   if (!(await authorized(request))) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const report = await runAudit();
+  // A manual run does everything a scheduled cycle does: audit, change
+  // report and IndexNow submission.
+  const auto = await runAutopilotCycle();
   return Response.json({
     ok: true,
-    score: report.score,
-    errors: report.errors,
-    warnings: report.warnings,
-    pageCount: report.pageCount,
-    generatedAt: report.generatedAt,
+    score: auto.score,
+    errors: auto.errors,
+    warnings: auto.warnings,
+    pageCount: auto.pageCount,
+    summary: auto.summary,
+    indexing: auto.indexing,
+    generatedAt: auto.t,
   });
 }

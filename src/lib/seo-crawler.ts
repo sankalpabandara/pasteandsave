@@ -183,6 +183,56 @@ async function auditPath(path: string): Promise<CrawledPage> {
       detail: "og:title improves link previews on social.",
     });
   }
+  if (!extractMeta(html, "og:image", "property")) {
+    checks.push({
+      severity: "warn",
+      label: "No Open Graph image",
+      detail: "Shared links show no preview image. Set og:image for better click-through.",
+    });
+  }
+  if (!extractMeta(html, "twitter:card", "name")) {
+    checks.push({
+      severity: "warn",
+      label: "No Twitter card",
+      detail: "twitter:card controls how links look when shared on X.",
+    });
+  }
+
+  // Document basics
+  if (!/<html[^>]+lang=/i.test(html)) {
+    checks.push({
+      severity: "warn",
+      label: "Missing lang attribute",
+      detail: "The <html> tag should declare its language.",
+    });
+  }
+  if (!extractMeta(html, "viewport", "name")) {
+    checks.push({
+      severity: "warn",
+      label: "No viewport meta",
+      detail: "Without a viewport tag the page fails mobile-friendly checks.",
+    });
+  }
+
+  // Heading structure beyond the H1
+  if (countMatches(html, /<h2[\s>]/gi) === 0) {
+    checks.push({
+      severity: "warn",
+      label: "No H2 headings",
+      detail: "Subheadings help both readers and crawlers understand the page.",
+    });
+  }
+
+  // Internal linking: a page that links to few of its siblings passes on
+  // little authority and is harder to crawl to.
+  const internalLinks = countMatches(html, /<a[^>]+href=["']\//gi);
+  if (internalLinks < 5) {
+    checks.push({
+      severity: "warn",
+      label: "Few internal links",
+      detail: `Only ${internalLinks} internal link(s) found. Aim for 5 or more.`,
+    });
+  }
 
   // Images missing alt
   const noAlt = imagesMissingAlt(html);
