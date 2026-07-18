@@ -1,7 +1,9 @@
 // Popup logic: shows what the background worker found on the active tab,
 // downloads plain files directly, and routes pages or streams to the site.
 
-const api = globalThis.browser ?? globalThis.chrome;
+// chrome first: Firefox's browser.* namespace ignores callbacks, but its
+// chrome.* namespace supports them, so this order works in both browsers.
+const api = globalThis.chrome ?? globalThis.browser;
 
 let site = "https://pasteandsave.com";
 let allItems = [];
@@ -120,7 +122,7 @@ function render() {
   saveAll.hidden = directFiles.length < 2;
   saveAll.onclick = () => {
     saveAll.disabled = true;
-    saveAll.textContent = "Saving…";
+    saveAll.textContent = "Saving...";
     let left = directFiles.length;
     for (const item of directFiles) {
       api.runtime.sendMessage(

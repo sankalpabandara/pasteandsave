@@ -1,4 +1,4 @@
-// PasteAndSave extension background worker.
+﻿// PasteAndSave extension background worker.
 //
 // Watches network traffic the same way a download manager does: every video
 // or audio response a page loads is recorded per tab, the toolbar badge shows
@@ -7,7 +7,7 @@
 // hosts like YouTube) are handed to pasteandsave.com, which knows how to
 // fetch them whole.
 
-const api = globalThis.browser ?? globalThis.chrome;
+const api = globalThis.chrome ?? globalThis.browser;
 const DEFAULT_SITE = "https://pasteandsave.com";
 
 // The site address is configurable (options page) so the extension can point

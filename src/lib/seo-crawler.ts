@@ -276,9 +276,31 @@ async function auditPath(path: string): Promise<CrawledPage> {
   };
 }
 
+// Crawl a few pages at a time. Fetching everything at once makes the pages
+// queue behind each other, which both distorts the measured load times and
+// spikes the very server being audited.
+const CRAWL_CONCURRENCY = 4;
+
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 export async function crawlSite(): Promise<CrawlReport> {
   const paths = ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/extension", "/terms"];
-  const pages = await Promise.all(paths.map(auditPath));
+  const pages = await mapLimit(paths, CRAWL_CONCURRENCY, auditPath);
 
   // Flag pages that share a title or meta description with another page, then
   // rescore those pages to account for the added findings.

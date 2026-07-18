@@ -38,13 +38,16 @@ body {
   min-height: 100vh;
 }
 
-/* Aurora background: soft colour fields behind the glass, fixed on scroll. */
+/* Aurora background: soft colour fields behind the glass, fixed on scroll.
+   The translateZ promotes it to its own compositor layer so scrolling never
+   repaints the gradients. */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  transform: translateZ(0);
   background:
     radial-gradient(42rem 42rem at 12% 8%, rgba(139, 92, 246, 0.22), transparent 60%),
     radial-gradient(38rem 38rem at 88% 12%, rgba(236, 72, 153, 0.16), transparent 60%),
@@ -78,6 +81,8 @@ body::before {
 .glass-sheen {
   position: relative;
 }
+/* Plain translucent gradient; blend modes force expensive extra compositing
+   passes on top of the backdrop blur, which janks scrolling on phones. */
 .glass-sheen::after {
   content: "";
   position: absolute;
@@ -86,16 +91,25 @@ body::before {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.35),
+    rgba(255, 255, 255, 0.22),
     rgba(255, 255, 255, 0) 40%
   );
-  opacity: 0.6;
-  mix-blend-mode: overlay;
 }
 
 .font-display {
   font-family: var(--font-display), var(--font-sans), sans-serif;
   letter-spacing: -0.02em;
+}
+
+/* Phones get a lighter blur: the effect reads the same at small sizes but
+   costs far less GPU, which keeps scrolling smooth. */
+@media (max-width: 640px) {
+  .glass {
+    backdrop-filter: blur(10px) saturate(150%);
+  }
+  .glass-strong {
+    backdrop-filter: blur(12px) saturate(160%);
+  }
 }
 
 /* Respect reduced transparency / motion preferences. */

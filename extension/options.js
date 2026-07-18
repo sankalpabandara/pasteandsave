@@ -1,7 +1,7 @@
-// Settings page: site address and minimum file size, stored in sync storage
+﻿// Settings page: site address and minimum file size, stored in sync storage
 // so they follow the user's browser profile.
 
-const api = globalThis.browser ?? globalThis.chrome;
+const api = globalThis.chrome ?? globalThis.browser;
 const DEFAULTS = { siteBase: "https://pasteandsave.com", minBytes: 204800 };
 
 const siteInput = document.getElementById("site");
