@@ -4,7 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
-import { EXTRACTOR_ARGS, FFMPEG_DIR, YTDLP_PATH } from "./ytdlp";
+import {
+  EXTRACTOR_ARGS,
+  FFMPEG_DIR,
+  YTDLP_PATH,
+  networkArgs,
+  siteArgs,
+  isBlockedByPlatform,
+} from "./ytdlp";
 import { BusyError, jobLimiter } from "./concurrency";
 
 export type JobStatus =
@@ -92,6 +99,10 @@ export function startJob(opts: StartJobOptions): string {
   jobs.set(id, job);
 
   const outputTemplate = path.join(tmpDir, "file.%(ext)s");
+  // The same YouTube hardening the lookup uses: without matching player
+  // clients and proxy/retry flags, a download can fail even after the info
+  // lookup succeeded.
+  const hardening = [...EXTRACTOR_ARGS, ...networkArgs(), ...siteArgs(opts.url)];
   const args =
     opts.mode === "audio"
       ? [
@@ -105,7 +116,7 @@ export function startJob(opts: StartJobOptions): string {
           "--no-warnings",
           "--ffmpeg-location",
           FFMPEG_DIR,
-          ...EXTRACTOR_ARGS,
+          ...hardening,
           "-o",
           outputTemplate,
           "--",
@@ -119,7 +130,7 @@ export function startJob(opts: StartJobOptions): string {
           "--no-warnings",
           "--ffmpeg-location",
           FFMPEG_DIR,
-          ...EXTRACTOR_ARGS,
+          ...hardening,
           "-o",
           outputTemplate,
           "--",
@@ -170,7 +181,9 @@ export function startJob(opts: StartJobOptions): string {
     releaseOnce();
     if (code !== 0) {
       job.status = "error";
-      job.error = stderrTail.trim().split("\n").pop() || `yt-dlp exited with code ${code}`;
+      job.error = isBlockedByPlatform(stderrTail)
+        ? "This site is rate-limiting our server right now. Give it a minute and try again."
+        : stderrTail.trim().split("\n").pop() || `yt-dlp exited with code ${code}`;
       return;
     }
     try {

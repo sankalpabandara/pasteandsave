@@ -17,6 +17,70 @@ export const FFMPEG_DIR = BIN_DIR;
 // A URL that doesn't match a specific extractor fails cleanly instead.
 export const EXTRACTOR_ARGS = ["--ies", "default,-generic"];
 
+// --- YouTube hardening -----------------------------------------------------
+// YouTube blocks its default "web" player client from datacenter IPs (the
+// "Sign in to confirm you're not a bot" wall). Picking clients that are more
+// tolerant of server IPs makes lookups and downloads work far more often. The
+// set is env-overridable so the box operator can retune when YouTube shifts
+// again, without a code change or redeploy.
+const YT_CLIENTS =
+  process.env.YTDLP_YOUTUBE_CLIENTS || "tv,web_safari,mweb,android_vr";
+// A different mix tried once if the first attempt fails, since which clients
+// work drifts week to week.
+const YT_FALLBACK_CLIENTS =
+  process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS || "default,tv,ios";
+
+// Optional residential/rotating proxy. Routing YouTube through a non-datacenter
+// IP is the durable fix when player-client tricks stop being enough.
+const YTDLP_PROXY = process.env.YTDLP_PROXY;
+// Escape hatch: any extra flags the operator wants (a PO-token provider,
+// a cookies file they manage themselves, geo options, etc.), space separated.
+const YTDLP_EXTRA_ARGS = (process.env.YTDLP_EXTRA_ARGS || "").trim();
+
+export function isYouTube(rawUrl: string): boolean {
+  try {
+    const h = new URL(rawUrl).hostname.toLowerCase();
+    return /(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(h);
+  } catch {
+    return false;
+  }
+}
+
+// Network-resilience + operator flags shared by every yt-dlp invocation.
+export function networkArgs(): string[] {
+  const args: string[] = [
+    "--extractor-retries",
+    "3",
+    "--retry-sleep",
+    "2",
+    "--socket-timeout",
+    "20",
+  ];
+  if (YTDLP_PROXY) args.unshift("--proxy", YTDLP_PROXY);
+  if (YTDLP_EXTRA_ARGS) args.push(...YTDLP_EXTRA_ARGS.split(/\s+/));
+  return args;
+}
+
+function youtubeClientArgs(clients: string): string[] {
+  return ["--extractor-args", `youtube:player_client=${clients}`];
+}
+
+// Builds the YouTube-specific extractor args to bolt onto any call. Empty for
+// non-YouTube URLs, which keep working exactly as before.
+export function siteArgs(url: string, fallback = false): string[] {
+  if (!isYouTube(url)) return [];
+  return youtubeClientArgs(fallback ? YT_FALLBACK_CLIENTS : YT_CLIENTS);
+}
+
+// Stderr signatures that mean "the platform is refusing our server", as
+// opposed to a genuinely private or missing video. Used to give a clearer
+// message and to decide whether a fallback retry is worth attempting.
+export function isBlockedByPlatform(stderr: string): boolean {
+  return /confirm you'?re not a bot|sign in to confirm|not a bot|HTTP Error 429|HTTP Error 403|too many requests|failed to extract any player response|unable to download api page/i.test(
+    stderr,
+  );
+}
+
 function ipv4IsPrivate(a: number, b: number): boolean {
   if (a === 127 || a === 10 || a === 0) return true;
   if (a === 169 && b === 254) return true; // link-local / cloud metadata
@@ -146,20 +210,46 @@ function runYtDlp(args: string[], timeoutMs = 30_000): Promise<string> {
   });
 }
 
+export class PlatformBlockedError extends Error {}
+
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {
   // Hold a concurrency slot for the whole lookup so a burst of requests can't
   // spawn unlimited yt-dlp processes.
   const release = await lookupLimiter.acquire();
   try {
-    const stdout = await runYtDlp([
+    const base = [
       "--dump-single-json",
       "--no-playlist",
       "--no-warnings",
       ...EXTRACTOR_ARGS,
-      "--",
-      url,
-    ]);
-    return JSON.parse(stdout) as YtDlpInfo;
+      ...networkArgs(),
+    ];
+    const yt = isYouTube(url);
+    // YouTube gets a longer budget: multiple player clients plus retries take
+    // more wall time than a single clean fetch.
+    const timeout = yt ? 60_000 : 30_000;
+    try {
+      const stdout = await runYtDlp([...base, ...siteArgs(url), "--", url], timeout);
+      return JSON.parse(stdout) as YtDlpInfo;
+    } catch (err) {
+      // For YouTube, one bot-block deserves a second try with a different
+      // client mix before we give up.
+      if (yt && err instanceof Error && !(err instanceof UnsupportedSiteError) && isBlockedByPlatform(err.message)) {
+        try {
+          const stdout = await runYtDlp([...base, ...siteArgs(url, true), "--", url], timeout);
+          return JSON.parse(stdout) as YtDlpInfo;
+        } catch (retryErr) {
+          if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
+            throw new PlatformBlockedError(retryErr.message);
+          }
+          throw retryErr;
+        }
+      }
+      if (err instanceof Error && isBlockedByPlatform(err.message)) {
+        throw new PlatformBlockedError(err.message);
+      }
+      throw err;
+    }
   } finally {
     release();
   }
@@ -201,6 +291,8 @@ export async function fetchPlaylist(url: string): Promise<PlaylistInfo | null> {
       "--dump-single-json",
       "--no-warnings",
       ...EXTRACTOR_ARGS,
+      ...networkArgs(),
+      ...siteArgs(url),
       "--playlist-end",
       String(MAX_PLAYLIST_ITEMS + 1),
       "--",
