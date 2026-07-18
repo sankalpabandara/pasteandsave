@@ -1,4 +1,4 @@
-﻿// Settings page: site address and minimum file size, stored in sync storage
+// Settings page: site address and minimum file size, stored in sync storage
 // so they follow the user's browser profile.
 
 const api = globalThis.chrome ?? globalThis.browser;
