@@ -2,8 +2,8 @@
 // downloads plain files directly, and routes pages or streams to the site.
 
 const api = globalThis.browser ?? globalThis.chrome;
-const SITE = "https://pasteandsave.com";
 
+let site = "https://pasteandsave.com";
 let allItems = [];
 let activeFilter = "all";
 let pageUrl = "";
@@ -29,7 +29,7 @@ function categoryOf(item) {
 
 function openSite(url, mp3) {
   const param = mp3 ? "&mp3=1" : "";
-  api.tabs.create({ url: `${SITE}/?url=${encodeURIComponent(url)}${param}` });
+  api.tabs.create({ url: `${site}/?url=${encodeURIComponent(url)}${param}` });
   window.close();
 }
 
@@ -156,10 +156,11 @@ async function init() {
     document.getElementById("save-page-label").textContent = "Open a video page first";
   }
 
-  const { items = [], minBytes } = await new Promise((resolve) =>
+  const { items = [], minBytes, siteBase } = await new Promise((resolve) =>
     api.runtime.sendMessage({ type: "getMedia", tabId: tab.id }, (res) => resolve(res ?? {})),
   );
   allItems = items;
+  if (siteBase) site = siteBase;
 
   const minSel = document.getElementById("min-size");
   if (minBytes) minSel.value = String(minBytes);

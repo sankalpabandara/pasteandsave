@@ -28,10 +28,17 @@ const mockApi = {
     query: (_q, cb) => cb([{ id: 1, url: "https://example.com/watch" }]),
   },
   action: {
-    setBadgeText: ({ tabId, text }) => (badge[tabId] = text),
-    setBadgeBackgroundColor: () => {},
+    // Rejects for "dead" tabs the way Chrome does for prerendered pages that
+    // vanish, so the guards in background.js get exercised for real.
+    setBadgeText: ({ tabId, text }) => {
+      if (tabId >= 900000000) return Promise.reject(new Error("No tab with id: " + tabId));
+      badge[tabId] = text;
+      return Promise.resolve();
+    },
+    setBadgeBackgroundColor: () => Promise.resolve(),
   },
   storage: {
+    onChanged: { addListener: (fn) => (listeners.storageChanged = fn) },
     session: {
       set: async (obj) => Object.assign(sessionStore, obj),
       get: async (key) => ({ [key]: sessionStore[key] }),
@@ -182,6 +189,24 @@ check("shortcut opened site with page url", createdTabs.some((u) => u.startsWith
 console.log("scenario: context menu click opens the site");
 listeners.menuClicked({ pageUrl: "https://example.com/some-post" });
 check("menu opened site", createdTabs.some((u) => u.includes("some-post")));
+
+console.log("scenario: dead prerender tab does not crash the worker");
+let crashed = false;
+process.once("unhandledRejection", () => (crashed = true));
+await fire({ tabId: 933053465, url: "https://cdn.example.com/prerender.mp4", responseHeaders: H({ "content-length": "9000000" }) });
+await new Promise((res) => setTimeout(res, 20));
+check("badge rejection swallowed", !crashed);
+r = await getMedia(933053465);
+check("dead-tab media still recorded for popup", r.items.length === 1);
+
+console.log("scenario: site address setting changes where links open");
+listeners.storageChanged({ siteBase: { newValue: "http://localhost:3030" } }, "sync");
+listeners.command("send-page");
+await new Promise((res) => setTimeout(res, 10));
+check("links now open on the configured site", createdTabs.some((u) => u.startsWith("http://localhost:3030/?url=")));
+check("getMedia reports the site to the popup", (await getMedia(2)).siteBase === "http://localhost:3030");
+listeners.storageChanged({ siteBase: { newValue: "javascript:alert(1)" } }, "sync");
+check("bad scheme falls back to the default", (await getMedia(2)).siteBase === "https://pasteandsave.com");
 
 console.log("scenario: list is capped at 40 items");
 for (let i = 0; i < 50; i++) {

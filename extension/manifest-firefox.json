@@ -28,7 +28,7 @@
     }
   },
   "background": {
-    "service_worker": "background.js"
+    "scripts": ["background.js"]
   },
   "options_ui": {
     "page": "options.html",
@@ -38,6 +38,12 @@
     "send-page": {
       "suggested_key": { "default": "Alt+Shift+S" },
       "description": "Send the current page to PasteAndSave"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "extension@pasteandsave.com",
+      "strict_min_version": "115.0"
     }
   }
 }

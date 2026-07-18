@@ -8,7 +8,11 @@
 // fetch them whole.
 
 const api = globalThis.browser ?? globalThis.chrome;
-const SITE = "https://pasteandsave.com";
+const DEFAULT_SITE = "https://pasteandsave.com";
+
+// The site address is configurable (options page) so the extension can point
+// at a staging or local copy of PasteAndSave before the domain is live.
+let siteBase = DEFAULT_SITE;
 
 const MEDIA_URL = /\.(mp4|webm|mkv|mov|m4v|mp3|m4a|aac|ogg|opus|wav|flac)([?#]|$)/i;
 const STREAM_URL = /\.(m3u8|mpd)([?#]|$)/i;
@@ -17,14 +21,40 @@ const STREAM_URL = /\.(m3u8|mpd)([?#]|$)/i;
 const STREAM_HOSTS = /(^|\.)(googlevideo\.com|youtube\.com|ytimg\.com|fbcdn\.net|cdninstagram\.com|tiktokcdn\S*\.com|twimg\.com)$/i;
 const DEFAULT_MIN_BYTES = 200 * 1024; // ignore tiny blips like preview clips
 
-// Minimum size is user-adjustable from the popup and cached here.
+// Minimum size and site address are user-adjustable and cached here.
 let minBytes = DEFAULT_MIN_BYTES;
+
+function normalizeSite(raw) {
+  try {
+    const u = new URL(String(raw).trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return DEFAULT_SITE;
+    return u.origin;
+  } catch {
+    return DEFAULT_SITE;
+  }
+}
+
+function loadSettings() {
+  try {
+    api.storage.sync.get({ minBytes: DEFAULT_MIN_BYTES, siteBase: DEFAULT_SITE }, (v) => {
+      if (v && Number.isFinite(v.minBytes)) minBytes = v.minBytes;
+      if (v && v.siteBase) siteBase = normalizeSite(v.siteBase);
+    });
+  } catch {
+    // sync storage unavailable; the defaults stand
+  }
+}
+loadSettings();
 try {
-  api.storage.sync.get({ minBytes: DEFAULT_MIN_BYTES }, (v) => {
-    if (v && Number.isFinite(v.minBytes)) minBytes = v.minBytes;
+  api.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "sync") return;
+    if (changes.minBytes && Number.isFinite(changes.minBytes.newValue)) {
+      minBytes = changes.minBytes.newValue;
+    }
+    if (changes.siteBase) siteBase = normalizeSite(changes.siteBase.newValue);
   });
 } catch {
-  // sync storage unavailable; the default stands
+  // fine
 }
 
 // tabId -> Map(key -> item). Mirrored to storage.session because MV3
@@ -99,10 +129,22 @@ async function persist(tabId) {
   }
 }
 
+// Chrome fires network events for prerendered pages whose tab can vanish
+// before the badge call lands, so every badge call swallows that failure.
+function setBadge(tabId, text) {
+  try {
+    const p1 = api.action.setBadgeText({ tabId, text });
+    if (p1 && typeof p1.catch === "function") p1.catch(() => {});
+    const p2 = api.action.setBadgeBackgroundColor({ tabId, color: "#7c3aed" });
+    if (p2 && typeof p2.catch === "function") p2.catch(() => {});
+  } catch {
+    // tab already gone
+  }
+}
+
 function updateBadge(tabId) {
   const count = tabMedia.get(tabId)?.size ?? 0;
-  api.action.setBadgeText({ tabId, text: count ? String(count) : "" });
-  api.action.setBadgeBackgroundColor({ tabId, color: "#7c3aed" });
+  setBadge(tabId, count ? String(count) : "");
 }
 
 async function restore(tabId) {
@@ -162,9 +204,10 @@ api.webRequest.onResponseStarted.addListener(
 
 function clearTab(tabId) {
   tabMedia.delete(tabId);
-  api.action.setBadgeText({ tabId, text: "" });
+  setBadge(tabId, "");
   try {
-    api.storage.session.remove("tab:" + tabId);
+    const p = api.storage.session.remove("tab:" + tabId);
+    if (p && typeof p.catch === "function") p.catch(() => {});
   } catch {
     // fine
   }
@@ -177,7 +220,7 @@ api.tabs.onUpdated.addListener((tabId, changeInfo) => {
 api.tabs.onRemoved.addListener((tabId) => clearTab(tabId));
 
 function openOnSite(target) {
-  api.tabs.create({ url: `${SITE}/?url=${encodeURIComponent(target)}` });
+  api.tabs.create({ url: `${siteBase}/?url=${encodeURIComponent(target)}` });
 }
 
 // Right-click entries: page, link, or the media element itself.
@@ -223,7 +266,7 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     restore(msg.tabId).then(() => {
       const items = [...(tabMedia.get(msg.tabId)?.values() ?? [])];
       items.sort((a, b) => b.size - a.size || a.foundAt - b.foundAt);
-      sendResponse({ items, minBytes });
+      sendResponse({ items, minBytes, siteBase });
     });
     return true; // async response
   }

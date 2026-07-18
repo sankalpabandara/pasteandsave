@@ -41,12 +41,25 @@ plain browser tab.
 
 ## Install in Firefox
 
-1. Open `about:debugging#/runtime/this-firefox`
-2. Click "Load Temporary Add-on"
-3. Pick `manifest.json` inside the unzipped folder
+1. In the unzipped folder, delete `manifest.json` and rename
+   `manifest-firefox.json` to `manifest.json` (Firefox runs the worker as
+   an event page instead of a service worker)
+2. Open `about:debugging#/runtime/this-firefox`
+3. Click "Load Temporary Add-on"
+4. Pick the `manifest.json` file
 
 Firefox removes temporary add-ons when it closes. For a permanent install
 the extension needs to be signed through addons.mozilla.org.
+
+## Settings
+
+Right-click the toolbar icon and choose Options (or open the extension's
+details page and click Extension options):
+
+- **Site address** — where streams and page links open. Defaults to
+  https://pasteandsave.com. Until that domain is live, or if you run your
+  own copy, set it to your server, for example `http://localhost:3030`.
+- **Minimum file size** — files smaller than this never show in the list.
 
 ## Store note
 
