@@ -10,6 +10,7 @@ import {
   YTDLP_PATH,
   networkArgs,
   siteArgs,
+  proxyArgs,
   isBlockedByPlatform,
 } from "./ytdlp";
 import { BusyError, jobLimiter } from "./concurrency";
@@ -102,7 +103,12 @@ export function startJob(opts: StartJobOptions): string {
   // The same YouTube hardening the lookup uses: without matching player
   // clients and proxy/retry flags, a download can fail even after the info
   // lookup succeeded.
-  const hardening = [...EXTRACTOR_ARGS, ...networkArgs(), ...siteArgs(opts.url)];
+  const hardening = [
+    ...EXTRACTOR_ARGS,
+    ...networkArgs(),
+    ...siteArgs(opts.url),
+    ...proxyArgs(opts.url),
+  ];
   const args =
     opts.mode === "audio"
       ? [

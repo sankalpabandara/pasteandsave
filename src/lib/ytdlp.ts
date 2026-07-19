@@ -30,9 +30,21 @@ const YT_CLIENTS =
 const YT_FALLBACK_CLIENTS =
   process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS || "default,tv,ios";
 
-// Optional residential/rotating proxy. Routing YouTube through a non-datacenter
-// IP is the durable fix when player-client tricks stop being enough.
+// Optional residential/rotating proxy. Routing blocked sites through a
+// non-datacenter IP is the durable fix once player-client tricks stop being
+// enough. By default the proxy is applied ONLY to the sites that actually
+// block datacenter IPs, so you never pay to proxy Facebook, TikTok, Vimeo and
+// the 1,200+ others that work fine direct. Set YTDLP_PROXY_HOSTS="all" to
+// route every site through the proxy instead.
 const YTDLP_PROXY = process.env.YTDLP_PROXY;
+const YTDLP_PROXY_HOSTS = (
+  process.env.YTDLP_PROXY_HOSTS ||
+  "youtube.com,youtu.be,youtube-nocookie.com,dailymotion.com,bilibili.com"
+)
+  .toLowerCase()
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 // Escape hatch: any extra flags the operator wants (a PO-token provider,
 // a cookies file they manage themselves, geo options, etc.), space separated.
 const YTDLP_EXTRA_ARGS = (process.env.YTDLP_EXTRA_ARGS || "").trim();
@@ -56,9 +68,26 @@ export function networkArgs(): string[] {
     "--socket-timeout",
     "20",
   ];
-  if (YTDLP_PROXY) args.unshift("--proxy", YTDLP_PROXY);
   if (YTDLP_EXTRA_ARGS) args.push(...YTDLP_EXTRA_ARGS.split(/\s+/));
   return args;
+}
+
+// Adds --proxy only for URLs whose host is in YTDLP_PROXY_HOSTS (or for every
+// URL when that list is "all"/"*"). This keeps paid proxy bandwidth spent only
+// on the sites that actually block the server, not the many that work direct.
+export function proxyArgs(rawUrl: string): string[] {
+  if (!YTDLP_PROXY) return [];
+  if (YTDLP_PROXY_HOSTS.includes("all") || YTDLP_PROXY_HOSTS.includes("*")) {
+    return ["--proxy", YTDLP_PROXY];
+  }
+  let host = "";
+  try {
+    host = new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return [];
+  }
+  const match = YTDLP_PROXY_HOSTS.some((h) => host === h || host.endsWith("." + h));
+  return match ? ["--proxy", YTDLP_PROXY] : [];
 }
 
 function youtubeClientArgs(clients: string): string[] {
@@ -212,6 +241,71 @@ function runYtDlp(args: string[], timeoutMs = 30_000): Promise<string> {
 
 export class PlatformBlockedError extends Error {}
 
+// Turns a raw yt-dlp failure into an honest, specific message, so a deleted
+// video, a photo-only post, a login wall and a real outage don't all show the
+// same scary text. Returns the HTTP status to use alongside it.
+export function userFacingError(err: unknown): { error: string; status: number } {
+  if (err instanceof UnsupportedSiteError) {
+    return { error: "That link isn't from a site we can download from.", status: 400 };
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (err instanceof PlatformBlockedError || isBlockedByPlatform(msg)) {
+    return {
+      error:
+        "This site is blocking our server right now. It usually clears up soon — try again in a bit, or try a link from another site.",
+      status: 503,
+    };
+  }
+  if (/timed out|timeout/i.test(msg)) {
+    return { error: "That took too long and timed out. Please try again.", status: 504 };
+  }
+  if (/is private|private video|this (?:video|post|reel) is private/i.test(msg)) {
+    return { error: "This one is private, so it can't be downloaded.", status: 422 };
+  }
+  if (/age.?restrict|confirm your age|inappropriate for some users/i.test(msg)) {
+    return {
+      error: "This video is age-restricted and needs a sign-in, so it can't be fetched.",
+      status: 422,
+    };
+  }
+  if (
+    /video unavailable|been removed|no longer available|account.*(terminated|closed|suspended)|removed by the (?:uploader|user)|has been deleted|not available anymore|this content isn'?t available/i.test(
+      msg,
+    )
+  ) {
+    return { error: "This video was removed or is no longer available.", status: 422 };
+  }
+  if (
+    /not available in your (?:country|region|location)|geo.?restrict|blocked it in your country|not available from your location/i.test(
+      msg,
+    )
+  ) {
+    return {
+      error: "This video is blocked in our server's region, so we can't reach it.",
+      status: 451,
+    };
+  }
+  if (
+    /no video formats?|no video could be found|there is no video|unable to extract.*(?:video|media)|no media found|requested format is not available/i.test(
+      msg,
+    )
+  ) {
+    return {
+      error: "No video found at that link — it may be a photo, a story, or a text-only post.",
+      status: 422,
+    };
+  }
+  if (/login required|requires? (?:a )?login|log ?in to|you must be logged in|please log in/i.test(msg)) {
+    return { error: "This post needs a login to view, so it can't be downloaded.", status: 422 };
+  }
+  return {
+    error:
+      "Couldn't read that link. It may be private, region-locked, or the site changed something on their end.",
+    status: 502,
+  };
+}
+
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {
   // Hold a concurrency slot for the whole lookup so a burst of requests can't
   // spawn unlimited yt-dlp processes.
@@ -229,14 +323,20 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     // more wall time than a single clean fetch.
     const timeout = yt ? 60_000 : 30_000;
     try {
-      const stdout = await runYtDlp([...base, ...siteArgs(url), "--", url], timeout);
+      const stdout = await runYtDlp(
+        [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
+        timeout,
+      );
       return JSON.parse(stdout) as YtDlpInfo;
     } catch (err) {
       // For YouTube, one bot-block deserves a second try with a different
       // client mix before we give up.
       if (yt && err instanceof Error && !(err instanceof UnsupportedSiteError) && isBlockedByPlatform(err.message)) {
         try {
-          const stdout = await runYtDlp([...base, ...siteArgs(url, true), "--", url], timeout);
+          const stdout = await runYtDlp(
+            [...base, ...siteArgs(url, true), ...proxyArgs(url), "--", url],
+            timeout,
+          );
           return JSON.parse(stdout) as YtDlpInfo;
         } catch (retryErr) {
           if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
@@ -293,6 +393,7 @@ export async function fetchPlaylist(url: string): Promise<PlaylistInfo | null> {
       ...EXTRACTOR_ARGS,
       ...networkArgs(),
       ...siteArgs(url),
+      ...proxyArgs(url),
       "--playlist-end",
       String(MAX_PLAYLIST_ITEMS + 1),
       "--",

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { UnsupportedSiteError, PlatformBlockedError, fetchInfo, isSafeUrl } from "@/lib/ytdlp";
+import { fetchInfo, isSafeUrl, userFacingError } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
@@ -125,28 +125,9 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     void logEvent({ type: "lookup", ok: false });
-    if (err instanceof UnsupportedSiteError) {
-      return Response.json(
-        { error: "This site isn't supported." },
-        { status: 400 },
-      );
-    }
-    if (err instanceof PlatformBlockedError) {
-      return Response.json(
-        {
-          error:
-            "This site is rate-limiting our server right now. Give it a minute and try again, or try a link from another site.",
-        },
-        { status: 503 },
-      );
-    }
-    console.error("yt-dlp info error", err);
-    return Response.json(
-      {
-        error:
-          "Couldn't read that link. It may be private, region-locked, or the site changed something on their end.",
-      },
-      { status: 502 },
-    );
+    const { error, status } = userFacingError(err);
+    // Only log the unexpected ones; private/removed/photo posts are normal.
+    if (status >= 500) console.error("yt-dlp info error", err);
+    return Response.json({ error }, { status });
   }
 }

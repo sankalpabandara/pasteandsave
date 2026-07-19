@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { UnsupportedSiteError, fetchPlaylist, isSafeUrl } from "@/lib/ytdlp";
+import { fetchPlaylist, isSafeUrl, userFacingError } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
@@ -44,13 +44,8 @@ export async function POST(request: NextRequest) {
     return Response.json(playlist);
   } catch (err) {
     void logEvent({ type: "lookup", ok: false });
-    if (err instanceof UnsupportedSiteError) {
-      return Response.json({ error: "This site isn't supported." }, { status: 400 });
-    }
-    console.error("yt-dlp playlist error", err);
-    return Response.json(
-      { error: "Couldn't read that playlist. It may be private or region-locked." },
-      { status: 502 },
-    );
+    const { error, status } = userFacingError(err);
+    if (status >= 500) console.error("yt-dlp playlist error", err);
+    return Response.json({ error }, { status });
   }
 }
