@@ -5,7 +5,11 @@ const isProd = process.env.NODE_ENV === "production";
 // Security headers applied to every response. The strict Content-Security
 // Policy is production-only so it doesn't interfere with the dev server's
 // hot-reload (which needs eval and websockets).
+// Bump on each release so a deploy can be verified from the response headers.
+const APP_VERSION = "2026.07.19";
+
 const securityHeaders = [
+  { key: "X-App-Version", value: APP_VERSION },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
