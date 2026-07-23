@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PasteAndSave - Video Downloader",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Spots downloadable video and audio on the page you are on. Save files directly, or send any page to PasteAndSave for MP4 and MP3.",
   "permissions": [
     "contextMenus",

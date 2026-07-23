@@ -18,7 +18,8 @@ const MEDIA_URL = /\.(mp4|webm|mkv|mov|m4v|mp3|m4a|aac|ogg|opus|wav|flac)([?#]|$
 const STREAM_URL = /\.(m3u8|mpd)([?#]|$)/i;
 // Hosts that serve media in protected or split form; direct saving of their
 // raw streams does not produce a usable file, so those go through the site.
-const STREAM_HOSTS = /(^|\.)(googlevideo\.com|youtube\.com|ytimg\.com|fbcdn\.net|cdninstagram\.com|tiktokcdn\S*\.com|twimg\.com)$/i;
+// (googlevideo is handled separately below — YouTube runs on the user's IP.)
+const STREAM_HOSTS = /(^|\.)(fbcdn\.net|cdninstagram\.com|tiktokcdn\S*\.com|twimg\.com)$/i;
 const DEFAULT_MIN_BYTES = 200 * 1024; // ignore tiny blips like preview clips
 
 // Minimum size and site address are user-adjustable and cached here.
@@ -55,6 +56,57 @@ try {
   });
 } catch {
   // fine
+}
+
+// --- YouTube client-side capture -------------------------------------------
+// YouTube ciphers its stream URLs, so they can't be read from the page. But
+// when the user plays a video, their own browser deciphers them and fetches
+// the real streams from googlevideo on their own IP. We capture those — the
+// one path YouTube can't block, because it's their own player doing the work.
+const YT_ITAG = {
+  18: { av: "av", label: "360p MP4 · with audio", ext: "mp4" },
+  22: { av: "av", label: "720p MP4 · with audio", ext: "mp4" },
+  139: { av: "audio", label: "Audio · low (M4A)", ext: "m4a" },
+  140: { av: "audio", label: "Audio · medium (M4A)", ext: "m4a" },
+  141: { av: "audio", label: "Audio · high (M4A)", ext: "m4a" },
+  171: { av: "audio", label: "Audio (WebM)", ext: "webm" },
+  249: { av: "audio", label: "Audio · low (WebM)", ext: "webm" },
+  250: { av: "audio", label: "Audio · medium (WebM)", ext: "webm" },
+  251: { av: "audio", label: "Audio · high (WebM)", ext: "webm" },
+  137: { av: "video", label: "1080p · video only", ext: "mp4" },
+  136: { av: "video", label: "720p · video only", ext: "mp4" },
+  135: { av: "video", label: "480p · video only", ext: "mp4" },
+  134: { av: "video", label: "360p · video only", ext: "mp4" },
+  133: { av: "video", label: "240p · video only", ext: "mp4" },
+  160: { av: "video", label: "144p · video only", ext: "mp4" },
+  248: { av: "video", label: "1080p · video only (WebM)", ext: "webm" },
+  247: { av: "video", label: "720p · video only (WebM)", ext: "webm" },
+  244: { av: "video", label: "480p · video only (WebM)", ext: "webm" },
+};
+
+function youtubeStream(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!/(^|\.)googlevideo\.com$/i.test(u.hostname)) return null;
+  const itag = Number(u.searchParams.get("itag"));
+  if (!itag) return null;
+  const mime = decodeURIComponent(u.searchParams.get("mime") || "");
+  const clen = Number(u.searchParams.get("clen")) || 0;
+  const known = YT_ITAG[itag];
+  const av = known?.av || (mime.startsWith("audio") ? "audio" : "video");
+  const ext =
+    known?.ext ||
+    (mime.includes("webm") ? "webm" : mime.includes("mp4") ? "mp4" : "bin");
+  const label = known?.label || `${av === "audio" ? "Audio" : "Video"} · itag ${itag}`;
+  // Drop the byte-range so a plain GET returns the whole file, not one chunk.
+  u.searchParams.delete("range");
+  u.searchParams.delete("rn");
+  u.searchParams.delete("rbuf");
+  return { itag, av, label, ext, size: clen, url: u.toString() };
 }
 
 // tabId -> Map(key -> item). Mirrored to storage.session because MV3
@@ -163,29 +215,47 @@ async function restore(tabId) {
 function recordResponse(details) {
   const { tabId, url, type, responseHeaders, statusCode } = details;
   if (tabId < 0 || statusCode >= 400) return;
-  const contentType = contentTypeOf(responseHeaders);
-  const kind = classify(url, type, contentType);
-  if (!kind) return;
 
-  const bytes = totalBytes(responseHeaders);
-  if (kind === "file" && bytes > 0 && bytes < minBytes) return;
+  // YouTube: capture the already-deciphered stream the browser is playing,
+  // keyed by format so each quality appears once. No min-size gate.
+  const yt = youtubeStream(url);
+  let item;
+  if (yt) {
+    item = {
+      key: "yt:" + yt.itag,
+      url: yt.url,
+      kind: "youtube",
+      av: yt.av,
+      label: yt.label,
+      ext: yt.ext,
+      size: yt.size,
+      foundAt: Date.now(),
+    };
+  } else {
+    const contentType = contentTypeOf(responseHeaders);
+    const kind = classify(url, type, contentType);
+    if (!kind) return;
+    const bytes = totalBytes(responseHeaders);
+    if (kind === "file" && bytes > 0 && bytes < minBytes) return;
+    item = {
+      key: mediaKey(url),
+      url,
+      kind,
+      size: bytes,
+      contentType,
+      filename: filenameFrom(url, contentType),
+      foundAt: Date.now(),
+    };
+  }
 
   return restore(tabId).then(() => {
     if (!tabMedia.has(tabId)) tabMedia.set(tabId, new Map());
     const items = tabMedia.get(tabId);
-    const key = mediaKey(url);
-    const existing = items.get(key);
+    const existing = items.get(item.key);
     // Keep the largest size seen; range requests report chunks.
-    const size = Math.max(bytes, existing?.size ?? 0);
-    items.set(key, {
-      key,
-      url,
-      kind,
-      size,
-      contentType,
-      filename: filenameFrom(url, contentType),
-      foundAt: existing?.foundAt ?? Date.now(),
-    });
+    item.size = Math.max(item.size || 0, existing?.size ?? 0);
+    item.foundAt = existing?.foundAt ?? item.foundAt;
+    items.set(item.key, item);
     // Cap the list so a long session cannot grow without limit.
     if (items.size > 40) {
       const oldest = [...items.values()].sort((a, b) => a.foundAt - b.foundAt)[0];

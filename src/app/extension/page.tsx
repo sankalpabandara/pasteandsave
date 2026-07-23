@@ -13,6 +13,10 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   {
+    title: "YouTube, straight from your own connection",
+    body: "YouTube blocks servers, but not you. On a YouTube page, the extension picks up the audio and video your browser is already playing and saves them from your own connection. No server, no waiting, no blocks. Press play, open the popup, pick a format.",
+  },
+  {
     title: "Finds media on its own",
     body: "While a page loads, the extension quietly notices every video and audio file it fetches. A small badge on the toolbar icon counts what it found. Nothing is drawn over the page itself.",
   },
@@ -82,7 +86,8 @@ export default function ExtensionPage() {
           <p className="mx-auto mt-4 max-w-xl text-neutral-600 dark:text-neutral-400">
             The PasteAndSave extension watches the page you are on and lists
             every video and audio file it finds. Save them in one click, with
-            no copying links and no switching tabs.
+            no copying links and no switching tabs. It even handles YouTube,
+            straight from your own connection.
           </p>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a

@@ -9,6 +9,11 @@ Works in Chrome, Edge, Brave, Opera (Chromium) and Firefox from one codebase.
 
 ## What it does
 
+- **YouTube on your own IP.** YouTube blocks datacenter servers, so the
+  website can't fetch it. The extension can: while a video plays, the browser
+  deciphers and downloads the real streams on *your* connection, and the
+  extension captures those to save the audio or video. Press play, open the
+  popup, pick a format. No server, no proxy, no block.
 - Watches the page's own network traffic for video and audio
 - Toolbar badge counts what it found; nothing is injected into pages
 - One-click direct download for plain MP4, WebM, MP3 and similar files
