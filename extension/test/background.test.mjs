@@ -170,6 +170,12 @@ check("tab 2 sees only its own file", r.items.length === 1 && r.items[0].filenam
 r = await getMedia(1);
 check("tab 1 unchanged", r.items.length === 4);
 
+console.log("scenario: SPA navigation (url change, no reload) clears the tab");
+await fire({ tabId: 7, url: "https://x.googlevideo.com/videoplayback?itag=140&mime=audio%2Fmp4&clen=9000000", responseHeaders: H({ "content-type": "audio/mp4" }) });
+check("tab 7 has a capture before SPA nav", (await getMedia(7)).items.length >= 1);
+listeners.tabUpdated(7, { url: "https://www.youtube.com/watch?v=NEXT" }); // no status: "loading"
+check("SPA url change cleared tab 7", (await getMedia(7)).items.length === 0);
+
 console.log("scenario: navigation clears the tab");
 listeners.tabUpdated(1, { status: "loading", url: "https://elsewhere.com" });
 r = await getMedia(1);

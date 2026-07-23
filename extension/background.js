@@ -284,8 +284,9 @@ function clearTab(tabId) {
 }
 
 api.tabs.onUpdated.addListener((tabId, changeInfo) => {
-  // A real navigation starts a fresh list for that tab.
-  if (changeInfo.status === "loading" && changeInfo.url) clearTab(tabId);
+  // Any URL change starts a fresh list — including single-page navigations
+  // like clicking to the next YouTube video, which never fully reload.
+  if (changeInfo.url) clearTab(tabId);
 });
 api.tabs.onRemoved.addListener((tabId) => clearTab(tabId));
 
