@@ -136,25 +136,18 @@ await fire({ tabId: 1, type: "xmlhttprequest", url: "https://video.example.com/l
 r = await getMedia(1);
 check("stream recorded", r.items.some((i) => i.kind === "stream"));
 
-console.log("scenario: googlevideo (YouTube) captured for the user's IP");
-await fire({ tabId: 1, url: "https://rr3---sn-abc.googlevideo.com/videoplayback?itag=22&mime=video%2Fmp4&clen=90000000&range=0-100&dur=19", responseHeaders: H({ "content-type": "video/mp4" }) });
+console.log("scenario: googlevideo (YouTube) routes to the site as a stream");
+await fire({ tabId: 1, url: "https://rr3---sn-abc.googlevideo.com/videoplayback?itag=22&mime=video%2Fmp4&clen=90000000", responseHeaders: H({ "content-type": "video/mp4" }) });
 r = await getMedia(1);
-const yt22 = r.items.find((i) => i.url.includes("googlevideo"));
-check("youtube stream captured as 'youtube' kind", yt22?.kind === "youtube");
-check("itag 22 recognised as muxed mp4", yt22?.av === "av" && yt22.ext === "mp4");
-check("byte-range stripped for full download", yt22 && !/[?&]range=/.test(yt22.url));
-check("size taken from clen", yt22?.size === 90000000);
+check("googlevideo captured as a stream (not a broken file)", r.items.find((i) => i.url.includes("googlevideo"))?.kind === "stream");
 
-console.log("scenario: youtube itag parsing (fresh tab)");
+console.log("scenario: googlevideo streams dedup by format (fresh tab)");
 await fire({ tabId: 5, url: "https://x.googlevideo.com/videoplayback?itag=140&mime=audio%2Fmp4&clen=3500000", responseHeaders: H({ "content-type": "audio/mp4" }) });
 await fire({ tabId: 5, url: "https://x.googlevideo.com/videoplayback?itag=251&mime=audio%2Fwebm&clen=3400000", responseHeaders: H({ "content-type": "audio/webm" }) });
-await fire({ tabId: 5, url: "https://x.googlevideo.com/videoplayback?itag=137&mime=video%2Fmp4&clen=90000000", responseHeaders: H({ "content-type": "video/mp4" }) });
 await fire({ tabId: 5, url: "https://x.googlevideo.com/videoplayback?itag=140&mime=audio%2Fmp4&clen=3500000&range=1-2", responseHeaders: H({ "content-type": "audio/mp4" }) });
 r = await getMedia(5);
-check("m4a audio parsed", r.items.find((i) => i.key === "yt:140")?.ext === "m4a");
-check("webm audio parsed", r.items.find((i) => i.key === "yt:251")?.av === "audio");
-check("1080p video-only parsed", r.items.find((i) => i.key === "yt:137")?.label.includes("1080p"));
-check("deduped by itag (4 requests, 3 formats)", r.items.length === 3);
+check("all googlevideo items are streams", r.items.length > 0 && r.items.every((i) => i.kind === "stream"));
+check("deduped by format (3 requests, 2 formats)", r.items.length === 2);
 
 console.log("scenario: tiny file is ignored, non-media is ignored");
 await fire({ tabId: 1, url: "https://cdn.example.com/preview-blip.mp4", responseHeaders: H({ "content-length": "50000" }) });

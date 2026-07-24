@@ -13,8 +13,8 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   {
-    title: "YouTube capture (experimental)",
-    body: "YouTube blocks servers, but not you. On a YouTube page, the extension tries to pick up the audio and video your browser is already playing and save them from your own connection. This one is new and still in testing, so it may not work on every video yet.",
+    title: "YouTube, TikTok, Instagram and more",
+    body: "On any supported video page, hit the extension and it hands the link to PasteAndSave, which fetches the real file — YouTube included. One button, no copying links, works across 1,200+ sites.",
   },
   {
     title: "Finds media on its own",

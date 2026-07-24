@@ -1,5 +1,6 @@
 // Popup logic: shows what the background worker found on the active tab,
-// downloads plain files directly, and routes pages or streams to the site.
+// downloads plain files directly, and routes pages or streams to the site
+// (which does the heavy lifting — including YouTube, via its server proxy).
 
 // chrome first: Firefox's browser.* namespace ignores callbacks, but its
 // chrome.* namespace supports them, so this order works in both browsers.
@@ -10,8 +11,6 @@ let allItems = [];
 let activeFilter = "all";
 let pageUrl = "";
 let pageIsHttp = false;
-let ytTitle = "";
-let isYouTube = false;
 
 function fmtSize(bytes) {
   if (!bytes) return "size unknown";
@@ -21,7 +20,6 @@ function fmtSize(bytes) {
 }
 
 function categoryOf(item) {
-  if (item.kind === "youtube") return item.av === "audio" ? "audio" : "video";
   if (item.kind === "stream") return "stream";
   if (
     (item.contentType || "").startsWith("audio/") ||
@@ -30,18 +28,6 @@ function categoryOf(item) {
     return "audio";
   }
   return "video";
-}
-
-// A safe filename from the current video title (YouTube items carry no name).
-function safeTitle() {
-  const t = (ytTitle || "youtube").replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim();
-  return t.slice(0, 100) || "youtube";
-}
-function displayName(item) {
-  return item.kind === "youtube" ? item.label : item.filename;
-}
-function downloadName(item) {
-  return item.kind === "youtube" ? `${safeTitle()}.${item.ext}` : item.filename;
 }
 
 function openSite(url, mp3) {
@@ -53,7 +39,7 @@ function openSite(url, mp3) {
 function download(btn, item) {
   btn.disabled = true;
   api.runtime.sendMessage(
-    { type: "download", url: item.url, filename: downloadName(item) },
+    { type: "download", url: item.url, filename: item.filename },
     (res) => {
       btn.textContent = res?.ok ? "Saved" : "Retry";
       btn.classList.toggle("done", !!res?.ok);
@@ -67,8 +53,7 @@ function render() {
   list.textContent = "";
   const visible = allItems
     .filter((it) => activeFilter === "all" || categoryOf(it) === activeFilter)
-    // YouTube captures first, then largest files.
-    .sort((a, b) => (b.kind === "youtube") - (a.kind === "youtube") || b.size - a.size);
+    .sort((a, b) => b.size - a.size);
 
   for (const item of visible) {
     const li = document.createElement("li");
@@ -76,13 +61,13 @@ function render() {
 
     const chip = document.createElement("span");
     chip.className = "kind " + cat;
-    chip.textContent = item.kind === "youtube" ? "YT " + cat.toUpperCase() : cat.toUpperCase();
+    chip.textContent = cat.toUpperCase();
 
     const meta = document.createElement("div");
     meta.className = "meta";
     const name = document.createElement("p");
     name.className = "name";
-    name.textContent = displayName(item);
+    name.textContent = item.filename;
     name.title = item.url;
     const size = document.createElement("p");
     size.className = "size";
@@ -111,7 +96,7 @@ function render() {
     btn.textContent = "Save";
     btn.addEventListener("click", () => {
       if (item.kind === "stream") {
-        // Raw stream chunks are not a playable file; the site fetches it whole.
+        // Raw stream chunks aren't a playable file; the site fetches it whole.
         openSite(pageIsHttp ? pageUrl : item.url);
         return;
       }
@@ -120,8 +105,7 @@ function render() {
 
     actions.append(copy, btn);
 
-    // "Get as MP3" routes to the site to transcode — only for ordinary files
-    // the server can fetch, not YouTube (which runs here) or raw streams.
+    // "Get as MP3" routes a plain video file to the site to transcode.
     if (cat === "video" && item.kind === "file") {
       const mp3 = document.createElement("button");
       mp3.className = "icon-btn";
@@ -161,25 +145,17 @@ async function init() {
 
   pageUrl = tab.url ?? "";
   pageIsHttp = /^https?:/i.test(pageUrl);
-  let host = "";
-  try {
-    host = new URL(pageUrl).hostname.replace(/^www\./, "");
-  } catch {
-    host = "";
-  }
-  isYouTube = /(^|\.)(youtube\.com|youtu\.be)$/i.test(host);
-  ytTitle = tab.title ? tab.title.replace(/\s*[-–—]\s*YouTube\s*$/i, "").trim() : "";
-
   const saveBtn = document.getElementById("save-page");
   const hostEl = document.getElementById("page-host");
 
-  if (isYouTube) {
-    // YouTube runs entirely on the visitor's connection — no server route.
-    document.getElementById("save-page-label").textContent = "YouTube — pick a format below";
-    hostEl.textContent = "saved from your own connection";
-    saveBtn.disabled = true;
-  } else if (pageIsHttp) {
-    hostEl.textContent = "from " + host;
+  if (pageIsHttp) {
+    try {
+      hostEl.textContent = "from " + new URL(pageUrl).hostname.replace(/^www\./, "");
+    } catch {
+      hostEl.textContent = "";
+    }
+    // Every video page — YouTube, TikTok, Facebook, etc. — is handed to the
+    // site, which resolves the actual download (YouTube via its proxy).
     saveBtn.addEventListener("click", () => openSite(pageUrl));
   } else {
     saveBtn.disabled = true;
@@ -208,13 +184,7 @@ async function init() {
     render();
   });
 
-  if (allItems.length === 0) {
-    if (isYouTube) {
-      document.getElementById("empty").textContent =
-        "Press play on the video for a second, then reopen this. YouTube formats show up here, downloaded from your own connection.";
-    }
-    return; // empty state stays visible
-  }
+  if (allItems.length === 0) return; // empty state stays visible
 
   document.getElementById("empty").hidden = true;
   document.getElementById("media-section").hidden = false;
