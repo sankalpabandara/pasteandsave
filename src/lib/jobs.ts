@@ -11,7 +11,7 @@ import {
   networkArgs,
   siteArgs,
   proxyArgs,
-  isBlockedByPlatform,
+  classifyFailure,
 } from "./ytdlp";
 import { BusyError, jobLimiter } from "./concurrency";
 
@@ -204,8 +204,11 @@ export function startJob(opts: StartJobOptions): string {
 
   child.on("error", (err) => {
     clearTimeout(killTimer);
+    // err.message carries the binary path, so it is logged, not shown.
+    console.error(`[job ${id}] spawn failed: ${err.message}`);
     job.status = "error";
-    job.error = err.message;
+    job.error = "Something went wrong on our side. Please try again.";
+    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     releaseOnce();
   });
 
@@ -213,10 +216,18 @@ export function startJob(opts: StartJobOptions): string {
     clearTimeout(killTimer);
     releaseOnce();
     if (code !== 0) {
+      // Never forward stderr: yt-dlp puts the full proxy URL (credentials and
+      // all) in connection errors and temp paths in write errors, and this
+      // string is sent straight to the browser over SSE.
+      const { category, message } = classifyFailure(stderrTail);
+      console.error(
+        `[job ${id}] failed category=${category} exit=${code} url_host=${safeHost(opts.url)}`,
+      );
       job.status = "error";
-      job.error = isBlockedByPlatform(stderrTail)
-        ? "This site is rate-limiting our server right now. Give it a minute and try again."
-        : stderrTail.trim().split("\n").pop() || `yt-dlp exited with code ${code}`;
+      job.error = message;
+      // A failed job keeps nothing worth downloading, so release its scratch
+      // directory now rather than waiting for a later sweep that may never run.
+      fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
       return;
     }
     try {
@@ -224,8 +235,10 @@ export function startJob(opts: StartJobOptions): string {
         (f) => !f.endsWith(".part") && !f.endsWith(".ytdl"),
       );
       if (files.length === 0) {
+        console.error(`[job ${id}] no output file url_host=${safeHost(opts.url)}`);
         job.status = "error";
-        job.error = "No output file was produced.";
+        job.error = "The file couldn't be prepared. Please try another quality.";
+        fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
         return;
       }
       const filePath = path.join(tmpDir, files[0]);
@@ -245,4 +258,14 @@ export function startJob(opts: StartJobOptions): string {
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 120) || "download";
+}
+
+// Logs identify a job by the site it targeted, never the full URL, which can
+// carry tokens or identifiers in its query string.
+function safeHost(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname;
+  } catch {
+    return "unknown";
+  }
 }

@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -41,6 +43,19 @@ const FEATURES = [
     body: "Press Alt+Shift+S on any page and it opens here with the link already loaded. You can also set your own minimum file size so tiny clips never clutter the list.",
   },
 ];
+
+// Measured from the file that is actually served, so the figure can't drift
+// out of date the next time the extension is rebuilt.
+function zipSizeLabel(): string {
+  try {
+    const bytes = fs.statSync(
+      path.join(process.cwd(), "public", "pasteandsave-extension.zip"),
+    ).size;
+    return `${Math.round(bytes / 1024)} KB`;
+  } catch {
+    return "small";
+  }
+}
 
 const CHROME_STEPS = [
   "Download the extension and unzip it anywhere you like.",
@@ -102,7 +117,7 @@ export default function ExtensionPage() {
               Download the extension
             </a>
             <span className="text-xs text-neutral-500 dark:text-neutral-400">
-              31 KB zip · no account · no tracking
+              {zipSizeLabel()} zip · no account · no tracking
             </span>
           </div>
         </section>
@@ -164,12 +179,14 @@ export default function ExtensionPage() {
               Private by design
             </h2>
             <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-              The extension runs entirely in your browser. It does not collect
-              analytics, does not phone home, and never sees a page until you
-              visit one. The only network request it ever makes on its own is
-              opening pasteandsave.com when you ask it to. The source is plain
-              readable JavaScript inside the zip, so you can check every line
-              before installing.
+              The extension itself collects nothing. It does not add analytics,
+              does not phone home, and never sees a page until you visit one.
+              Finding media happens locally in your browser. When you send a
+              link here, our server fetches that video for you, so the link and
+              your request reach us the same way they would if you pasted it on
+              the site. Nothing else is sent. The source is plain readable
+              JavaScript inside the zip, so you can check every line before
+              installing.
             </p>
           </div>
         </section>

@@ -121,6 +121,73 @@ export function isBlockedByPlatform(stderr: string): boolean {
   );
 }
 
+// Categories used to turn a raw extractor failure into something safe to show.
+// Downloads report progress over SSE, so whatever lands here reaches the
+// visitor's browser — raw stderr must never be forwarded, because yt-dlp
+// embeds the full proxy URL (credentials included) in connection errors and
+// temp-directory paths in write errors.
+export type FailureCategory =
+  | "PROXY_UNAVAILABLE"
+  | "UPSTREAM_BLOCKED"
+  | "MEDIA_UNAVAILABLE"
+  | "PRIVATE_OR_LOGIN_REQUIRED"
+  | "FORMAT_UNAVAILABLE"
+  | "CONVERSION_FAILED"
+  | "NETWORK_FAILED"
+  | "INTERNAL_ERROR";
+
+const CATEGORY_MESSAGE: Record<FailureCategory, string> = {
+  PROXY_UNAVAILABLE:
+    "Our connection to this site is temporarily unavailable. Please try again in a moment.",
+  UPSTREAM_BLOCKED:
+    "This site is rate-limiting our server right now. Give it a minute and try again.",
+  MEDIA_UNAVAILABLE: "This video was removed or is no longer available.",
+  PRIVATE_OR_LOGIN_REQUIRED:
+    "This one is private or needs a sign-in, so it can't be downloaded.",
+  FORMAT_UNAVAILABLE:
+    "That quality isn't available for this video. Try a different one.",
+  CONVERSION_FAILED: "The file couldn't be prepared. Please try another quality.",
+  NETWORK_FAILED:
+    "The download was interrupted before it finished. Please try again.",
+  INTERNAL_ERROR: "Something went wrong on our side. Please try again.",
+};
+
+/**
+ * Classifies extractor stderr. The returned message is safe to send to the
+ * browser; the category is what belongs in server logs.
+ */
+export function classifyFailure(stderr: string): {
+  category: FailureCategory;
+  message: string;
+} {
+  const s = stderr || "";
+  let category: FailureCategory = "INTERNAL_ERROR";
+
+  if (/proxy|ProxyError|Tunnel connection failed|EAI_AGAIN|ECONNREFUSED/i.test(s)) {
+    category = "PROXY_UNAVAILABLE";
+  } else if (isBlockedByPlatform(s)) {
+    category = "UPSTREAM_BLOCKED";
+  } else if (
+    /is private|private video|login required|requires? (?:a )?login|log ?in to|age.?restrict|confirm your age/i.test(s)
+  ) {
+    category = "PRIVATE_OR_LOGIN_REQUIRED";
+  } else if (
+    /video unavailable|been removed|no longer available|has been deleted|this content isn'?t available|account.*(terminated|closed|suspended)/i.test(s)
+  ) {
+    category = "MEDIA_UNAVAILABLE";
+  } else if (/requested format is not available|no such format|format is not available/i.test(s)) {
+    category = "FORMAT_UNAVAILABLE";
+  } else if (/ffmpeg|postprocess|merger|conversion/i.test(s)) {
+    category = "CONVERSION_FAILED";
+  } else if (
+    /timed out|timeout|connection reset|incomplete read|unable to download|HTTP Error 5\d\d/i.test(s)
+  ) {
+    category = "NETWORK_FAILED";
+  }
+
+  return { category, message: CATEGORY_MESSAGE[category] };
+}
+
 function ipv4IsPrivate(a: number, b: number): boolean {
   if (a === 127 || a === 10 || a === 0) return true;
   if (a === 169 && b === 254) return true; // link-local / cloud metadata
@@ -177,6 +244,9 @@ export function isSafeUrl(rawUrl: string): boolean {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     return false;
   }
+  // Credentials in a URL are never needed for a public post and are a common
+  // way to disguise the real host from a reader (and from naive parsers).
+  if (parsed.username || parsed.password) return false;
   return !isPrivateHost(parsed.hostname);
 }
 

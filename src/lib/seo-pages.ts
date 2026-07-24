@@ -227,7 +227,7 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
     h1: "Instagram Reels Downloader",
     tagline:
-      "Save Instagram Reels as HD MP4 files. Paste the link and the download is ready in a few seconds.",
+      "Save Instagram Reels as HD MP4 files. Paste the link and the download is ready in under a minute.",
     placeholder: "Paste an Instagram Reel link here",
     badge: { label: "Reels", color: "from-fuchsia-500 to-pink-500" },
     features: [
@@ -241,7 +241,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         title: "Quick lookup",
-        body: "Paste the link and the quality options appear in a few seconds.",
+        body: "Paste the link and the quality options appear in under a minute.",
       },
       {
         title: "Nothing to install",
@@ -403,7 +403,7 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
     h1: "Facebook Reels Downloader",
     tagline:
-      "Save Facebook Reels as HD MP4 files. Paste the link and the download is ready in seconds.",
+      "Save Facebook Reels as HD MP4 files. Paste the link and the download is ready in under a minute.",
     placeholder: "Paste a Facebook Reel link here",
     badge: { label: "FB Reels", color: "from-blue-500 to-indigo-500" },
     features: [
@@ -421,7 +421,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         title: "Free and fast",
-        body: "No account, no limits, and the file is ready in a few seconds.",
+        body: "No account, no signup, and the file is ready in under a minute.",
       },
     ],
     stepsHeading: "How to download a Facebook Reel",
@@ -557,7 +557,7 @@ export const TOOL_PAGES: ToolPage[] = [
     navLabel: "YouTube MP3",
     title: "YouTube to MP3 Converter - Free High Quality Downloads",
     description:
-      "Convert YouTube to MP3 free online. Paste the link and download the audio at up to 320kbps within seconds. No registration and no software to install.",
+      "Convert YouTube to MP3 free online. Paste the link and download the audio at up to 320kbps in under a minute. No registration and no software to install.",
     keywords: [
       "youtube to mp3",
       "youtube to mp3 converter",
@@ -640,7 +640,7 @@ export const TOOL_PAGES: ToolPage[] = [
     navLabel: "MP3 Converter",
     title: "Video to MP3 Converter - Free Online MP3 Downloader",
     description:
-      "Free online MP3 downloader. Paste a link from any supported site and convert video to MP3 at up to 320kbps. Unlimited, no registration, no ads on the file.",
+      "Free online MP3 downloader. Paste a link from any supported site and convert video to MP3 at up to 320kbps. Free, no registration, no ads on the file.",
     keywords: [
       "free mp3 downloader",
       "mp3 downloader online",
@@ -678,7 +678,7 @@ export const TOOL_PAGES: ToolPage[] = [
         body: "The MP3 you get is clean audio only. Nothing is added to the file itself.",
       },
       {
-        title: "Free and unlimited",
+        title: "Free, no account",
         body: "No account, no registration and no daily limit on conversions.",
       },
     ],
@@ -718,7 +718,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         q: "Is there a limit on how many files I can convert?",
-        a: "No. The converter is free and unlimited.",
+        a: "No. The converter is free and needs no account. Fair-use limits keep it running for everyone.",
       },
       {
         q: "Does the MP3 have ads or a watermark?",
@@ -1037,7 +1037,7 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
     h1: "Threads Video Downloader",
     tagline:
-      "Save Threads videos as HD MP4 files. Paste the post link and download in seconds.",
+      "Save Threads videos as HD MP4 files. Paste the post link and download in under a minute.",
     placeholder: "Paste a Threads post link here",
     badge: { label: "Threads", color: "from-neutral-900 to-black" },
     features: [
@@ -1055,7 +1055,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         title: "Free to use",
-        body: "No account, no limits, ready in a few seconds.",
+        body: "No account, no signup, ready in under a minute.",
       },
     ],
     stepsHeading: "How to download a Threads video",
@@ -1172,7 +1172,7 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
     h1: "Dailymotion Video Downloader",
     tagline:
-      "Save Dailymotion videos as MP4 files. Paste the link and download in seconds.",
+      "Save Dailymotion videos as MP4 files. Paste the link and download in under a minute.",
     placeholder: "Paste a Dailymotion video link here",
     badge: { label: "Dailymotion", color: "from-sky-600 to-blue-600" },
     features: [
@@ -1237,7 +1237,7 @@ export const TOOL_PAGES: ToolPage[] = [
     ],
     h1: "SoundCloud MP3 Downloader",
     tagline:
-      "Save SoundCloud tracks as MP3 files. Paste the track link and download in seconds.",
+      "Save SoundCloud tracks as MP3 files. Paste the track link and download in under a minute.",
     placeholder: "Paste a SoundCloud track link here",
     badge: { label: "SoundCloud", color: "from-orange-400 to-amber-500" },
     features: [
@@ -1251,7 +1251,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         title: "Free to use",
-        body: "No account, no limits, and no ads added to the file.",
+        body: "No account, no signup, and no ads added to the file.",
       },
       {
         title: "Any device",

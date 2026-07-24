@@ -19,7 +19,7 @@ const FAQS = [
   },
   {
     q: "How do I download a video from a link?",
-    a: "Copy the share link from the site or app, paste it into the box at the top of this page, and press Download. Every available quality shows up in a list a few seconds later.",
+    a: "Copy the share link from the site or app, paste it into the box at the top of this page, and press Download. Every available quality shows up in a list, usually in under a minute.",
   },
   {
     q: "Can I convert a video link straight to MP3?",

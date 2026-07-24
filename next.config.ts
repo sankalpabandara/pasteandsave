@@ -54,6 +54,19 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // The certificate covers both hostnames, so https://www served the whole
+  // site as a second copy. Everything belongs on the apex domain that the
+  // canonical tags and sitemap already point at.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.pasteandsave.com" }],
+        destination: "https://pasteandsave.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
