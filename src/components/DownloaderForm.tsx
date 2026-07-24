@@ -91,6 +91,64 @@ function statusLabel(job: JobState): string {
   }
 }
 
+// A lookup can be slow (the source site is fetched live), but it must never
+// hang forever — without a ceiling a stalled request leaves the spinner
+// running with no way out.
+const LOOKUP_TIMEOUT_MS = 120_000;
+
+type UrlCheck = { url: string } | { error: string };
+
+// Catches the obvious mistakes before spending a slow round trip on them, and
+// forgives a pasted address that is missing its https:// prefix.
+function checkUrl(raw: string): UrlCheck {
+  const trimmed = raw.trim();
+  if (!trimmed) return { error: "Paste a video link first." };
+
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(withScheme);
+  } catch {
+    return {
+      error:
+        "That doesn't look like a link. Copy the address from your browser and paste the whole thing.",
+    };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { error: "Only web links starting with http or https can be downloaded." };
+  }
+  // A hostname with no dot is either a typo or a machine on the local
+  // network, neither of which is something to download from.
+  if (!parsed.hostname.includes(".")) {
+    return { error: "That link is missing a website name. Check it and try again." };
+  }
+  return { url: parsed.toString() };
+}
+
+// Wraps fetch with an abort timer so a stalled request surfaces as a real,
+// readable error instead of an endless spinner.
+function postJson(path: string, body: unknown): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LOOKUP_TIMEOUT_MS);
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timer));
+}
+
+// Anything that stops the request reaching a real answer, said plainly.
+function networkErrorMessage(err: unknown): string {
+  if (err instanceof DOMException && err.name === "AbortError") {
+    return "That link took too long to read. The site may be busy right now — please try again.";
+  }
+  return "Couldn't reach the server. Check your connection and try again.";
+}
+
 // Every row in both tabs looks and behaves the same: a title, an optional
 // note, a size, and a Save button that fills with progress while it runs.
 function DownloadRow({
@@ -184,17 +242,13 @@ export default function DownloaderForm({
       if (fromPlaylist) setSelectedUrl(trimmed);
       // Kick off the lookup and show the ad gate at the same time, so the ad
       // overlaps the existing wait instead of adding delay.
-      const infoPromise = fetch("/api/info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed }),
-      });
+      const infoPromise = postJson("/api/info", { url: trimmed });
       try {
         await gate();
         const res = await infoPromise;
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setError(data.error ?? "Something went wrong.");
+          setError(data.error ?? "Something went wrong. Please try again.");
           return;
         }
         setResult(data);
@@ -204,8 +258,8 @@ export default function DownloaderForm({
         const preferAudio =
           mp3PrefRef.current || (data.video?.length ?? 0) === 0;
         setTab(preferAudio && (data.audio?.length ?? 0) > 0 ? "audio" : "video");
-      } catch {
-        setError("Couldn't reach the server. Try again.");
+      } catch (err) {
+        setError(networkErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -220,22 +274,18 @@ export default function DownloaderForm({
       setLoading(true);
       setError(null);
       setPlaylist(null);
-      const promise = fetch("/api/playlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: trimmed }),
-      });
+      const promise = postJson("/api/playlist", { url: trimmed });
       try {
         await gate();
         const res = await promise;
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
           setError(data.error ?? "Couldn't read that playlist.");
           return;
         }
         setPlaylist(data);
-      } catch {
-        setError("Couldn't reach the server. Try again.");
+      } catch (err) {
+        setError(networkErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -245,17 +295,27 @@ export default function DownloaderForm({
 
   const runLookup = useCallback(
     async (target: string) => {
-      const trimmed = target.trim();
-      if (!trimmed) return;
-      setUrl(trimmed);
+      // Reject what is plainly not a link here, so an obvious typo costs
+      // nothing and gets a straight answer instead of a slow generic failure.
+      const checked = checkUrl(target);
+      if ("error" in checked) {
+        setResult(null);
+        setPlaylist(null);
+        setSelectedUrl(null);
+        setJobs({});
+        setError(checked.error);
+        return;
+      }
+      const clean = checked.url;
+      setUrl(clean);
       setResult(null);
       setPlaylist(null);
       setSelectedUrl(null);
       setJobs({});
-      if (isPlaylistUrl(trimmed)) {
-        await lookupPlaylist(trimmed);
+      if (isPlaylistUrl(clean)) {
+        await lookupPlaylist(clean);
       } else {
-        await lookupSingle(trimmed);
+        await lookupSingle(clean);
       }
     },
     [lookupSingle, lookupPlaylist],
@@ -408,12 +468,20 @@ export default function DownloaderForm({
         className="glass-strong glass-sheen flex flex-col gap-3 rounded-2xl p-3 sm:flex-row"
       >
         <div className="relative min-w-0 flex-1">
+          {/* Deliberately type="text": type="url" makes the browser reject a
+              perfectly good address pasted without its https:// prefix, which
+              is how most people copy links. checkUrl handles it instead. */}
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            type="url"
+            type="text"
             inputMode="url"
+            autoComplete="url"
+            spellCheck={false}
             placeholder={placeholder}
+            aria-label="Paste video URL"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "downloader-error" : undefined}
             className="w-full rounded-xl border border-black/10 bg-white/70 py-3 pl-4 pr-10 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-black/30 dark:text-white dark:placeholder:text-neutral-400"
           />
           {url && (
@@ -446,18 +514,56 @@ export default function DownloaderForm({
           <button
             type="submit"
             disabled={loading}
-            className="flex-1 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:opacity-60 sm:flex-none"
+            aria-busy={loading}
+            className="flex-1 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
           >
-            {loading ? "Looking up..." : "Download"}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="6.5"
+                    stroke="currentColor"
+                    strokeOpacity="0.3"
+                    strokeWidth="2.5"
+                  />
+                  <path
+                    d="M14.5 8A6.5 6.5 0 0 0 8 1.5"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                Looking up...
+              </span>
+            ) : (
+              "Download"
+            )}
           </button>
         </div>
       </form>
 
+      {/* Announced to screen readers the moment it appears, since a failed
+          lookup is otherwise silent for anyone not watching the page. */}
       {error && (
-        <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
+        <p
+          id="downloader-error"
+          role="alert"
+          className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300"
+        >
           {error}
         </p>
       )}
+
+      <p role="status" aria-live="polite" className="sr-only">
+        {loading ? "Reading that link, please wait." : ""}
+      </p>
 
       {playlist && (
         <div className="glass glass-hairline mt-6 overflow-hidden rounded-2xl">
