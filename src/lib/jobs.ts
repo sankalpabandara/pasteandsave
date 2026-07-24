@@ -70,7 +70,13 @@ export function finalizeJob(id: string) {
 
 type StartJobOptions =
   | { mode: "video"; url: string; formatId: string; title: string; hasAudio?: boolean }
-  | { mode: "audio"; url: string; title: string };
+  | {
+      mode: "audio";
+      url: string;
+      title: string;
+      audioFormat?: "mp3" | "m4a";
+      bitrate?: number | null;
+    };
 
 export function startJob(opts: StartJobOptions): string {
   sweepStaleJobs();
@@ -124,14 +130,19 @@ export function startJob(opts: StartJobOptions): string {
     opts.mode === "video" && opts.hasAudio === false
       ? ["--merge-output-format", "mp4"]
       : [];
+  // M4A is taken as-is where possible (no re-encode, so no quality lost);
+  // MP3 is encoded at the rate the visitor picked, defaulting to best.
+  const audioFormat = opts.mode === "audio" ? (opts.audioFormat ?? "mp3") : "mp3";
+  const audioQuality =
+    opts.mode === "audio" && opts.bitrate ? `${opts.bitrate}K` : "0";
   const args =
     opts.mode === "audio"
       ? [
           "-x",
           "--audio-format",
-          "mp3",
+          audioFormat,
           "--audio-quality",
-          "0",
+          audioQuality,
           "--newline",
           "--no-playlist",
           "--no-warnings",

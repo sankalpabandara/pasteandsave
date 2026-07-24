@@ -23,12 +23,17 @@ export const EXTRACTOR_ARGS = ["--ies", "default,-generic"];
 // tolerant of server IPs makes lookups and downloads work far more often. The
 // set is env-overridable so the box operator can retune when YouTube shifts
 // again, without a code change or redeploy.
+// Each extra client is another full round trip to YouTube — and for us that
+// trip goes through a residential proxy, so four clients cost tens of seconds
+// on every paste. Two is enough to stay reliable: android_vr survives the
+// datacenter block, tv supplies the combined video+audio streams. The rest are
+// kept for the fallback attempt below.
 const YT_CLIENTS =
-  process.env.YTDLP_YOUTUBE_CLIENTS || "tv,web_safari,mweb,android_vr";
+  process.env.YTDLP_YOUTUBE_CLIENTS || "android_vr,tv";
 // A different mix tried once if the first attempt fails, since which clients
 // work drifts week to week.
 const YT_FALLBACK_CLIENTS =
-  process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS || "default,tv,ios";
+  process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS || "default,web_safari,mweb,ios";
 
 // Optional residential/rotating proxy. Routing blocked sites through a
 // non-datacenter IP is the durable fix once player-client tricks stop being

@@ -4,13 +4,26 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { detectPlatform } from "@/lib/platforms";
 import { useAdGate } from "@/components/ads/AdProvider";
 
-type FormatOption = {
+type VideoTier = {
   formatId: string;
   ext: string;
   label: string;
+  height: number;
   hasAudio: boolean;
-  hasVideo: boolean;
-  isImage: boolean;
+  filesize: number | null;
+};
+
+type AudioOption = {
+  id: string;
+  label: string;
+  audioFormat: "mp3" | "m4a";
+  bitrate: number | null;
+};
+
+type ImageFormat = {
+  formatId: string;
+  ext: string;
+  label: string;
   filesize: number | null;
 };
 
@@ -20,7 +33,9 @@ type InfoResult = {
   duration: number | null;
   uploader: string | null;
   site: string | null;
-  formats: FormatOption[];
+  video: VideoTier[];
+  audio: AudioOption[];
+  images: ImageFormat[];
 };
 
 type PlaylistEntry = { title: string; url: string; duration: number | null };
@@ -76,6 +91,68 @@ function statusLabel(job: JobState): string {
   }
 }
 
+// Every row in both tabs looks and behaves the same: a title, an optional
+// note, a size, and a Save button that fills with progress while it runs.
+function DownloadRow({
+  label,
+  note,
+  size,
+  job,
+  onClick,
+}: {
+  label: string;
+  note: string;
+  size: string;
+  job: JobState;
+  onClick: () => void;
+}) {
+  const active = job.status !== "idle" && job.status !== "error";
+  return (
+    <div className="relative">
+      {active && "percent" in job && (
+        <div
+          className="absolute inset-y-0 left-0 bg-violet-50 transition-all dark:bg-violet-900/30"
+          style={{ width: `${job.percent}%` }}
+        />
+      )}
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={active}
+        className="relative flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm hover:bg-neutral-50 disabled:hover:bg-transparent dark:hover:bg-white/5"
+      >
+        <span className="font-medium text-neutral-800 dark:text-neutral-200">
+          {label}
+          {note && (
+            <span className="ml-2 text-xs font-normal text-neutral-400 dark:text-neutral-500">
+              {note}
+            </span>
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-3 text-neutral-500 dark:text-neutral-400">
+          {active ? (
+            <span className="text-xs font-medium text-violet-700 dark:text-violet-300">
+              {statusLabel(job)}
+            </span>
+          ) : (
+            <>
+              {size}
+              <span className="rounded-lg bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                Save
+              </span>
+            </>
+          )}
+        </span>
+      </button>
+      {job.status === "error" && (
+        <p className="px-4 pb-2 text-xs text-red-600 dark:text-red-400">
+          {job.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function DownloaderForm({
   placeholder = "Paste your video link here",
 }: {
@@ -88,6 +165,7 @@ export default function DownloaderForm({
   const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
+  const [tab, setTab] = useState<"video" | "audio">("video");
   const sourcesRef = useRef<Record<string, EventSource>>({});
   const autoRanRef = useRef(false);
   const mp3PrefRef = useRef(false);
@@ -120,6 +198,12 @@ export default function DownloaderForm({
           return;
         }
         setResult(data);
+        // Open on the tab that actually has something in it — photo posts and
+        // music links have no video ladder — or on Audio when the visitor
+        // arrived from the extension's MP3 shortcut.
+        const preferAudio =
+          mp3PrefRef.current || (data.video?.length ?? 0) === 0;
+        setTab(preferAudio && (data.audio?.length ?? 0) > 0 ? "audio" : "video");
       } catch {
         setError("Couldn't reach the server. Try again.");
       } finally {
@@ -267,7 +351,7 @@ export default function DownloaderForm({
       });
   }
 
-  function downloadFormat(f: FormatOption) {
+  function downloadFormat(f: VideoTier) {
     // Gate resolves instantly if the interstitial was shown recently, so this
     // rarely fires a second ad right after the lookup gate.
     gate().then(() =>
@@ -281,21 +365,37 @@ export default function DownloaderForm({
     );
   }
 
-  function downloadAudio() {
+  function downloadAudio(option?: AudioOption) {
+    const choice = option ?? result?.audio[0];
     gate().then(() =>
-      startJob("__audio__", {
+      startJob(choice ? choice.id : "__audio__", {
         url: url.trim(),
         mode: "audio",
+        audioFormat: choice?.audioFormat ?? "mp3",
+        bitrate: choice?.bitrate ?? null,
         title: result?.title ?? "download",
       }),
     );
+  }
+
+  // Wipes the box and everything under it so the next link starts clean.
+  function clearAll() {
+    for (const source of Object.values(sourcesRef.current)) source.close();
+    sourcesRef.current = {};
+    setUrl("");
+    setResult(null);
+    setPlaylist(null);
+    setSelectedUrl(null);
+    setJobs({});
+    setError(null);
+    setTab("video");
   }
 
   // Extension deep links with ?mp3=1 skip the extra click: the MP3 job starts
   // as soon as the lookup lands, unless the post turned out to be photos only.
   useEffect(() => {
     if (!mp3PrefRef.current || !result) return;
-    if (result.formats.length > 0 && result.formats.every((f) => f.isImage)) return;
+    if (result.audio.length === 0) return;
     mp3PrefRef.current = false;
     downloadAudio();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -307,14 +407,34 @@ export default function DownloaderForm({
         onSubmit={handleSubmit}
         className="glass-strong glass-sheen flex flex-col gap-3 rounded-2xl p-3 sm:flex-row"
       >
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          type="url"
-          inputMode="url"
-          placeholder={placeholder}
-          className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white/70 px-4 py-3 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-black/30 dark:text-white dark:placeholder:text-neutral-400"
-        />
+        <div className="relative min-w-0 flex-1">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            type="url"
+            inputMode="url"
+            placeholder={placeholder}
+            className="w-full rounded-xl border border-black/10 bg-white/70 py-3 pl-4 pr-10 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-black/30 dark:text-white dark:placeholder:text-neutral-400"
+          />
+          {url && (
+            <button
+              type="button"
+              onClick={clearAll}
+              aria-label="Clear the link"
+              title="Clear"
+              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path
+                  d="M1.5 1.5 L10.5 10.5 M10.5 1.5 L1.5 10.5"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
+        </div>
         <div className="flex gap-2">
           <button
             type="button"
@@ -407,85 +527,89 @@ export default function DownloaderForm({
                   .filter(Boolean)
                   .join(" · ")}
               </p>
-              {/* Hide the MP3 button for photo-only posts, which have no audio. */}
-              {!(result.formats.length > 0 && result.formats.every((f) => f.isImage)) && (
-                <>
-                  <button
-                    type="button"
-                    onClick={downloadAudio}
-                    disabled={
-                      jobs.__audio__ &&
-                      jobs.__audio__.status !== "error"
-                    }
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-60 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-                  >
-                    {jobs.__audio__ && jobs.__audio__.status !== "error"
-                      ? statusLabel(jobs.__audio__)
-                      : "Save as MP3"}
-                  </button>
-                  {jobs.__audio__?.status === "error" && (
-                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                      {jobs.__audio__.message}
-                    </p>
-                  )}
-                </>
-              )}
             </div>
           </div>
-          <div className="divide-y divide-black/5 border-t border-black/5 dark:divide-white/10 dark:border-white/10">
-            {result.formats.map((f) => {
-              const job = jobs[f.formatId] ?? { status: "idle" as const };
-              const active = job.status !== "idle" && job.status !== "error";
-              return (
-                <div key={f.formatId} className="relative">
-                  {active && "percent" in job && (
-                    <div
-                      className="absolute inset-y-0 left-0 bg-violet-50 transition-all dark:bg-violet-900/30"
-                      style={{ width: `${job.percent}%` }}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => downloadFormat(f)}
-                    disabled={active}
-                    className="relative flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm hover:bg-neutral-50 disabled:hover:bg-transparent dark:hover:bg-white/5"
-                  >
-                    <span className="font-medium text-neutral-800 dark:text-neutral-200">
-                      {f.label}
-                      {!f.hasAudio && f.hasVideo && (
-                        <span className="ml-2 text-xs font-normal text-emerald-600 dark:text-emerald-400">
-                          with audio
-                        </span>
-                      )}
-                    </span>
-                    <span className="flex shrink-0 items-center gap-3 text-neutral-500 dark:text-neutral-400">
-                      {active ? (
-                        <span className="text-xs font-medium text-violet-700 dark:text-violet-300">
-                          {statusLabel(job)}
-                        </span>
-                      ) : (
-                        <>
-                          {formatBytes(f.filesize)}
-                          <span className="rounded-lg bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                            Save
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </button>
-                  {job.status === "error" && (
-                    <p className="px-4 pb-2 text-xs text-red-600 dark:text-red-400">
-                      {job.message}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-            {result.formats.length === 0 && (
-              <p className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
-                No downloadable formats were found for this link.
-              </p>
-            )}
+
+          {(result.video.length > 0 || result.audio.length > 0) && (
+            <div className="flex gap-2 border-t border-black/5 px-4 pt-3 dark:border-white/10">
+              {result.video.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTab("video")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                    tab === "video"
+                      ? "bg-violet-600 text-white"
+                      : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  Video
+                </button>
+              )}
+              {result.audio.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTab("audio")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                    tab === "audio"
+                      ? "bg-violet-600 text-white"
+                      : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  Audio
+                </button>
+              )}
+            </div>
+          )}
+          <div className="mt-3 divide-y divide-black/5 border-t border-black/5 dark:divide-white/10 dark:border-white/10">
+            {tab === "video" &&
+              result.video.map((f) => (
+                <DownloadRow
+                  key={f.formatId}
+                  label={f.label}
+                  note={f.ext.toUpperCase()}
+                  size={formatBytes(f.filesize)}
+                  job={jobs[f.formatId] ?? { status: "idle" }}
+                  onClick={() => downloadFormat(f)}
+                />
+              ))}
+            {tab === "audio" &&
+              result.audio.map((a) => (
+                <DownloadRow
+                  key={a.id}
+                  label={a.label}
+                  note={a.audioFormat}
+                  size=""
+                  job={jobs[a.id] ?? { status: "idle" }}
+                  onClick={() => downloadAudio(a)}
+                />
+              ))}
+            {tab === "video" &&
+              result.images.map((img) => (
+                <DownloadRow
+                  key={img.formatId}
+                  label={img.label}
+                  note=""
+                  size={formatBytes(img.filesize)}
+                  job={jobs[img.formatId] ?? { status: "idle" }}
+                  onClick={() =>
+                    downloadFormat({
+                      formatId: img.formatId,
+                      ext: img.ext,
+                      label: img.label,
+                      height: 0,
+                      hasAudio: true,
+                      filesize: img.filesize,
+                    })
+                  }
+                />
+              ))}
+            {result.video.length === 0 &&
+              result.audio.length === 0 &&
+              result.images.length === 0 && (
+                <p className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
+                  No downloadable formats were found for this link.
+                </p>
+              )}
           </div>
         </div>
       )}

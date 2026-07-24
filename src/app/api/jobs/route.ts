@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
     formatId?: string;
     title?: string;
     hasAudio?: boolean;
+    audioFormat?: string;
+    bitrate?: number;
   };
   try {
     body = await request.json();
@@ -42,6 +44,15 @@ export async function POST(request: NextRequest) {
   if (mode === "video" && (!body.formatId || !isValidFormatId(body.formatId))) {
     return Response.json({ error: "Invalid format." }, { status: 400 });
   }
+
+  // Both of these end up as yt-dlp arguments, so neither is taken on trust:
+  // only the exact values the picker offers are accepted.
+  const audioFormat = body.audioFormat === "m4a" ? "m4a" : "mp3";
+  const ALLOWED_BITRATES = [320, 256, 128, 96, 64];
+  const bitrate =
+    typeof body.bitrate === "number" && ALLOWED_BITRATES.includes(body.bitrate)
+      ? body.bitrate
+      : null;
 
   // Only downloads routed through the metered proxy count against the daily
   // budget; everything that works direct is never limited.
@@ -66,7 +77,7 @@ export async function POST(request: NextRequest) {
             title,
             hasAudio: body.hasAudio === true,
           })
-        : startJob({ mode: "audio", url, title });
+        : startJob({ mode: "audio", url, title, audioFormat, bitrate });
     void logEvent({ type: "download", mode });
     if (proxied) void recordProxyUsage(mode);
     return Response.json({ jobId: id });

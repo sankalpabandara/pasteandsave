@@ -16,7 +16,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* System monospace: only a few code spans use it, so downloading a whole
+     webfont family for them was not worth the page weight. */
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --font-display: var(--font-display);
 }
 
