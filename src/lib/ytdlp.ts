@@ -90,6 +90,12 @@ export function proxyArgs(rawUrl: string): string[] {
   return match ? ["--proxy", YTDLP_PROXY] : [];
 }
 
+// True when a download for this URL would actually go through the (metered)
+// proxy — used to decide whether it counts against the daily proxy budget.
+export function usesProxy(rawUrl: string): boolean {
+  return proxyArgs(rawUrl).length > 0;
+}
+
 function youtubeClientArgs(clients: string): string[] {
   return ["--extractor-args", `youtube:player_client=${clients}`];
 }

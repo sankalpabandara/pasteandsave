@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getStats } from "@/lib/analytics";
 import { getGaSummary } from "@/lib/ga-data";
+import { proxyUsageToday } from "@/lib/proxy-budget";
 import AdminBar from "./AdminBar";
 
 export const metadata: Metadata = {
@@ -48,6 +49,8 @@ export default async function AdminDashboard() {
   const stats = await getStats();
   const gaId = process.env.NEXT_PUBLIC_GA_ID;
   const ga = await getGaSummary();
+  const proxyOn = !!process.env.YTDLP_PROXY;
+  const proxy = proxyOn ? await proxyUsageToday() : null;
 
   const maxDay = Math.max(
     1,
@@ -101,6 +104,48 @@ export default async function AdminDashboard() {
           sub="conversion rate"
         />
       </div>
+
+      {proxy && (
+        <section className="glass glass-hairline mt-4 rounded-2xl p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-sm font-semibold text-neutral-900 dark:text-white">
+              Proxy usage today (YouTube)
+            </h2>
+            <span
+              className={`text-xs font-medium ${
+                proxy.capMb > 0 && proxy.usedMb >= proxy.capMb
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-neutral-500 dark:text-neutral-400"
+              }`}
+            >
+              {proxy.capMb === 0
+                ? "no daily cap"
+                : proxy.usedMb >= proxy.capMb
+                  ? "daily cap reached"
+                  : "within budget"}
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
+            {proxy.downloads.toLocaleString()} proxied download
+            {proxy.downloads === 1 ? "" : "s"} · ~{proxy.usedMb} MB used
+            {proxy.capMb > 0 ? ` of ${proxy.capMb} MB` : ""}
+          </p>
+          {proxy.capMb > 0 && (
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+              <div
+                className={`h-full rounded-full ${
+                  proxy.usedMb >= proxy.capMb ? "bg-red-500" : "bg-violet-600"
+                }`}
+                style={{ width: `${Math.min(100, Math.round((proxy.usedMb / proxy.capMb) * 100))}%` }}
+              />
+            </div>
+          )}
+          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+            Only YouTube (and other blocked sites) use the paid proxy. Estimated
+            from download sizes. Adjust the ceiling with YTDLP_PROXY_DAILY_MB.
+          </p>
+        </section>
+      )}
 
       <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
