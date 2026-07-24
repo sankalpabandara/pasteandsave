@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     mode?: "video" | "audio";
     formatId?: string;
     title?: string;
+    hasAudio?: boolean;
   };
   try {
     body = await request.json();
@@ -58,7 +59,13 @@ export async function POST(request: NextRequest) {
   try {
     const id =
       mode === "video"
-        ? startJob({ mode: "video", url, formatId: body.formatId!, title })
+        ? startJob({
+            mode: "video",
+            url,
+            formatId: body.formatId!,
+            title,
+            hasAudio: body.hasAudio === true,
+          })
         : startJob({ mode: "audio", url, title });
     void logEvent({ type: "download", mode });
     if (proxied) void recordProxyUsage(mode);

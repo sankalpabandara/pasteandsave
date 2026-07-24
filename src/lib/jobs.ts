@@ -69,7 +69,7 @@ export function finalizeJob(id: string) {
 }
 
 type StartJobOptions =
-  | { mode: "video"; url: string; formatId: string; title: string }
+  | { mode: "video"; url: string; formatId: string; title: string; hasAudio?: boolean }
   | { mode: "audio"; url: string; title: string };
 
 export function startJob(opts: StartJobOptions): string {
@@ -109,6 +109,21 @@ export function startJob(opts: StartJobOptions): string {
     ...siteArgs(opts.url),
     ...proxyArgs(opts.url),
   ];
+  // A video-only stream (YouTube serves HD only as separate video + audio)
+  // gets the best audio muxed in, so the saved file always has sound. Prefer
+  // m4a audio so an MP4 pick stays a clean, widely-playable MP4; fall back to
+  // any audio, then to the bare stream if the site has no separate audio.
+  // Formats that already carry audio are downloaded as-is (no double track).
+  const videoFormat =
+    opts.mode === "video" && opts.hasAudio === false
+      ? `${opts.formatId}+bestaudio[ext=m4a]/${opts.formatId}+bestaudio/${opts.formatId}`
+      : opts.mode === "video"
+        ? opts.formatId
+        : "";
+  const mergeArgs =
+    opts.mode === "video" && opts.hasAudio === false
+      ? ["--merge-output-format", "mp4"]
+      : [];
   const args =
     opts.mode === "audio"
       ? [
@@ -130,7 +145,8 @@ export function startJob(opts: StartJobOptions): string {
         ]
       : [
           "-f",
-          opts.formatId,
+          videoFormat,
+          ...mergeArgs,
           "--newline",
           "--no-playlist",
           "--no-warnings",

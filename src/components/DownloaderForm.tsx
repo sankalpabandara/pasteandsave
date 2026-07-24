@@ -275,6 +275,7 @@ export default function DownloaderForm({
         url: url.trim(),
         mode: "video",
         formatId: f.formatId,
+        hasAudio: f.hasAudio,
         title: result?.title ?? "download",
       }),
     );
@@ -452,8 +453,8 @@ export default function DownloaderForm({
                     <span className="font-medium text-neutral-800 dark:text-neutral-200">
                       {f.label}
                       {!f.hasAudio && f.hasVideo && (
-                        <span className="ml-2 text-xs font-normal text-neutral-400 dark:text-neutral-500">
-                          no audio
+                        <span className="ml-2 text-xs font-normal text-emerald-600 dark:text-emerald-400">
+                          with audio
                         </span>
                       )}
                     </span>
