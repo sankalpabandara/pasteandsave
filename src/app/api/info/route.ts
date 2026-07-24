@@ -185,8 +185,12 @@ export async function POST(request: NextRequest) {
       filesize: sizeOf(f),
     }));
 
-    const hasVideo = (f: YtDlpFormat) => !!f.vcodec && f.vcodec !== "none";
-    const hasAudio = (f: YtDlpFormat) => !!f.acodec && f.acodec !== "none";
+    // A blank codec field means the site never reported one, not that the
+    // track is missing. Facebook, X and various small hosts leave these empty,
+    // so requiring a codec name here silently dropped every one of their
+    // formats. Only an explicit "none" counts as absent.
+    const hasVideo = (f: YtDlpFormat) => f.vcodec !== "none";
+    const hasAudio = (f: YtDlpFormat) => f.acodec !== "none";
 
     // Cheapest audio stream that will be merged into a video-only pick. Used
     // to quote an honest combined size in the list.
@@ -197,12 +201,17 @@ export async function POST(request: NextRequest) {
       .sort((a, b) => a - b);
     const mergeAudioSize = audioSizes.length > 0 ? audioSizes[0] : 0;
 
-    // One winner per rung of the ladder.
+    // One winner per rung of the ladder. Streams whose dimensions are missing
+    // or too small to place are kept aside rather than thrown away.
     const best = new Map<number, YtDlpFormat>();
+    const untiered: YtDlpFormat[] = [];
     for (const f of all) {
       if (!hasVideo(f) || isImageFormat(f)) continue;
       const tier = tierFor(qualityOf(f));
-      if (tier === null) continue;
+      if (tier === null) {
+        untiered.push(f);
+        continue;
+      }
       const current = best.get(tier);
       if (!current || isBetterVideo(f, current)) best.set(tier, f);
     }
@@ -221,6 +230,28 @@ export async function POST(request: NextRequest) {
         filesize: size === null ? null : withAudio ? size : size + mergeAudioSize,
       };
     });
+
+    // Sites that report no usable dimensions still hand back real,
+    // downloadable streams, so they are listed under whatever name they gave
+    // instead of vanishing from the picker.
+    const seenExtra = new Set<string>();
+    for (const f of untiered) {
+      if (video.length >= VIDEO_TIERS.length + 6) break;
+      const label =
+        f.format_note?.trim() || f.resolution?.trim() || f.ext.toUpperCase();
+      if (seenExtra.has(label)) continue;
+      seenExtra.add(label);
+      const withAudio = hasAudio(f);
+      const size = sizeOf(f);
+      video.push({
+        formatId: f.format_id,
+        ext: f.ext,
+        label,
+        height: 0,
+        hasAudio: withAudio,
+        filesize: size === null ? null : withAudio ? size : size + mergeAudioSize,
+      });
+    }
 
     // Only offer audio when the source actually has a soundtrack.
     const audio: AudioOption[] = all.some(hasAudio) ? AUDIO_OPTIONS : [];
