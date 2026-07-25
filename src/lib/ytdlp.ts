@@ -42,9 +42,14 @@ const YT_FALLBACK_CLIENTS =
 // the 1,200+ others that work fine direct. Set YTDLP_PROXY_HOSTS="all" to
 // route every site through the proxy instead.
 const YTDLP_PROXY = process.env.YTDLP_PROXY;
+// Instagram refuses datacenter addresses outright: the same reel that
+// extracts fine from a home connection fails in about four seconds from the
+// server. Threads runs on Instagram's backend and blocks the same way.
+// TikTok and Facebook still work direct, so they stay off this list and cost
+// no proxy traffic.
 const YTDLP_PROXY_HOSTS = (
   process.env.YTDLP_PROXY_HOSTS ||
-  "youtube.com,youtu.be,youtube-nocookie.com,dailymotion.com,bilibili.com"
+  "youtube.com,youtu.be,youtube-nocookie.com,instagram.com,threads.net,dailymotion.com,bilibili.com"
 )
   .toLowerCase()
   .split(",")
@@ -99,6 +104,16 @@ export function proxyArgs(rawUrl: string): string[] {
 // proxy — used to decide whether it counts against the daily proxy budget.
 export function usesProxy(rawUrl: string): boolean {
   return proxyArgs(rawUrl).length > 0;
+}
+
+/**
+ * Which sites are routed through the proxy, for the health endpoint. Reports
+ * only whether a proxy is set and the hostnames it applies to — never the
+ * proxy URL, which carries credentials. Wrong routing here is invisible from
+ * the outside otherwise, and is exactly what made Instagram fail.
+ */
+export function proxyStatus(): { configured: boolean; hosts: string[] } {
+  return { configured: Boolean(YTDLP_PROXY), hosts: [...YTDLP_PROXY_HOSTS] };
 }
 
 function youtubeClientArgs(clients: string): string[] {

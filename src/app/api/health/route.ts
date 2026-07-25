@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
-import { YTDLP_PATH, FFMPEG_DIR } from "@/lib/ytdlp";
+import { YTDLP_PATH, FFMPEG_DIR, proxyStatus } from "@/lib/ytdlp";
 import { jobLimiter, lookupLimiter } from "@/lib/concurrency";
 
 export const runtime = "nodejs";
@@ -69,6 +69,7 @@ export async function GET() {
       status: healthy ? "ok" : "degraded",
       checks: { ytdlp: ytdlpOk, ffmpeg: ffmpegOk, tmpWritable },
       load: { lookupsQueued, jobsActive },
+      proxy: proxyStatus(),
       uptimeSeconds: Math.round(process.uptime()),
     },
     {
