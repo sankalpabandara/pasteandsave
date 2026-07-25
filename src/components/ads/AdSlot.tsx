@@ -43,10 +43,15 @@ export default function AdSlot({
       <p className="mb-1 text-center text-[10px] font-medium uppercase tracking-widest text-neutral-400 dark:text-neutral-500">
         Advertisement
       </p>
+      {/* minHeight rather than height, and nothing clipped: the box reserves
+          space so the page does not jump, but a banner taller than the
+          reserved size is allowed to push it open instead of being cut off.
+          Clipping made the network report these units as partly hidden, which
+          is a state it will not serve into. */}
       <div
-        className="mx-auto overflow-hidden rounded-xl border border-black/5 bg-neutral-50 dark:border-white/10 dark:bg-neutral-900/40"
+        className="mx-auto rounded-xl border border-black/5 bg-neutral-50 dark:border-white/10 dark:bg-neutral-900/40"
         style={{
-          height: cfg.height,
+          minHeight: cfg.height,
           maxWidth: cfg.maxWidth,
           width: "100%",
         }}
@@ -56,14 +61,16 @@ export default function AdSlot({
             key={unitId}
             title="Advertisement"
             data-aa={unitId}
-            src={`https://acceptable.a-ads.com/${unitId}`}
+            // size=auto lets the unit pick a shape that fits the width it is
+            // given, rather than rendering at a fixed size the box may not fit.
+            src={`https://acceptable.a-ads.com/${unitId}?size=auto`}
             loading="lazy"
             referrerPolicy="no-referrer"
             style={{
               border: 0,
+              display: "block",
               width: "100%",
-              height: "100%",
-              overflow: "hidden",
+              height: cfg.height,
               backgroundColor: "transparent",
             }}
           />
