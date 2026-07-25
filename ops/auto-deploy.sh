@@ -41,12 +41,13 @@ rm -rf .next.previous
 
 git reset --hard "origin/$BRANCH" --quiet || { echo "$(stamp) checkout failed"; exit 1; }
 
-# Dev dependencies are required here: typescript and tailwind are build-time
-# tools, so --omit=dev produces a tree that cannot build at all. The runtime
-# bundle stays lean regardless, because output: standalone only copies what
-# the server actually needs.
-if ! npm ci --silent 2>/dev/null; then
-  npm install --silent || {
+# --include=dev is not optional here. typescript and @tailwindcss/postcss are
+# build-time tools, and this box runs with NODE_ENV=production, which makes
+# npm skip devDependencies on its own — a plain `npm ci` installs a tree that
+# cannot build. The runtime bundle stays lean regardless, because
+# output: standalone copies only what the server actually needs.
+if ! npm ci --include=dev --silent 2>/dev/null; then
+  npm install --include=dev --silent || {
     echo "$(stamp) dependency install failed"
     alert "deploy blocked: dependency install failed" \
       "npm could not install dependencies in $APP_DIR, so ${remote_sha:0:8} was not deployed. The previous version is still serving."
