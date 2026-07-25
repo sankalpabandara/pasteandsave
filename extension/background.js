@@ -269,6 +269,100 @@ function openOnSite(target) {
   api.tabs.create({ url: `${siteBase}/?url=${encodeURIComponent(target)}` });
 }
 
+// --- talking to the site on the page's behalf -------------------------------
+//
+// The in-page menu cannot call the site itself: it runs on youtube.com or
+// wherever, and a cross-origin request from there would be refused. The worker
+// has host permissions, so it makes the call and passes the answer back. This
+// is what lets a download finish where the visitor already is, instead of
+// throwing them onto another tab.
+
+async function fetchFormats(target) {
+  const res = await fetch(`${siteBase}/api/info`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: target }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Couldn't read that link.");
+  return data;
+}
+
+function tellTab(tabId, message) {
+  if (!tabId) return;
+  try {
+    api.tabs.sendMessage(tabId, message);
+  } catch {
+    // tab closed or navigated away
+  }
+}
+
+// Runs a download to completion and hands the finished file to the browser's
+// own downloader, so it lands in the normal downloads folder with its proper
+// name and the visitor never leaves the page.
+async function runDownload(tabId, jobBody, requestId) {
+  const start = await fetch(`${siteBase}/api/jobs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(jobBody),
+  });
+  const started = await start.json().catch(() => ({}));
+  if (!start.ok || !started.jobId) {
+    throw new Error(started.error || "Couldn't start the download.");
+  }
+
+  // The progress stream is read directly rather than with EventSource, which
+  // does not exist in a service worker.
+  const events = await fetch(`${siteBase}/api/jobs/${started.jobId}/events`);
+  const reader = events.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let finished = false;
+
+  while (!finished) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+    for (const chunk of chunks) {
+      const line = /^data: (.*)$/m.exec(chunk);
+      if (!line) continue;
+      let payload;
+      try {
+        payload = JSON.parse(line[1]);
+      } catch {
+        continue;
+      }
+      if (payload.status === "error") {
+        throw new Error(payload.error || "The download failed.");
+      }
+      if (payload.status === "done") {
+        finished = true;
+        break;
+      }
+      tellTab(tabId, {
+        type: "downloadProgress",
+        requestId,
+        status: payload.status,
+        percent: payload.percent ?? 0,
+      });
+    }
+  }
+  try {
+    reader.cancel();
+  } catch {
+    // already closed
+  }
+
+  if (!finished) throw new Error("The download stopped before it finished.");
+
+  // Content-Disposition on that endpoint carries the filename, so the browser
+  // names the file correctly without us guessing.
+  api.downloads.download({ url: `${siteBase}/api/jobs/${started.jobId}/file` });
+  tellTab(tabId, { type: "downloadProgress", requestId, status: "saved", percent: 100 });
+}
+
 // Right-click entries: page, link, or the media element itself.
 function setupMenus() {
   api.contextMenus.removeAll(() => {
@@ -361,6 +455,27 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg?.type === "openOnSite") {
     if (msg.url) openOnSite(msg.url);
+    sendResponse({ ok: true });
+    return false;
+  }
+  // The in-page menu asks for the quality list, then for one of them.
+  if (msg?.type === "getFormats") {
+    fetchFormats(msg.url)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
+    return true; // async response
+  }
+  if (msg?.type === "startDownload") {
+    const tabId = _sender?.tab?.id;
+    runDownload(tabId, msg.job, msg.requestId)
+      .catch((err) => {
+        tellTab(tabId, {
+          type: "downloadProgress",
+          requestId: msg.requestId,
+          status: "error",
+          error: err.message,
+        });
+      });
     sendResponse({ ok: true });
     return false;
   }

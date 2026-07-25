@@ -1,24 +1,21 @@
-// In-page download button.
+// In-page download button and quality menu.
 //
-// Puts a small "Save video" chip in the corner of any real video on the page,
-// so a visitor never has to open the popup or copy a link to notice that the
-// video can be saved. This is the one thing a download-manager extension is
-// judged on, and it is also the easiest way to break somebody else's site, so
-// the rules here are strict:
+// Puts a "Download now" chip on any real video, and opens the quality list
+// right there rather than sending the visitor to another tab. The site is
+// called through the background worker, because a request to pasteandsave.com
+// from inside somebody else's page would be refused as cross-origin, and the
+// finished file is handed to the browser's own downloader so it lands in the
+// normal downloads folder.
 //
-//   - Everything lives inside a shadow root, so no page CSS can touch our
-//     styles and none of our styles can leak onto the page.
-//   - Nothing is inserted into the page's own layout. The chip is fixed-
-//     positioned and moved to follow its video, so no reflow is caused.
-//   - Tiny videos, muted autoplay loops and background decoration are ignored,
-//     because a button over a site's hero animation is just litter.
-//   - The whole thing switches off for a site the moment the user says so.
+// Rules this file sticks to, because it is a guest on pages we do not own:
+//   - Everything lives inside a shadow root, so styling cannot cross either way.
+//   - Nothing is inserted into the page's layout; the UI is fixed-positioned.
+//   - Decoration, tiny clips and hidden players are ignored.
+//   - Any failure is swallowed rather than allowed to break the page.
 
 (function () {
   const api = globalThis.chrome ?? globalThis.browser;
   if (!api?.runtime?.sendMessage) return;
-  // Only run in the top document. Videos inside iframes are handled by the
-  // frame's own injection, and running in both would double up the chips.
   if (window.top !== window) return;
 
   const MIN_WIDTH = 200;
@@ -28,80 +25,263 @@
   let enabled = true;
   let host = null;
   let shadow = null;
-  // video element -> chip element
+  let panel = null;
+  let panelFor = null;
   const chips = new Map();
+  const pending = new Map();
 
   function makeHost() {
     if (host) return;
     host = document.createElement("div");
     host.id = HOST_ID;
-    // The host itself must never intercept clicks meant for the page.
     host.style.cssText =
       "position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;";
     shadow = host.attachShadow({ mode: "open" });
     const style = document.createElement("style");
     style.textContent = `
       .chip {
-        position: fixed;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 7px 11px;
-        border-radius: 10px;
-        border: 0;
-        background: rgba(124, 58, 237, 0.95);
-        color: #fff;
+        position: fixed; display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 11px; border-radius: 10px; border: 0;
+        background: rgba(124,58,237,.95); color: #fff;
         font: 600 12px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        cursor: pointer;
-        pointer-events: auto;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-        opacity: 0;
-        transition: opacity .15s ease, transform .15s ease;
-        transform: translateY(-2px);
-      }
-      .chip.show { opacity: .92; transform: none; }
-      .chip:hover { opacity: 1; background: rgba(109, 40, 217, 1); }
-      .chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-      .chip .x {
-        margin-left: 2px;
-        opacity: .75;
-        font-weight: 700;
-        padding: 0 2px;
-      }
+        cursor: pointer; pointer-events: auto;
+        box-shadow: 0 4px 14px rgba(0,0,0,.35);
+        opacity: 0; transition: opacity .15s ease; }
+      .chip.show { opacity: .92; }
+      .chip:hover { opacity: 1; background: rgba(109,40,217,1); }
+      .chip .x { margin-left: 2px; opacity: .75; font-weight: 700; padding: 0 2px; }
       .chip .x:hover { opacity: 1; }
+      .panel {
+        position: fixed; width: 268px; max-height: 340px; overflow-y: auto;
+        background: #fff; color: #111827; border-radius: 12px;
+        border: 1px solid rgba(0,0,0,.08);
+        box-shadow: 0 16px 40px rgba(0,0,0,.28);
+        font: 400 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        pointer-events: auto; z-index: 2147483647; }
+      .panel .head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(0,0,0,.06); }
+      .panel .title {
+        font-weight: 600; font-size: 12px; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; }
+      .panel .close {
+        border: 0; background: none; cursor: pointer; font-size: 15px;
+        line-height: 1; color: #9ca3af; padding: 2px 4px; }
+      .panel .close:hover { color: #374151; }
+      .panel .group {
+        padding: 6px 12px 2px; font-size: 10px; font-weight: 700;
+        letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; }
+      .row {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; width: 100%; padding: 8px 12px; border: 0;
+        background: none; cursor: pointer; text-align: left;
+        font: inherit; color: inherit; }
+      .row:hover { background: #f5f3ff; }
+      .row:disabled { cursor: default; opacity: .65; }
+      .row .q { font-weight: 600; }
+      .row .sz { font-size: 11px; color: #6b7280; }
+      .msg { padding: 12px; font-size: 12px; color: #6b7280; }
+      .msg.err { color: #b91c1c; }
+      .bar { height: 3px; background: #ede9fe; border-radius: 999px; overflow: hidden; margin-top: 6px; }
+      .bar > i { display: block; height: 100%; background: #7c3aed; width: 0; transition: width .2s ease; }
     `;
     shadow.append(style);
     (document.body || document.documentElement).append(host);
   }
 
-  // A video worth offering. Skips the decorative background loops that many
-  // marketing sites autoplay, and anything too small to be real content.
   function isWorthOffering(video) {
     const r = video.getBoundingClientRect();
     if (r.width < MIN_WIDTH || r.height < MIN_HEIGHT) return false;
     const cs = getComputedStyle(video);
-    if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") {
-      return false;
-    }
-    // Muted + autoplay + loop with no controls is decoration, not content.
+    if (cs.visibility === "hidden" || cs.display === "none" || cs.opacity === "0") return false;
     if (video.muted && video.autoplay && video.loop && !video.controls) return false;
     return true;
   }
 
+  // Players commonly stack more than one <video> in the same spot: a preview
+  // layer behind the real one, or an ad slot sharing the frame. Offering a
+  // button for each puts two chips on what looks like one video, so only the
+  // largest of any overlapping set is offered.
+  function pickVideos() {
+    const all = [...document.querySelectorAll("video")].filter(isWorthOffering);
+    all.sort(
+      (a, b) =>
+        b.getBoundingClientRect().width * b.getBoundingClientRect().height -
+        a.getBoundingClientRect().width * a.getBoundingClientRect().height,
+    );
+    const kept = [];
+    for (const video of all) {
+      const r = video.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const covered = kept.some((k) => {
+        const kr = k.getBoundingClientRect();
+        return cx >= kr.left && cx <= kr.right && cy >= kr.top && cy <= kr.bottom;
+      });
+      if (!covered) kept.push(video);
+    }
+    return kept;
+  }
+
   function place(chip, video) {
     const r = video.getBoundingClientRect();
-    const offscreen =
-      r.bottom < 0 || r.top > window.innerHeight || r.right < 0 || r.left > window.innerWidth;
-    if (offscreen || !isWorthOffering(video)) {
+    const off =
+      r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth;
+    if (off || !isWorthOffering(video)) {
       chip.classList.remove("show");
       return;
     }
     chip.classList.add("show");
-    // Top-right of the video, nudged in so it clears rounded corners and the
-    // player's own controls, which sit along the bottom.
-    const width = chip.offsetWidth || 110;
+    const width = chip.offsetWidth || 120;
     chip.style.top = `${Math.max(4, r.top + 10)}px`;
-    chip.style.left = `${Math.min(window.innerWidth - width - 4, r.right - width - 10)}px`;
+    chip.style.left = `${Math.min(innerWidth - width - 4, r.right - width - 10)}px`;
+  }
+
+  function fmtSize(bytes) {
+    if (!bytes) return "";
+    const mb = bytes / (1024 * 1024);
+    return mb < 1 ? `${Math.round(bytes / 1024)} KB` : `${mb.toFixed(1)} MB`;
+  }
+
+  function closePanel() {
+    panel?.remove();
+    panel = null;
+    panelFor = null;
+  }
+
+  function openPanel(video, chip) {
+    closePanel();
+    panelFor = video;
+    panel = document.createElement("div");
+    panel.className = "panel";
+
+    const head = document.createElement("div");
+    head.className = "head";
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = "Reading this video…";
+    const close = document.createElement("button");
+    close.className = "close";
+    close.textContent = "✕";
+    close.title = "Close";
+    close.addEventListener("click", closePanel);
+    head.append(title, close);
+
+    const body = document.createElement("div");
+    const msg = document.createElement("p");
+    msg.className = "msg";
+    msg.textContent = "Fetching the available qualities…";
+    body.append(msg);
+
+    panel.append(head, body);
+    shadow.append(panel);
+    positionPanel(chip);
+
+    const src = video.currentSrc || video.src || "";
+    const target = /^https?:/i.test(src) ? src : location.href;
+
+    api.runtime.sendMessage({ type: "getFormats", url: target }, (res) => {
+      if (!panel) return;
+      body.textContent = "";
+      if (!res || !res.ok) {
+        title.textContent = "Couldn't read it";
+        const err = document.createElement("p");
+        err.className = "msg err";
+        err.textContent = (res && res.error) || "Couldn't reach PasteAndSave.";
+        body.append(err);
+        positionPanel(chip);
+        return;
+      }
+      renderFormats(body, title, res.data, target, chip);
+    });
+  }
+
+  function renderFormats(body, title, data, target, chip) {
+    title.textContent = data.title || "This video";
+    const videos = Array.isArray(data.video) ? data.video : [];
+    const audio = Array.isArray(data.audio) ? data.audio : [];
+
+    if (videos.length === 0 && audio.length === 0) {
+      const none = document.createElement("p");
+      none.className = "msg";
+      none.textContent = "No downloadable formats were found here.";
+      body.append(none);
+      positionPanel(chip);
+      return;
+    }
+
+    const addRow = (label, size, job) => {
+      const row = document.createElement("button");
+      row.className = "row";
+      const q = document.createElement("span");
+      q.className = "q";
+      q.textContent = label;
+      const sz = document.createElement("span");
+      sz.className = "sz";
+      sz.textContent = size;
+      row.append(q, sz);
+
+      const bar = document.createElement("div");
+      bar.className = "bar";
+      const fill = document.createElement("i");
+      bar.append(fill);
+
+      row.addEventListener("click", () => {
+        if (row.disabled) return;
+        row.disabled = true;
+        sz.textContent = "starting…";
+        row.append(bar);
+        const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        pending.set(requestId, { sz, fill, row });
+        api.runtime.sendMessage({ type: "startDownload", job, requestId });
+      });
+      body.append(row);
+    };
+
+    if (videos.length > 0) {
+      const g = document.createElement("p");
+      g.className = "group";
+      g.textContent = "Video";
+      body.append(g);
+      for (const f of videos) {
+        addRow(f.label, fmtSize(f.filesize), {
+          url: target,
+          mode: "video",
+          formatId: f.formatId,
+          hasAudio: f.hasAudio,
+          title: data.title || "download",
+        });
+      }
+    }
+    if (audio.length > 0) {
+      const g = document.createElement("p");
+      g.className = "group";
+      g.textContent = "Audio";
+      body.append(g);
+      // The whole ladder would bury the video list in a small panel, so the
+      // two people actually pick are offered here.
+      for (const a of audio.filter((x) => x.id === "mp3-320" || x.id === "mp3-128")) {
+        addRow(`MP3 ${a.label}`, "", {
+          url: target,
+          mode: "audio",
+          audioFormat: a.audioFormat,
+          bitrate: a.bitrate,
+          title: data.title || "download",
+        });
+      }
+    }
+    positionPanel(chip);
+  }
+
+  function positionPanel(chip) {
+    if (!panel) return;
+    const c = chip.getBoundingClientRect();
+    const w = panel.offsetWidth || 268;
+    const h = panel.offsetHeight || 200;
+    let top = c.bottom + 6;
+    if (top + h > innerHeight - 8) top = Math.max(8, c.top - h - 6);
+    panel.style.top = `${top}px`;
+    panel.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, c.right - w))}px`;
   }
 
   function chipFor(video) {
@@ -111,14 +291,14 @@
     chip = document.createElement("button");
     chip.className = "chip";
     chip.type = "button";
-    chip.title = "Save this video with PasteAndSave";
+    chip.title = "Download this video with PasteAndSave";
 
     const label = document.createElement("span");
-    label.textContent = "Save video";
+    label.textContent = "Download now";
     const close = document.createElement("span");
     close.className = "x";
     close.textContent = "✕";
-    close.title = "Hide on this page";
+    close.title = "Hide on this video";
     chip.append(label, close);
 
     chip.addEventListener("click", (e) => {
@@ -127,13 +307,11 @@
       if (e.target === close) {
         chip.remove();
         chips.delete(video);
+        if (panelFor === video) closePanel();
         return;
       }
-      // The page URL is what the site can actually resolve; a blob: or
-      // media-fragment src is meaningless once it leaves this tab.
-      const src = video.currentSrc || video.src || "";
-      const usable = /^https?:/i.test(src) ? src : location.href;
-      api.runtime.sendMessage({ type: "openOnSite", url: usable });
+      if (panelFor === video) closePanel();
+      else openPanel(video, chip);
     });
 
     shadow.append(chip);
@@ -143,26 +321,26 @@
 
   function sync() {
     if (!enabled) return;
-    const videos = document.querySelectorAll("video");
+    const videos = pickVideos();
     if (videos.length === 0 && chips.size === 0) return;
     makeHost();
 
-    for (const video of videos) {
-      if (!isWorthOffering(video)) continue;
-      place(chipFor(video), video);
-    }
-    // Drop chips whose video has gone (single-page navigation, lazy players).
+    const live = new Set(videos);
+    for (const video of videos) place(chipFor(video), video);
     for (const [video, chip] of chips) {
-      if (!video.isConnected) {
+      if (!video.isConnected || !live.has(video)) {
         chip.remove();
         chips.delete(video);
+        if (panelFor === video) closePanel();
       } else {
         place(chip, video);
+        if (panelFor === video) positionPanel(chip);
       }
     }
   }
 
   function teardown() {
+    closePanel();
     for (const [, chip] of chips) chip.remove();
     chips.clear();
     host?.remove();
@@ -170,9 +348,6 @@
     shadow = null;
   }
 
-  // Cheap and steady rather than clever: a rAF-throttled reposition covers
-  // scrolling, resizing, players going fullscreen and layout shifts, without
-  // measuring on every one of hundreds of scroll events.
   function safeSync() {
     try {
       sync();
@@ -193,6 +368,9 @@
 
   addEventListener("scroll", schedule, { passive: true, capture: true });
   addEventListener("resize", schedule, { passive: true });
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closePanel();
+  });
   document.addEventListener("fullscreenchange", schedule);
 
   const mo = new MutationObserver(schedule);
@@ -214,7 +392,6 @@
   // all. Scroll and resize keep using rAF, where throttling is what you want.
   setInterval(safeSync, 2000);
 
-  // Ask whether this site is switched off before drawing anything.
   try {
     api.runtime.sendMessage({ type: "isSiteEnabled", host: location.hostname }, (res) => {
       if (res && res.enabled === false) {
@@ -225,14 +402,33 @@
       }
     });
   } catch {
-    // Worker asleep; the defaults stand and the next sync will draw.
+    // Worker asleep; defaults stand and the next sync draws.
   }
 
-  // The popup toggles a site without a reload.
   api.runtime.onMessage?.addListener((msg) => {
-    if (msg?.type !== "siteEnabledChanged") return;
-    enabled = msg.enabled !== false;
-    if (enabled) schedule();
-    else teardown();
+    if (msg?.type === "siteEnabledChanged") {
+      enabled = msg.enabled !== false;
+      if (enabled) schedule();
+      else teardown();
+      return;
+    }
+    if (msg?.type !== "downloadProgress") return;
+    const entry = pending.get(msg.requestId);
+    if (!entry) return;
+    if (msg.status === "error") {
+      entry.sz.textContent = msg.error || "failed";
+      entry.row.disabled = false;
+      pending.delete(msg.requestId);
+      return;
+    }
+    if (msg.status === "saved") {
+      entry.sz.textContent = "saved";
+      entry.fill.style.width = "100%";
+      pending.delete(msg.requestId);
+      return;
+    }
+    entry.sz.textContent =
+      msg.status === "converting" ? "converting…" : `${Math.round(msg.percent)}%`;
+    entry.fill.style.width = `${Math.max(2, msg.percent)}%`;
   });
 })();

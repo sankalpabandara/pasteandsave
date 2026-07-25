@@ -9,11 +9,12 @@ Works in Chrome, Edge, Brave, Opera (Chromium) and Firefox from one codebase.
 
 ## What it does
 
-- **A Save button on the video itself.** A small chip appears in the corner of
-  any real video on the page, so there is nothing to open and no link to copy.
-  Press it and PasteAndSave resolves the download. Decorative background loops,
-  tiny clips and hidden players are ignored, and the ✕ dismisses a chip you
-  don't want.
+- **Download without leaving the page.** A "Download now" button sits on the
+  corner of any real video. Press it and the quality list opens there — video
+  qualities with sizes, plus MP3 — and picking one saves straight to the
+  downloads folder. No new tab. Decorative background loops, tiny clips and
+  hidden players are ignored, only the largest of any stacked players is
+  offered, and the ✕ dismisses a button you don't want.
 - **One button on any video page.** Press the extension on a YouTube, TikTok,
   Instagram, Facebook (etc.) page and it hands the link to PasteAndSave, which
   resolves the real download — YouTube included, via the site's proxy.

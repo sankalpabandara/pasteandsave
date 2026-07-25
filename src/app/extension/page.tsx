@@ -15,8 +15,8 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   {
-    title: "A Save button on the video itself",
-    body: "A small chip appears in the corner of any real video you come across, so there is nothing to open and no link to copy. Press it and the download starts here. Background loops, tiny clips and hidden players are left alone, and one tap on the ✕ dismisses a chip you don't want.",
+    title: "Download without leaving the page",
+    body: "A Download now button sits on the corner of any real video. Press it and the quality list opens right there — 1080p, 720p, 360p, MP3 — with sizes. Pick one and it saves to your downloads folder while you carry on watching. No new tab, no copying links.",
   },
   {
     title: "YouTube, TikTok, Instagram and more",
