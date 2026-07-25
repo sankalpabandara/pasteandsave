@@ -12,6 +12,9 @@ import {
   siteArgs,
   proxyArgs,
   classifyFailure,
+  proxyAvailable,
+  forceProxyArgs,
+  looksLikeIpBlock,
 } from "./ytdlp";
 import { BusyError, jobLimiter } from "./concurrency";
 
@@ -109,11 +112,11 @@ export function startJob(opts: StartJobOptions): string {
   // The same YouTube hardening the lookup uses: without matching player
   // clients and proxy/retry flags, a download can fail even after the info
   // lookup succeeded.
-  const hardening = [
+  const hardeningWith = (proxyFlags: string[]) => [
     ...EXTRACTOR_ARGS,
     ...networkArgs(),
     ...siteArgs(opts.url),
-    ...proxyArgs(opts.url),
+    ...proxyFlags,
   ];
   // A video-only stream (YouTube serves HD only as separate video + audio)
   // gets the best audio muxed in, so the saved file always has sound. Prefer
@@ -135,7 +138,7 @@ export function startJob(opts: StartJobOptions): string {
   const audioFormat = opts.mode === "audio" ? (opts.audioFormat ?? "mp3") : "mp3";
   const audioQuality =
     opts.mode === "audio" && opts.bitrate ? `${opts.bitrate}K` : "0";
-  const args =
+  const buildArgs = (proxyFlags: string[]) =>
     opts.mode === "audio"
       ? [
           "-x",
@@ -148,7 +151,7 @@ export function startJob(opts: StartJobOptions): string {
           "--no-warnings",
           "--ffmpeg-location",
           FFMPEG_DIR,
-          ...hardening,
+          ...hardeningWith(proxyFlags),
           "-o",
           outputTemplate,
           "--",
@@ -163,23 +166,30 @@ export function startJob(opts: StartJobOptions): string {
           "--no-warnings",
           "--ffmpeg-location",
           FFMPEG_DIR,
-          ...hardening,
+          ...hardeningWith(proxyFlags),
           "-o",
           outputTemplate,
           "--",
           opts.url,
         ];
 
-  const child = spawn(YTDLP_PATH, args, { windowsHide: true });
+  let current: ReturnType<typeof spawn> | null = null;
+  let stderrTail = "";
+  let triedProxyFallback = false;
 
-  // Kill a download that runs too long so it can't hold its slot forever.
+  // One deadline for the whole job, retry included, so a download can never
+  // hold its slot indefinitely.
   const killTimer = setTimeout(() => {
     job.status = "error";
-    job.error = "Download timed out.";
-    child.kill();
+    job.error = "That took too long and was stopped. Please try again.";
+    current?.kill("SIGKILL");
   }, JOB_TIMEOUT_MS);
 
-  let stderrTail = "";
+  const finish = () => {
+    clearTimeout(killTimer);
+    releaseOnce();
+  };
+
   const handleLine = (line: string) => {
     const dl = line.match(/\[download\]\s+([\d.]+)%/);
     if (dl) {
@@ -193,65 +203,98 @@ export function startJob(opts: StartJobOptions): string {
     }
   };
 
-  child.stdout.on("data", (chunk: Buffer) => {
-    for (const line of chunk.toString().split(/\r?\n/)) {
-      if (line) handleLine(line);
-    }
-  });
-  child.stderr.on("data", (chunk: Buffer) => {
-    stderrTail = (stderrTail + chunk.toString()).slice(-2000);
-  });
+  const run = (proxyFlags: string[]) => {
+    const child = spawn(YTDLP_PATH, buildArgs(proxyFlags), { windowsHide: true });
+    current = child;
 
-  child.on("error", (err) => {
-    clearTimeout(killTimer);
-    // err.message carries the binary path, so it is logged, not shown.
-    console.error(`[job ${id}] spawn failed: ${err.message}`);
-    job.status = "error";
-    job.error = "Something went wrong on our side. Please try again.";
-    fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-    releaseOnce();
-  });
+    child.stdout.on("data", (chunk: Buffer) => {
+      for (const line of chunk.toString().split(/\r?\n/)) {
+        if (line) handleLine(line);
+      }
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-2000);
+    });
 
-  child.on("close", async (code) => {
-    clearTimeout(killTimer);
-    releaseOnce();
-    if (code !== 0) {
-      // Never forward stderr: yt-dlp puts the full proxy URL (credentials and
-      // all) in connection errors and temp paths in write errors, and this
-      // string is sent straight to the browser over SSE.
-      const { category, message } = classifyFailure(stderrTail);
-      console.error(
-        `[job ${id}] failed category=${category} exit=${code} url_host=${safeHost(opts.url)}`,
-      );
+    child.on("error", (err) => {
+      // err.message carries the binary path, so it is logged, not shown.
+      console.error(`[job ${id}] spawn failed: ${err.message}`);
       job.status = "error";
-      job.error = message;
-      // A failed job keeps nothing worth downloading, so release its scratch
-      // directory now rather than waiting for a later sweep that may never run.
+      job.error = "Something went wrong on our side. Please try again.";
       fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
-      return;
-    }
-    try {
-      const files = (await fsp.readdir(tmpDir)).filter(
-        (f) => !f.endsWith(".part") && !f.endsWith(".ytdl"),
-      );
-      if (files.length === 0) {
-        console.error(`[job ${id}] no output file url_host=${safeHost(opts.url)}`);
-        job.status = "error";
-        job.error = "The file couldn't be prepared. Please try another quality.";
+      finish();
+    });
+
+    child.on("close", async (code) => {
+      if (code !== 0) {
+        // The lookup retries a blocked site through the residential proxy, so
+        // the download has to do the same or it fails right after the formats
+        // appeared. Partial files from the blocked attempt are cleared first.
+        if (
+          !triedProxyFallback &&
+          proxyFlags.length === 0 &&
+          proxyAvailable() &&
+          looksLikeIpBlock(stderrTail) &&
+          job.status !== "error"
+        ) {
+          triedProxyFallback = true;
+          stderrTail = "";
+          job.percent = 0;
+          console.warn(`[job ${id}] blocked direct, retrying via proxy host=${safeHost(opts.url)}`);
+          try {
+            for (const f of await fsp.readdir(tmpDir)) {
+              await fsp.rm(path.join(tmpDir, f), { force: true });
+            }
+          } catch {
+            // nothing written yet
+          }
+          run(forceProxyArgs());
+          return;
+        }
+
+        // Never forward stderr: yt-dlp puts the full proxy URL (credentials
+        // and all) in connection errors and temp paths in write errors, and
+        // this string is sent straight to the browser over SSE.
+        const { category, message } = classifyFailure(stderrTail);
+        console.error(
+          `[job ${id}] failed category=${category} exit=${code} url_host=${safeHost(opts.url)} proxied=${proxyFlags.length > 0}`,
+        );
+        if (job.status !== "error") {
+          job.status = "error";
+          job.error = message;
+        }
         fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+        finish();
         return;
       }
-      const filePath = path.join(tmpDir, files[0]);
-      const ext = path.extname(files[0]);
-      job.filePath = filePath;
-      job.filename = `${sanitizeFilename(opts.title)}${ext}`;
-      job.percent = 100;
-      job.status = "done";
-    } catch (err) {
-      job.status = "error";
-      job.error = err instanceof Error ? err.message : "Unknown error";
-    }
-  });
+
+      try {
+        const files = (await fsp.readdir(tmpDir)).filter(
+          (f) => !f.endsWith(".part") && !f.endsWith(".ytdl"),
+        );
+        if (files.length === 0) {
+          console.error(`[job ${id}] no output file url_host=${safeHost(opts.url)}`);
+          job.status = "error";
+          job.error = "The file couldn't be prepared. Please try another quality.";
+          fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+          finish();
+          return;
+        }
+        const filePath = path.join(tmpDir, files[0]);
+        const ext = path.extname(files[0]);
+        job.filePath = filePath;
+        job.filename = `${sanitizeFilename(opts.title)}${ext}`;
+        job.percent = 100;
+        job.status = "done";
+      } catch {
+        job.status = "error";
+        job.error = "The file couldn't be prepared. Please try another quality.";
+      }
+      finish();
+    });
+  };
+
+  run(proxyArgs(opts.url));
 
   return id;
 }

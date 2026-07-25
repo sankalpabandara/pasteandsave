@@ -116,6 +116,41 @@ export function proxyStatus(): { configured: boolean; hosts: string[] } {
   return { configured: Boolean(YTDLP_PROXY), hosts: [...YTDLP_PROXY_HOSTS] };
 }
 
+/** True when a proxy exists to fall back to. */
+export function proxyAvailable(): boolean {
+  return Boolean(YTDLP_PROXY);
+}
+
+/** Proxy flags regardless of the host list, for the automatic retry below. */
+export function forceProxyArgs(): string[] {
+  return YTDLP_PROXY ? ["--proxy", YTDLP_PROXY] : [];
+}
+
+/**
+ * Whether a failure looks like the platform refusing this server's address,
+ * rather than the video genuinely being gone.
+ *
+ * Maintaining a hand-written list of which sites block datacenter IPs does
+ * not work: the list is always out of date, and every site that starts
+ * blocking becomes a silent outage until somebody notices and edits it.
+ * Instead a failure that looks like a block is retried once through the
+ * residential proxy, so a newly blocking site fixes itself.
+ *
+ * Deliberately excludes "removed" and "unavailable", which mean the video is
+ * really gone — retrying those would spend metered proxy traffic for nothing.
+ */
+export function looksLikeIpBlock(stderr: string): boolean {
+  const s = stderr || "";
+  if (
+    /video unavailable|been removed|has been deleted|no longer available|account.*(terminated|closed|suspended)/i.test(s)
+  ) {
+    return false;
+  }
+  return /HTTP Error 40[139]|HTTP Error 429|rate.?limit|too many requests|sign in to confirm|confirm you'?re not a bot|not a bot|login required|requires? (?:a )?login|log ?in to|you must be logged in|blocked|forbidden|empty media response|unable to extract|failed to extract|requested content is not available|restricted video/i.test(
+    s,
+  );
+}
+
 function youtubeClientArgs(clients: string): string[] {
   return ["--extractor-args", `youtube:player_client=${clients}`];
 }
@@ -441,6 +476,32 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           throw retryErr;
         }
       }
+      // Last resort for any site: if this request did not already go through
+      // the proxy and the failure looks like the platform refusing our
+      // address, try once more from the residential IP. This is what lets a
+      // site that newly starts blocking datacenters keep working without
+      // anyone editing the host list first.
+      if (
+        err instanceof Error &&
+        !(err instanceof UnsupportedSiteError) &&
+        proxyArgs(url).length === 0 &&
+        proxyAvailable() &&
+        looksLikeIpBlock(err.message)
+      ) {
+        try {
+          const stdout = await runYtDlp(
+            [...base, ...siteArgs(url), ...forceProxyArgs(), "--", url],
+            timeout,
+          );
+          console.warn(
+            `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
+          );
+          return JSON.parse(stdout) as YtDlpInfo;
+        } catch {
+          // Fall through to the original error, which describes the real
+          // problem better than a failed retry does.
+        }
+      }
       if (err instanceof Error && isBlockedByPlatform(err.message)) {
         throw new PlatformBlockedError(err.message);
       }
@@ -448,6 +509,15 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     }
   } finally {
     release();
+  }
+}
+
+// Hostname only: full URLs can carry tokens, and logs are not the place.
+function safeHostname(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname;
+  } catch {
+    return "unknown";
   }
 }
 

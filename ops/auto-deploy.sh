@@ -57,11 +57,17 @@ fi
 if ! npx next build >/tmp/ps-build.log 2>&1; then
   echo "$(stamp) BUILD FAILED, keeping the running version"
   tail -n 20 /tmp/ps-build.log
-  git reset --hard "$local_sha" --quiet
-  # A build that fails every cycle leaves the site frozen on an old version
-  # with nothing on screen to say so, which is how this went unnoticed.
+  # Deliberately no git revert here. Reverting also rolls back this script and
+  # everything else in ops/, so a deploy broken by a bad build could not
+  # deploy its own fix: every cycle pulled the fix, failed, and threw it away.
+  # The checkout stays at the new commit and only the build output is restored,
+  # so the running app is untouched and the next pushed fix can land.
+  if [ -d .next.previous ]; then
+    rm -rf .next
+    cp -r .next.previous .next
+  fi
   alert "deploy blocked: build failed" \
-    "Commit ${remote_sha:0:8} does not build, so the site is still running ${local_sha:0:8}. Last lines of the build log:
+    "Commit ${remote_sha:0:8} does not build, so the site is still serving the previous build. Push a fix and it will deploy on the next cycle. Last lines of the build log:
 $(tail -n 12 /tmp/ps-build.log)"
   exit 1
 fi
