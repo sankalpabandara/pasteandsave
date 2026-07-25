@@ -19,12 +19,10 @@ ALERT_EMAIL="${ALERT_EMAIL:-}"
 SELFTEST_URL="${SELFTEST_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
 
 stamp() { date "+%Y-%m-%d %H:%M:%S"; }
-alert() {
-  echo "$(stamp) ALERT: $1"
-  if [ -n "$ALERT_EMAIL" ] && command -v mail >/dev/null 2>&1; then
-    printf '%s\n' "$2" | mail -s "[PasteAndSave] $1" "$ALERT_EMAIL"
-  fi
-}
+
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib-alert.sh"
+alert() { send_alert "$1" "$2"; }
 
 # Reads the proxy the app uses so the self-test goes out the same path a real
 # lookup would. Never printed.

@@ -6,7 +6,8 @@
 set -uo pipefail
 
 APP_DIR="${APP_DIR:-/opt/pasteandsave}"
-ALERT_EMAIL="${ALERT_EMAIL:-}"
+ALERT_EMAIL="${ALERT_EMAIL:-sankethperera@proton.me}"
+ALERT_WEBHOOK_URL="${ALERT_WEBHOOK_URL:-}"
 OPS="$APP_DIR/ops"
 
 echo "Installing PasteAndSave automation from $OPS"
@@ -31,10 +32,15 @@ ROTATE
 
 # Rebuild only the entries this project owns, so re-running cannot duplicate
 # them and any unrelated cron lines are left alone.
-current="$(crontab -l 2>/dev/null | grep -v 'pasteandsave/ops/' | grep -v 'pasteandsave/auto-deploy.sh' || true)"
+current="$(crontab -l 2>/dev/null \
+  | grep -v 'pasteandsave/ops/' \
+  | grep -v 'pasteandsave/auto-deploy.sh' \
+  | grep -v '^ALERT_EMAIL=' \
+  | grep -v '^ALERT_WEBHOOK_URL=' || true)"
 {
   printf '%s\n' "$current"
   [ -n "$ALERT_EMAIL" ] && printf 'ALERT_EMAIL=%s\n' "$ALERT_EMAIL"
+  [ -n "$ALERT_WEBHOOK_URL" ] && printf 'ALERT_WEBHOOK_URL=%s\n' "$ALERT_WEBHOOK_URL"
   echo "*/2 * * * * $OPS/auto-deploy.sh >> /var/log/pasteandsave-deploy.log 2>&1"
   echo "*/2 * * * * $OPS/health-watchdog.sh >> /var/log/pasteandsave-watchdog.log 2>&1"
   echo "17 4 * * * $OPS/update-ytdlp.sh >> /var/log/pasteandsave-ytdlp.log 2>&1"
@@ -45,11 +51,10 @@ echo "Installed:"
 echo "  auto-deploy      every 2 min  (builds first, reloads, rolls back if unhealthy)"
 echo "  health watchdog  every 2 min  (restarts a wedged app, max 6/day)"
 echo "  yt-dlp update    daily 04:17  (self-tests, rolls back a bad update)"
-if [ -n "$ALERT_EMAIL" ]; then
-  echo "  alerts           -> $ALERT_EMAIL"
-else
-  echo "  alerts           DISABLED (re-run with ALERT_EMAIL=you@example.com to enable)"
-fi
+echo "  alerts           -> ${ALERT_EMAIL:-(email off)}${ALERT_WEBHOOK_URL:+ + webhook}"
 echo
 echo "Logs: /var/log/pasteandsave-*.log"
 echo "Check now: curl -s localhost:3000/api/health"
+echo
+echo "--- verifying alert delivery ---"
+ALERT_EMAIL="$ALERT_EMAIL" ALERT_WEBHOOK_URL="$ALERT_WEBHOOK_URL" "$OPS/test-alert.sh" || true

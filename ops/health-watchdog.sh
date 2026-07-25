@@ -26,13 +26,9 @@ MAX_RESTARTS_PER_DAY="${MAX_RESTARTS_PER_DAY:-6}"
 mkdir -p "$STATE_DIR"
 stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 
-alert() {
-  local subject="$1" body="$2"
-  echo "$(stamp) ALERT: $subject - $body"
-  if [ -n "$ALERT_EMAIL" ] && command -v mail >/dev/null 2>&1; then
-    printf '%s\n' "$body" | mail -s "[PasteAndSave] $subject" "$ALERT_EMAIL"
-  fi
-}
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib-alert.sh"
+alert() { send_alert "$1" "$2"; }
 
 # Reset the daily restart counter when the date changes.
 today="$(date +%F)"
