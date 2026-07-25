@@ -17,8 +17,9 @@ export const AD_GATE_COOLDOWN_MS = 4 * 60 * 1000;
 // How long the gate stays before its "Continue" button enables.
 export const AD_GATE_MIN_MS = 3000;
 
-// The desktop sidebar rail is off by default to keep the centered layout clean.
-export const SIDEBAR_ADS_ENABLED = false;
+// The desktop sidebar rail. It floats in the right-hand margin on wide
+// screens only, so the centred layout is unaffected on laptops and phones.
+export const SIDEBAR_ADS_ENABLED = true;
 
 // Show labelled placeholder boxes for unconfigured slots during development so
 // placements are visible while building. Never shown in production.

@@ -4,6 +4,7 @@ import ThemeScript from "@/components/ThemeScript";
 import TermsGate from "@/components/TermsGate";
 import Analytics from "@/components/Analytics";
 import { AdProvider } from "@/components/ads/AdProvider";
+import SidebarAd from "@/components/ads/SidebarAd";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -73,7 +74,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeScript />
-        <AdProvider>{children}</AdProvider>
+        <AdProvider>
+          {children}
+          <SidebarAd />
+        </AdProvider>
         <TermsGate />
         <Analytics />
       </body>

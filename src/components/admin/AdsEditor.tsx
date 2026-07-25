@@ -12,7 +12,10 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
   toolTop: { label: "Tool page — top", where: "All 16 platform pages, under the paste box" },
   toolMid: { label: "Tool page — mid", where: "All 16 platform pages, between sections" },
   toolBottom: { label: "Tool page — bottom", where: "All 16 platform pages, above the footer" },
-  sidebar: { label: "Desktop sidebar", where: "Off by default (SIDEBAR_ADS_ENABLED)" },
+  sidebar: {
+    label: "Desktop sidebar",
+    where: "Right margin, wide desktops only (1536px and up)",
+  },
   interstitial: { label: "Download interstitial", where: "Popup shown when a download starts" },
 };
 
