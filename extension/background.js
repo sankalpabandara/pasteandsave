@@ -24,6 +24,39 @@ const DEFAULT_MIN_BYTES = 200 * 1024; // ignore tiny blips like preview clips
 
 // Minimum size and site address are user-adjustable and cached here.
 let minBytes = DEFAULT_MIN_BYTES;
+// Hostnames the user has switched the extension off for. Kept as a plain
+// array in storage so it survives a worker restart and syncs across browsers.
+let disabledHosts = [];
+
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function siteEnabled(hostOrUrl) {
+  const host = hostOrUrl.includes("://")
+    ? hostOf(hostOrUrl)
+    : String(hostOrUrl).replace(/^www\./, "").toLowerCase();
+  if (!host) return true;
+  // A disabled entry covers its subdomains too, so switching off "example.com"
+  // also covers "cdn.example.com" without listing every one.
+  return !disabledHosts.some((h) => host === h || host.endsWith("." + h));
+}
+
+function setSiteEnabled(host, isEnabled) {
+  const clean = String(host || "").replace(/^www\./, "").toLowerCase();
+  if (!clean) return;
+  const without = disabledHosts.filter((h) => h !== clean);
+  disabledHosts = isEnabled ? without : [...without, clean];
+  try {
+    api.storage.sync.set({ disabledHosts });
+  } catch {
+    // keep the in-memory value
+  }
+}
 
 function normalizeSite(raw) {
   try {
@@ -37,10 +70,14 @@ function normalizeSite(raw) {
 
 function loadSettings() {
   try {
-    api.storage.sync.get({ minBytes: DEFAULT_MIN_BYTES, siteBase: DEFAULT_SITE }, (v) => {
-      if (v && Number.isFinite(v.minBytes)) minBytes = v.minBytes;
-      if (v && v.siteBase) siteBase = normalizeSite(v.siteBase);
-    });
+    api.storage.sync.get(
+      { minBytes: DEFAULT_MIN_BYTES, siteBase: DEFAULT_SITE, disabledHosts: [] },
+      (v) => {
+        if (v && Number.isFinite(v.minBytes)) minBytes = v.minBytes;
+        if (v && v.siteBase) siteBase = normalizeSite(v.siteBase);
+        if (v && Array.isArray(v.disabledHosts)) disabledHosts = v.disabledHosts;
+      },
+    );
   } catch {
     // sync storage unavailable; the defaults stand
   }
@@ -53,6 +90,9 @@ try {
       minBytes = changes.minBytes.newValue;
     }
     if (changes.siteBase) siteBase = normalizeSite(changes.siteBase.newValue);
+    if (changes.disabledHosts && Array.isArray(changes.disabledHosts.newValue)) {
+      disabledHosts = changes.disabledHosts.newValue;
+    }
   });
 } catch {
   // fine
@@ -164,6 +204,9 @@ async function restore(tabId) {
 function recordResponse(details) {
   const { tabId, url, type, responseHeaders, statusCode } = details;
   if (tabId < 0 || statusCode >= 400) return;
+  // Switched off for this site: capture nothing at all, rather than collecting
+  // quietly and only hiding it from the popup.
+  if (!siteEnabled(url)) return;
 
   const contentType = contentTypeOf(responseHeaders);
   const kind = classify(url, type, contentType);
@@ -269,7 +312,12 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     restore(msg.tabId).then(() => {
       const items = [...(tabMedia.get(msg.tabId)?.values() ?? [])];
       items.sort((a, b) => b.size - a.size || a.foundAt - b.foundAt);
-      sendResponse({ items, minBytes, siteBase });
+      sendResponse({
+        items,
+        minBytes,
+        siteBase,
+        siteEnabled: msg.host ? siteEnabled(msg.host) : true,
+      });
     });
     return true; // async response
   }
@@ -279,6 +327,42 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       () => sendResponse({ ok: !api.runtime.lastError }),
     );
     return true;
+  }
+  // The in-page chip asks before drawing, and again whenever the popup
+  // toggles the current site.
+  if (msg?.type === "isSiteEnabled") {
+    sendResponse({ enabled: siteEnabled(msg.host ?? "") });
+    return false;
+  }
+  if (msg?.type === "setSiteEnabled") {
+    setSiteEnabled(msg.host, msg.enabled !== false);
+    // Tell the open tabs on that host right away so the chip appears or goes
+    // without needing a reload.
+    try {
+      api.tabs.query({}, (tabs) => {
+        for (const tab of tabs ?? []) {
+          if (!tab.id || !tab.url) continue;
+          if (hostOf(tab.url) !== String(msg.host).replace(/^www\./, "").toLowerCase()) continue;
+          try {
+            api.tabs.sendMessage(tab.id, {
+              type: "siteEnabledChanged",
+              enabled: msg.enabled !== false,
+            });
+          } catch {
+            // no content script in that tab
+          }
+        }
+      });
+    } catch {
+      // tabs API unavailable
+    }
+    sendResponse({ ok: true, enabled: msg.enabled !== false });
+    return false;
+  }
+  if (msg?.type === "openOnSite") {
+    if (msg.url) openOnSite(msg.url);
+    sendResponse({ ok: true });
+    return false;
   }
   if (msg?.type === "setMinBytes") {
     const n = Number(msg.minBytes);

@@ -265,3 +265,30 @@ footer a:hover {
   font-size: 10px;
   padding: 2px 4px;
 }
+
+/* Save-every-video action, shown when a page has more than one video. */
+.grab-videos {
+  width: 100%;
+  margin: 0 0 8px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #f5f3ff;
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.grab-videos:hover { background: #ede9fe; }
+.grab-videos:disabled { opacity: .6; cursor: default; }
+
+/* Per-site switch in the footer. */
+.site-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #6b7280;
+  cursor: pointer;
+}
+.site-toggle input { accent-color: #7c3aed; cursor: pointer; }

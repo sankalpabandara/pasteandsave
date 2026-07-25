@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PasteAndSave - Video Downloader",
-  "version": "1.3.0",
-  "description": "Spots downloadable video and audio on the page you are on. Save files directly, or send any page to PasteAndSave for MP4 and MP3.",
+  "version": "2.0.0",
+  "description": "Puts a Save button on the videos you watch, and spots downloadable video and audio on any page. Save files directly, or send a page to PasteAndSave for MP4 and MP3.",
   "permissions": [
     "contextMenus",
     "activeTab",
@@ -11,6 +11,14 @@
     "storage"
   ],
   "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

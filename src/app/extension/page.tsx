@@ -15,12 +15,20 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   {
+    title: "A Save button on the video itself",
+    body: "A small chip appears in the corner of any real video you come across, so there is nothing to open and no link to copy. Press it and the download starts here. Background loops, tiny clips and hidden players are left alone, and one tap on the ✕ dismisses a chip you don't want.",
+  },
+  {
     title: "YouTube, TikTok, Instagram and more",
     body: "On any supported video page, hit the extension and it hands the link to PasteAndSave, which fetches the real file — YouTube included. One button, no copying links, works across 1,200+ sites.",
   },
   {
     title: "Finds media on its own",
-    body: "While a page loads, the extension quietly notices every video and audio file it fetches. A small badge on the toolbar icon counts what it found. Nothing is drawn over the page itself.",
+    body: "While a page loads, the extension quietly notices every video and audio file it fetches. A small badge on the toolbar icon counts what it found, and one action saves every video on the page at once.",
+  },
+  {
+    title: "Off whenever you want it off",
+    body: "A switch in the popup stops the extension on a site completely — the in-page button and the traffic watching both go quiet, subdomains included. Turn it back on in the same place, no reload needed.",
   },
   {
     title: "One click to save",
@@ -29,6 +37,10 @@ const FEATURES = [
   {
     title: "Streams go through the site",
     body: "Some players split video into hundreds of tiny pieces that are useless on their own. The extension recognises those and opens PasteAndSave with the link ready, so you still get one whole file.",
+  },
+  {
+    title: "It stays out of the way",
+    body: "The in-page button keeps its styling inside a shadow root and never touches the page's own markup, so nothing it does can shift a layout or clash with a site's design. Turn it off for a site and it disappears entirely.",
   },
   {
     title: "Right-click anywhere",

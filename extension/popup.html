@@ -28,6 +28,9 @@
           <p class="section-title">Found on this page</p>
           <button id="save-all" class="save-all" hidden>Save all</button>
         </div>
+        <button id="grab-videos" class="grab-videos" hidden>
+          Save every video found
+        </button>
         <div class="filters" id="filters">
           <button class="filter active" data-filter="all">All</button>
           <button class="filter" data-filter="video">Video</button>
@@ -44,6 +47,10 @@
     </main>
 
     <footer>
+      <label class="site-toggle" id="site-toggle-wrap" hidden>
+        <input type="checkbox" id="site-toggle" checked />
+        <span>Run on <span id="toggle-host">this site</span></span>
+      </label>
       <label class="min-size">
         Ignore files under
         <select id="min-size">

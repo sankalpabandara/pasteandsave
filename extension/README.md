@@ -9,9 +9,17 @@ Works in Chrome, Edge, Brave, Opera (Chromium) and Firefox from one codebase.
 
 ## What it does
 
+- **A Save button on the video itself.** A small chip appears in the corner of
+  any real video on the page, so there is nothing to open and no link to copy.
+  Press it and PasteAndSave resolves the download. Decorative background loops,
+  tiny clips and hidden players are ignored, and the ✕ dismisses a chip you
+  don't want.
 - **One button on any video page.** Press the extension on a YouTube, TikTok,
   Instagram, Facebook (etc.) page and it hands the link to PasteAndSave, which
   resolves the real download — YouTube included, via the site's proxy.
+- **Save every video found**, in one action, when a page has several.
+- **Switch it off per site.** A toggle in the popup stops both the in-page
+  button and the traffic watching for that site, subdomains included.
 - Watches the page's own network traffic for video and audio
 - Toolbar badge counts what it found; nothing is injected into pages
 - One-click direct download for plain MP4, WebM, MP3 and similar files
@@ -77,3 +85,8 @@ the stores for that reason.
 - `contextMenus`: the right-click entries
 - `activeTab`: to read the current tab's address when you open the popup
 - `storage`: keeps the found-media list alive between browser events
+
+The in-page button runs from a content script on http and https pages. It
+only reads video elements to know where to draw itself, never modifies the
+page's own markup, and keeps its styles inside a shadow root so nothing can
+leak either way.

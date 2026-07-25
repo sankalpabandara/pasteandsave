@@ -119,6 +119,30 @@ function render() {
     list.append(li);
   }
 
+  // Everything that is a video, however it has to be fetched. Plain files go
+  // straight through the browser; streams open on the site, which is the only
+  // way they become one whole file.
+  const allVideos = allItems.filter((it) => categoryOf(it) === "video" || it.kind === "stream");
+  const grab = document.getElementById("grab-videos");
+  grab.hidden = allVideos.length < 2;
+  grab.textContent = `Save every video found (${allVideos.length})`;
+  grab.onclick = () => {
+    grab.disabled = true;
+    grab.textContent = "Starting...";
+    const streams = allVideos.filter((it) => it.kind === "stream");
+    const plain = allVideos.filter((it) => it.kind === "file");
+    for (const item of plain) {
+      api.runtime.sendMessage({ type: "download", url: item.url, filename: item.filename });
+    }
+    // One tab per stream would bury the user, so the page itself is handed
+    // over once and the site resolves whatever is on it.
+    if (streams.length > 0) {
+      openSite(pageIsHttp ? pageUrl : streams[0].url);
+      return;
+    }
+    grab.textContent = `Saving ${plain.length}...`;
+  };
+
   const directFiles = visible.filter((it) => it.kind === "file");
   const saveAll = document.getElementById("save-all");
   saveAll.hidden = directFiles.length < 2;
@@ -162,11 +186,42 @@ async function init() {
     document.getElementById("save-page-label").textContent = "Open a video page first";
   }
 
-  const { items = [], minBytes, siteBase } = await new Promise((resolve) =>
-    api.runtime.sendMessage({ type: "getMedia", tabId: tab.id }, (res) => resolve(res ?? {})),
+  let pageHost = "";
+  try {
+    pageHost = new URL(pageUrl).hostname.replace(/^www\./, "");
+  } catch {
+    pageHost = "";
+  }
+
+  const {
+    items = [],
+    minBytes,
+    siteBase,
+    siteEnabled = true,
+  } = await new Promise((resolve) =>
+    api.runtime.sendMessage({ type: "getMedia", tabId: tab.id, host: pageHost }, (res) =>
+      resolve(res ?? {}),
+    ),
   );
   allItems = items;
   if (siteBase) site = siteBase;
+
+  // Per-site switch. Turning it off stops both the capture and the in-page
+  // button, for people who want the extension quiet on a particular site.
+  if (pageHost) {
+    const wrap = document.getElementById("site-toggle-wrap");
+    const toggle = document.getElementById("site-toggle");
+    document.getElementById("toggle-host").textContent = pageHost;
+    wrap.hidden = false;
+    toggle.checked = siteEnabled !== false;
+    toggle.addEventListener("change", () => {
+      api.runtime.sendMessage({
+        type: "setSiteEnabled",
+        host: pageHost,
+        enabled: toggle.checked,
+      });
+    });
+  }
 
   const minSel = document.getElementById("min-size");
   if (minBytes) minSel.value = String(minBytes);

@@ -15,6 +15,7 @@ const sessionStore = {};
 const syncStore = {};
 const downloads = [];
 const createdTabs = [];
+const tabMessages = [];
 
 // API_STYLE=firefox exercises the `browser` global that Firefox provides.
 const mockApi = {
@@ -26,6 +27,7 @@ const mockApi = {
     onRemoved: { addListener: (fn) => (listeners.tabRemoved = fn) },
     create: (opts) => createdTabs.push(opts.url),
     query: (_q, cb) => cb([{ id: 1, url: "https://example.com/watch" }]),
+    sendMessage: (tabId, msg) => tabMessages.push({ tabId, msg }),
   },
   action: {
     // Rejects for "dead" tabs the way Chrome does for prerendered pages that
@@ -228,6 +230,73 @@ for (let i = 0; i < 50; i++) {
 }
 r = await getMedia(3);
 check("cap enforced", r.items.length === 40);
+
+console.log("\nscenario: a site can be switched off and back on");
+{
+  const ask = (host) =>
+    new Promise((res) => listeners.message({ type: "isSiteEnabled", host }, null, res));
+  const setSite = (host, enabled) =>
+    new Promise((res) => listeners.message({ type: "setSiteEnabled", host, enabled }, null, res));
+
+  check("a site is on by default", (await ask("example.com")).enabled === true);
+
+  await setSite("example.com", false);
+  check("switching off is reported back", (await ask("example.com")).enabled === false);
+  check(
+    "subdomains are covered by the parent",
+    (await ask("cdn.example.com")).enabled === false,
+  );
+  check("www is treated as the same site", (await ask("www.example.com")).enabled === false);
+  check("an unrelated site is untouched", (await ask("other.com")).enabled === true);
+  check("the choice is persisted", Array.isArray(syncStore.disabledHosts));
+  check(
+    "open tabs on that host are told at once",
+    tabMessages.some((m) => m.msg?.type === "siteEnabledChanged" && m.msg.enabled === false),
+  );
+
+  // Nothing at all should be captured while a site is off.
+  const before = (await getMedia(11)).items.length;
+  await fire({
+    tabId: 11,
+    url: "https://example.com/video.mp4",
+    responseHeaders: H({ "content-length": "9000000" }),
+  });
+  check("nothing is captured while off", (await getMedia(11)).items.length === before);
+
+  await setSite("example.com", true);
+  check("switching back on is reported", (await ask("example.com")).enabled === true);
+  await fire({
+    tabId: 11,
+    url: "https://example.com/video.mp4",
+    responseHeaders: H({ "content-length": "9000000" }),
+  });
+  check("capture resumes once on", (await getMedia(11)).items.length === before + 1);
+}
+
+console.log("\nscenario: the in-page button hands its link to the site");
+{
+  const beforeTabs = createdTabs.length;
+  await new Promise((res) =>
+    listeners.message(
+      { type: "openOnSite", url: "https://example.com/watch?v=abc" },
+      null,
+      res,
+    ),
+  );
+  check("a tab opened on the site", createdTabs.length === beforeTabs + 1);
+  check(
+    "the link is passed through encoded",
+    createdTabs[createdTabs.length - 1].includes(encodeURIComponent("https://example.com/watch?v=abc")),
+  );
+}
+
+console.log("\nscenario: getMedia reports whether the site is switched on");
+{
+  const res = await new Promise((r) =>
+    listeners.message({ type: "getMedia", tabId: 2, host: "example.com" }, null, r),
+  );
+  check("site state travels with the media list", res.siteEnabled === true);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
