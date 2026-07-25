@@ -29,6 +29,7 @@ const ORDER: AdSlotKey[] = [
 
 export default function AdsEditor() {
   const [units, setUnits] = useState<Record<string, string>>({});
+  const [gaId, setGaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -36,8 +37,11 @@ export default function AdsEditor() {
   useEffect(() => {
     fetch("/api/admin/ads")
       .then((r) => (r.ok ? r.json() : { units: {} }))
-      .then((d) => setUnits(d.units ?? {}))
-      .catch(() => setMessage({ ok: false, text: "Couldn't load the current ad settings." }))
+      .then((d) => {
+        setUnits(d.units ?? {});
+        setGaId(d.gaId ?? "");
+      })
+      .catch(() => setMessage({ ok: false, text: "Couldn't load the current settings." }))
       .finally(() => setLoading(false));
   }, []);
 
@@ -48,7 +52,7 @@ export default function AdsEditor() {
       const res = await fetch("/api/admin/ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ units }),
+        body: JSON.stringify({ units, gaId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -56,7 +60,11 @@ export default function AdsEditor() {
         return;
       }
       setUnits(data.units ?? units);
-      setMessage({ ok: true, text: "Saved. Ads update on the next page load — no deploy needed." });
+      setGaId(data.gaId ?? gaId);
+      setMessage({
+        ok: true,
+        text: "Saved. Takes effect on the next page load — no deploy needed.",
+      });
     } catch {
       setMessage({ ok: false, text: "Couldn't reach the server." });
     } finally {
@@ -71,11 +79,11 @@ export default function AdsEditor() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-bold text-neutral-900 dark:text-white">
-            Ad placements
+            Ads &amp; analytics
           </h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            {active} of {ORDER.length} slots active. Paste the numeric unit id from
-            a-ads.com — the digits only, not the whole embed code.
+            {active} of {ORDER.length} ad slots active. Paste the numeric unit id
+            from a-ads.com — the digits only, not the whole embed code.
           </p>
         </div>
         <button
@@ -100,6 +108,33 @@ export default function AdsEditor() {
           {message.text}
         </p>
       )}
+
+      <div className="mt-4 rounded-xl border border-black/5 bg-white/40 p-4 dark:border-white/10 dark:bg-black/20">
+        <label
+          htmlFor="ga-id"
+          className="block text-sm font-medium text-neutral-800 dark:text-neutral-200"
+        >
+          Google Analytics measurement id
+        </label>
+        <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+          From GA4 → Admin → Data streams → your web stream. Looks like
+          <span className="font-mono"> G-ABC1234XYZ</span>. Saving it turns
+          tracking on across the site immediately. Leave empty to turn it off.
+        </p>
+        <input
+          id="ga-id"
+          value={gaId}
+          onChange={(e) => setGaId(e.target.value)}
+          placeholder="G-ABC1234XYZ"
+          spellCheck={false}
+          className="mt-2 w-56 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 font-mono text-sm outline-none focus:border-violet-500 dark:border-white/10 dark:bg-black/30 dark:text-white"
+        />
+        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+          This is the tracking id only. The numbers shown in the panel above
+          need the separate service-account setup, because reading data back
+          out of GA requires a credential that belongs in a file on the server.
+        </p>
+      </div>
 
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">

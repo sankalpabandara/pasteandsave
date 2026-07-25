@@ -1,7 +1,13 @@
 import type { NextRequest } from "next/server";
 import { isAdmin } from "@/lib/admin-guard";
 import { AD_SLOTS, type AdSlotKey } from "@/lib/ads";
-import { isValidUnitId, readAdUnits, writeAdUnits, type AdUnits } from "@/lib/ads-store";
+import {
+  isValidGaId,
+  isValidUnitId,
+  readSettings,
+  writeSettings,
+  type AdUnits,
+} from "@/lib/ads-store";
 
 export const runtime = "nodejs";
 
@@ -9,7 +15,7 @@ export async function GET() {
   if (!(await isAdmin())) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
-  return Response.json({ units: await readAdUnits() });
+  return Response.json(await readSettings());
 }
 
 export async function POST(request: NextRequest) {
@@ -17,7 +23,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  let body: { units?: Record<string, unknown> };
+  let body: { units?: Record<string, unknown>; gaId?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -43,18 +49,24 @@ export async function POST(request: NextRequest) {
 
   if (rejected.length > 0) {
     return Response.json(
-      {
-        error: `These need to be a plain unit number (digits only): ${rejected.join(", ")}`,
-      },
+      { error: `These need to be a plain unit number (digits only): ${rejected.join(", ")}` },
+      { status: 400 },
+    );
+  }
+
+  const gaId = String(body.gaId ?? "").trim();
+  if (!isValidGaId(gaId)) {
+    return Response.json(
+      { error: "The analytics id should look like G-XXXXXXX, or be left empty." },
       { status: 400 },
     );
   }
 
   try {
-    await writeAdUnits(units);
+    await writeSettings({ units, gaId });
   } catch {
     return Response.json({ error: "Couldn't save. Check disk permissions." }, { status: 500 });
   }
 
-  return Response.json({ ok: true, units: await readAdUnits() });
+  return Response.json({ ok: true, ...(await readSettings()) });
 }
