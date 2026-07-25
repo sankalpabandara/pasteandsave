@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { fetchInfo, isSafeUrl, userFacingError, type YtDlpFormat } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
+import { BusyError, lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
 
 export const runtime = "nodejs";
@@ -271,6 +271,13 @@ export async function POST(request: NextRequest) {
     return Response.json(payload);
   } catch (err) {
     void logEvent({ type: "lookup", ok: false });
+    // Turned away at the queue rather than by the site itself.
+    if (err instanceof BusyError) {
+      return Response.json(
+        { error: "We're handling a lot of links right now. Try again in a moment." },
+        { status: 503 },
+      );
+    }
     const { error, status } = userFacingError(err);
     // Only log the unexpected ones; private/removed/photo posts are normal.
     if (status >= 500) console.error("yt-dlp info error", err);

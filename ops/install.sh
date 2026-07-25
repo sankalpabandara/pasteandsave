@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# One-time setup for the self-healing automation. Safe to re-run.
+#
+#   sudo ALERT_EMAIL=you@example.com /opt/pasteandsave/ops/install.sh
+
+set -uo pipefail
+
+APP_DIR="${APP_DIR:-/opt/pasteandsave}"
+ALERT_EMAIL="${ALERT_EMAIL:-}"
+OPS="$APP_DIR/ops"
+
+echo "Installing PasteAndSave automation from $OPS"
+
+chmod +x "$OPS"/*.sh
+mkdir -p /var/lib/pasteandsave
+touch /var/log/pasteandsave-watchdog.log \
+      /var/log/pasteandsave-ytdlp.log \
+      /var/log/pasteandsave-deploy.log
+
+# Keep the logs from growing without limit.
+cat > /etc/logrotate.d/pasteandsave <<'ROTATE'
+/var/log/pasteandsave-*.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+ROTATE
+
+# Rebuild only the entries this project owns, so re-running cannot duplicate
+# them and any unrelated cron lines are left alone.
+current="$(crontab -l 2>/dev/null | grep -v 'pasteandsave/ops/' | grep -v 'pasteandsave/auto-deploy.sh' || true)"
+{
+  printf '%s\n' "$current"
+  [ -n "$ALERT_EMAIL" ] && printf 'ALERT_EMAIL=%s\n' "$ALERT_EMAIL"
+  echo "*/2 * * * * $OPS/auto-deploy.sh >> /var/log/pasteandsave-deploy.log 2>&1"
+  echo "*/2 * * * * $OPS/health-watchdog.sh >> /var/log/pasteandsave-watchdog.log 2>&1"
+  echo "17 4 * * * $OPS/update-ytdlp.sh >> /var/log/pasteandsave-ytdlp.log 2>&1"
+} | crontab -
+
+echo
+echo "Installed:"
+echo "  auto-deploy      every 2 min  (builds first, reloads, rolls back if unhealthy)"
+echo "  health watchdog  every 2 min  (restarts a wedged app, max 6/day)"
+echo "  yt-dlp update    daily 04:17  (self-tests, rolls back a bad update)"
+if [ -n "$ALERT_EMAIL" ]; then
+  echo "  alerts           -> $ALERT_EMAIL"
+else
+  echo "  alerts           DISABLED (re-run with ALERT_EMAIL=you@example.com to enable)"
+fi
+echo
+echo "Logs: /var/log/pasteandsave-*.log"
+echo "Check now: curl -s localhost:3000/api/health"

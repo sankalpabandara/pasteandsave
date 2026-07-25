@@ -1,6 +1,6 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { lookupLimiter } from "./concurrency";
+import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 
 // BIN_DIR is overridable so a production deploy can point at an absolute path
 // regardless of the working directory (e.g. Next.js standalone output).
@@ -390,7 +390,7 @@ export function userFacingError(err: unknown): { error: string; status: number }
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {
   // Hold a concurrency slot for the whole lookup so a burst of requests can't
   // spawn unlimited yt-dlp processes.
-  const release = await lookupLimiter.acquire();
+  const release = await lookupLimiter.acquire(QUEUE_WAIT_MS);
   try {
     const base = [
       "--dump-single-json",
@@ -465,7 +465,7 @@ type RawFlatEntry = {
 // full extraction (it keeps working even when a site blocks video downloads).
 // Returns null when the URL isn't actually a playlist.
 export async function fetchPlaylist(url: string): Promise<PlaylistInfo | null> {
-  const release = await lookupLimiter.acquire();
+  const release = await lookupLimiter.acquire(QUEUE_WAIT_MS);
   try {
     const stdout = await runYtDlp([
       "--flat-playlist",
