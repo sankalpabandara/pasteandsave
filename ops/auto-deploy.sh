@@ -18,6 +18,10 @@ LOCK="/tmp/pasteandsave-deploy.lock"
 
 stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib-alert.sh"
+alert() { send_alert "$1" "$2"; }
+
 # Never let two deploys overlap.
 exec 9>"$LOCK"
 flock -n 9 || { echo "$(stamp) another deploy is running, skipping"; exit 0; }
@@ -37,15 +41,28 @@ rm -rf .next.previous
 
 git reset --hard "origin/$BRANCH" --quiet || { echo "$(stamp) checkout failed"; exit 1; }
 
-if ! npm ci --omit=dev --silent 2>/dev/null; then
-  npm install --silent || { echo "$(stamp) dependency install failed"; exit 1; }
+# Dev dependencies are required here: typescript and tailwind are build-time
+# tools, so --omit=dev produces a tree that cannot build at all. The runtime
+# bundle stays lean regardless, because output: standalone only copies what
+# the server actually needs.
+if ! npm ci --silent 2>/dev/null; then
+  npm install --silent || {
+    echo "$(stamp) dependency install failed"
+    alert "deploy blocked: dependency install failed" \
+      "npm could not install dependencies in $APP_DIR, so ${remote_sha:0:8} was not deployed. The previous version is still serving."
+    exit 1
+  }
 fi
 
-# Build to a scratch directory so the running app keeps serving the old one.
 if ! npx next build >/tmp/ps-build.log 2>&1; then
   echo "$(stamp) BUILD FAILED, keeping the running version"
   tail -n 20 /tmp/ps-build.log
   git reset --hard "$local_sha" --quiet
+  # A build that fails every cycle leaves the site frozen on an old version
+  # with nothing on screen to say so, which is how this went unnoticed.
+  alert "deploy blocked: build failed" \
+    "Commit ${remote_sha:0:8} does not build, so the site is still running ${local_sha:0:8}. Last lines of the build log:
+$(tail -n 12 /tmp/ps-build.log)"
   exit 1
 fi
 
@@ -63,6 +80,8 @@ for i in $(seq 1 10); do
 done
 
 echo "$(stamp) new version is not healthy, rolling back to ${local_sha:0:8}"
+alert "deploy rolled back" \
+  "Commit ${remote_sha:0:8} built but did not answer the health check, so the site was put back on ${local_sha:0:8}."
 git reset --hard "$local_sha" --quiet
 if [ -d .next.previous ]; then
   rm -rf .next
