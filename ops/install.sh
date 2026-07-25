@@ -12,6 +12,21 @@ OPS="$APP_DIR/ops"
 
 echo "Installing PasteAndSave automation from $OPS"
 
+# Catch a placeholder pasted in literally instead of a real URL, which would
+# otherwise install cleanly and then quietly fail to deliver anything.
+if [ -n "$ALERT_WEBHOOK_URL" ]; then
+  case "$ALERT_WEBHOOK_URL" in
+    https://*|http://*) ;;
+    *)
+      echo
+      echo "ERROR: ALERT_WEBHOOK_URL is not a URL: '$ALERT_WEBHOOK_URL'"
+      echo "It must start with https://, for example https://ntfy.sh/your-topic"
+      echo "Nothing was installed. Re-run with a real URL, or omit it entirely."
+      exit 1
+      ;;
+  esac
+fi
+
 chmod +x "$OPS"/*.sh
 mkdir -p /var/lib/pasteandsave
 touch /var/log/pasteandsave-watchdog.log \

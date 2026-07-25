@@ -44,19 +44,40 @@ send_alert() {
   local delivered=0
 
   if [ -n "${ALERT_WEBHOOK_URL:-}" ]; then
-    # "content" suits Discord, "text" suits Slack and ntfy; sending both keeps
-    # this working without knowing which service is on the other end.
-    local payload
-    payload="$(printf '{"content":%s,"text":%s}' \
-      "$(json_escape "[$subject] $body")" \
-      "$(json_escape "[$subject] $body")")"
-    if curl -sS -m 15 -X POST -H 'Content-Type: application/json' \
-        -d "$payload" "$ALERT_WEBHOOK_URL" >/dev/null 2>&1; then
-      delivered=1
-      echo "$ts alert sent via webhook: $subject"
-    else
-      echo "$ts webhook delivery failed: $subject"
-    fi
+    local http_code
+    case "$ALERT_WEBHOOK_URL" in
+      *ntfy*)
+        # ntfy publishes the raw request body as the message, so JSON here
+        # would arrive as a wall of braces. Plain text with a Title header
+        # reads properly on the phone.
+        http_code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' \
+          -H "Title: PasteAndSave: $subject" \
+          -H "Priority: high" \
+          -d "$body" "$ALERT_WEBHOOK_URL" 2>/dev/null || echo 000)"
+        ;;
+      *)
+        # "content" suits Discord, "text" suits Slack; sending both keeps this
+        # working without knowing which service is on the other end.
+        local payload
+        payload="$(printf '{"content":%s,"text":%s}' \
+          "$(json_escape "[$subject] $body")" \
+          "$(json_escape "[$subject] $body")")"
+        http_code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' \
+          -X POST -H 'Content-Type: application/json' \
+          -d "$payload" "$ALERT_WEBHOOK_URL" 2>/dev/null || echo 000)"
+        ;;
+    esac
+    # Anything 2xx means the service accepted it; a placeholder URL or a typo
+    # lands here as a connection failure or a 4xx, and must be reported.
+    case "$http_code" in
+      2*)
+        delivered=1
+        echo "$ts alert sent via webhook (http $http_code): $subject"
+        ;;
+      *)
+        echo "$ts webhook delivery failed (http $http_code): $subject"
+        ;;
+    esac
   fi
 
   if [ -n "${ALERT_EMAIL:-}" ]; then
