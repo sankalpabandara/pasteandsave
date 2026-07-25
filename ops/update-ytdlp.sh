@@ -40,6 +40,15 @@ selftest() {
     | head -c 2000 | grep -q '"formats"'
 }
 
+# Dailymotion and a growing number of other sites refuse a plain TLS
+# handshake and need yt-dlp to impersonate a browser, which only the builds
+# bundling curl_cffi can do. Swapping to a build without it breaks those sites
+# with an error that mentions nothing about the network, so it is checked here
+# rather than discovered later.
+impersonation_ok() {
+  "$BIN" --list-impersonate-targets 2>/dev/null | grep -qiE 'chrome|firefox|safari|edge'
+}
+
 [ -x "$BIN" ] || { alert "yt-dlp missing" "No executable at $BIN"; exit 1; }
 
 before="$("$BIN" --version 2>/dev/null || echo unknown)"
@@ -61,6 +70,16 @@ if [ "$before" = "$after" ]; then
 fi
 
 echo "$(stamp) updated $before -> $after, running self-test"
+if ! impersonation_ok; then
+  echo "$(stamp) $after has no impersonation targets, rolling back to $before"
+  if [ -f "$BACKUP" ]; then
+    mv -f "$BACKUP" "$BIN"
+    chmod +x "$BIN"
+  fi
+  alert "yt-dlp update rolled back: no browser impersonation" \
+    "Version $after ships without curl_cffi, which Dailymotion and similar sites require. Rolled back to $before. If this repeats, the install may have been switched to a build variant that omits impersonation; the Linux standalone release (yt-dlp_linux) includes it."
+  exit 1
+fi
 if selftest; then
   echo "$(stamp) self-test passed on $after, restarting app"
   pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1
