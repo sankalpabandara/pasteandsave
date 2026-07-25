@@ -42,14 +42,22 @@ const YT_FALLBACK_CLIENTS =
 // the 1,200+ others that work fine direct. Set YTDLP_PROXY_HOSTS="all" to
 // route every site through the proxy instead.
 const YTDLP_PROXY = process.env.YTDLP_PROXY;
-// Instagram refuses datacenter addresses outright: the same reel that
-// extracts fine from a home connection fails in about four seconds from the
-// server. Threads runs on Instagram's backend and blocks the same way.
-// TikTok and Facebook still work direct, so they stay off this list and cost
-// no proxy traffic.
+// Only sites proven to refuse this server's address belong here. Everything
+// else goes direct and, if it turns out to be blocked, is retried through the
+// proxy automatically by the fallback in fetchInfo — so being absent from
+// this list costs a slow first attempt, never a broken site.
+//
+// Instagram and Threads refuse datacenter addresses outright: the same reel
+// that extracts fine from a home connection fails in about four seconds from
+// the server. TikTok and Facebook work direct and stay off.
+//
+// Dailymotion was listed here historically and was failing *because* of it —
+// it extracts fine direct but returns errors through the proxy, which points
+// at the exit node's location rather than the extractor. Direct-first with
+// the automatic fallback covers both cases.
 const YTDLP_PROXY_HOSTS = (
   process.env.YTDLP_PROXY_HOSTS ||
-  "youtube.com,youtu.be,youtube-nocookie.com,instagram.com,threads.net,dailymotion.com,bilibili.com"
+  "youtube.com,youtu.be,youtube-nocookie.com,instagram.com,threads.net,bilibili.com"
 )
   .toLowerCase()
   .split(",")
