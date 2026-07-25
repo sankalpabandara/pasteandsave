@@ -13,7 +13,7 @@ const FILE = path.join(DATA_DIR, "proxy-usage.json");
 // YTDLP_PROXY_DAILY_MB, or set it to 0 to disable the cap entirely.
 export const PROXY_DAILY_MB = (() => {
   const n = Number(process.env.YTDLP_PROXY_DAILY_MB);
-  return Number.isFinite(n) && n >= 0 ? n : 500;
+  return Number.isFinite(n) && n >= 0 ? n : 2048;
 })();
 
 // We don't know a download's exact size when it starts, so estimate

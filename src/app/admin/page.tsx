@@ -5,6 +5,7 @@ import { getStats } from "@/lib/analytics";
 import { getGaSummary } from "@/lib/ga-data";
 import { proxyUsageToday } from "@/lib/proxy-budget";
 import AdminBar from "./AdminBar";
+import AdsEditor from "@/components/admin/AdsEditor";
 
 export const metadata: Metadata = {
   title: "Admin dashboard",
@@ -315,19 +316,49 @@ export default async function AdminDashboard() {
                 ? "Client tracking is on. To show numbers here, connect the GA Data API:"
                 : "Not connected. To pull GA numbers into this dashboard:"}
             </p>
-            <ol className="mt-2 list-decimal space-y-1 pl-5 text-neutral-500 dark:text-neutral-400">
-              <li>Create a Google Cloud service account and download its JSON key.</li>
+            <ol className="mt-2 list-decimal space-y-2 pl-5 text-neutral-500 dark:text-neutral-400">
               <li>
-                In GA4, add the service account email as a Viewer on the property.
+                At console.cloud.google.com, create a project, enable the{" "}
+                <span className="font-mono">Google Analytics Data API</span>, then
+                create a service account and download its JSON key.
               </li>
               <li>
-                Set <span className="font-mono">GOOGLE_SERVICE_ACCOUNT_JSON</span> and{" "}
-                <span className="font-mono">GA4_PROPERTY_ID</span> in the environment.
+                In GA4 → Admin → Property access management, add the service
+                account email (it ends in{" "}
+                <span className="font-mono">.iam.gserviceaccount.com</span>) as a
+                Viewer.
+              </li>
+              <li>
+                In GA4 → Admin → Property details, copy the numeric{" "}
+                <span className="font-mono">Property ID</span> (not the G- code).
+              </li>
+              <li>
+                Put the key on the server and point the app at it. The key is a
+                credential, so it belongs in a file on disk rather than pasted
+                into a web form:
+                <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-100 p-3 text-[11px] leading-relaxed text-neutral-700 dark:bg-black/40 dark:text-neutral-300">
+{`# upload the key, then lock it down
+sudo mv ~/ga-key.json /opt/pasteandsave/ga-key.json
+sudo chmod 600 /opt/pasteandsave/ga-key.json
+
+# add these two lines to /opt/pasteandsave/.env.local
+GOOGLE_SERVICE_ACCOUNT_JSON=/opt/pasteandsave/ga-key.json
+GA4_PROPERTY_ID=123456789
+
+pm2 restart pasteandsave --update-env`}
+                </pre>
               </li>
             </ol>
+            <p className="mt-2 text-xs text-neutral-400">
+              Numbers appear here on the next load once those are set. Visitor
+              tracking on the site itself is separate and already runs from{" "}
+              <span className="font-mono">NEXT_PUBLIC_GA_ID</span>.
+            </p>
           </div>
         )}
       </section>
+
+      <AdsEditor />
 
       <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">

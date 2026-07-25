@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   AD_SLOTS,
   ADS_ENABLED,
   SHOW_AD_PLACEHOLDERS,
   type AdSlotKey,
 } from "@/lib/ads";
+// Imported through the same alias the layout uses. A relative path here can
+// resolve to a second copy of the module, which means a second React context
+// and a provider whose value never reaches this component.
+import { useAdUnits } from "@/components/ads/AdProvider";
 
 // A single ad placement. It reserves its height up front (no layout shift),
 // labels itself "Advertisement", and only injects the A-ADS iframe once it
@@ -19,28 +23,37 @@ export default function AdSlot({
   className?: string;
 }) {
   const cfg = AD_SLOTS[slot];
-  const ref = useRef<HTMLDivElement>(null);
+  const units = useAdUnits();
   const [inView, setInView] = useState(false);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || inView) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setInView(true);
-          io.disconnect();
-        }
-      },
-      { rootMargin: "300px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [inView]);
+  // Configured in the admin panel; the compiled value is only a fallback.
+  const unitId = (units[slot] ?? cfg.unitId ?? "").trim();
+  const hasUnit = unitId.length > 0;
+
+  // A callback ref rather than useRef + useEffect: unit ids arrive from a
+  // fetch, so before they land this component renders nothing and there is no
+  // element to observe. An effect keyed on scroll state alone never re-runs
+  // once the element finally appears, which left every ad permanently
+  // unrendered in production, where the placeholder box does not exist to
+  // hold the element open.
+  const observe = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el || inView) return;
+      const io = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+          }
+        },
+        { rootMargin: "300px" },
+      );
+      io.observe(el);
+    },
+    [inView],
+  );
 
   if (!ADS_ENABLED) return null;
-
-  const hasUnit = cfg.unitId.trim().length > 0;
   if (!hasUnit && !SHOW_AD_PLACEHOLDERS) return null;
 
   return (
@@ -49,7 +62,7 @@ export default function AdSlot({
         Advertisement
       </p>
       <div
-        ref={ref}
+        ref={observe}
         className="mx-auto overflow-hidden rounded-xl border border-black/5 bg-neutral-50 dark:border-white/10 dark:bg-neutral-900/40"
         style={{
           height: cfg.height,
@@ -60,8 +73,8 @@ export default function AdSlot({
         {inView && hasUnit ? (
           <iframe
             title="Advertisement"
-            data-aa={cfg.unitId}
-            src={`//acceptable.a-ads.com/${cfg.unitId}`}
+            data-aa={unitId}
+            src={`//acceptable.a-ads.com/${unitId}`}
             loading="lazy"
             referrerPolicy="no-referrer"
             style={{

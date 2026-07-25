@@ -23,18 +23,47 @@ type AdContextValue = {
    * never blocks the underlying action from eventually running.
    */
   gate: () => Promise<void>;
+  /** Unit ids as configured in the admin panel, keyed by slot. */
+  units: Record<string, string>;
 };
 
-const AdContext = createContext<AdContextValue>({ gate: async () => {} });
+const AdContext = createContext<AdContextValue>({
+  gate: async () => {},
+  units: {},
+});
 export const useAdGate = () => useContext(AdContext);
+export const useAdUnits = () => useContext(AdContext).units;
 
 const LAST_SHOWN_KEY = "ad-gate-last";
 
 export function AdProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [canContinue, setCanContinue] = useState(false);
+  const [units, setUnits] = useState<Record<string, string>>({});
+  const unitsRef = useRef<Record<string, string>>({});
   const resolveRef = useRef<(() => void) | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pages are prerendered, so unit ids cannot be baked in without a rebuild
+  // every time an ad changes. Fetching them once here keeps the pages static
+  // and still lets the admin panel swap an ad in on the next page load.
+  useEffect(() => {
+    if (!ADS_ENABLED) return;
+    let cancelled = false;
+    fetch("/api/ads")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.units) return;
+        unitsRef.current = data.units;
+        setUnits(data.units);
+      })
+      .catch(() => {
+        // Ads are never worth breaking a page over.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const finish = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -47,9 +76,11 @@ export function AdProvider({ children }: { children: ReactNode }) {
 
   const gate = useCallback(() => {
     return new Promise<void>((resolve) => {
-      const cfg = AD_SLOTS.interstitial;
+      // Read through the ref so the gate always sees the latest units without
+      // being rebuilt whenever they arrive.
+      const unitId = (unitsRef.current.interstitial ?? "").trim();
       // No-op when ads are off or this slot has no unit id yet.
-      if (!ADS_ENABLED || !cfg.unitId.trim()) {
+      if (!ADS_ENABLED || !unitId) {
         resolve();
         return;
       }
@@ -83,9 +114,10 @@ export function AdProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const cfg = AD_SLOTS.interstitial;
+  const interstitialUnit = (units.interstitial ?? "").trim();
 
   return (
-    <AdContext.Provider value={{ gate }}>
+    <AdContext.Provider value={{ gate, units }}>
       {children}
       {open && (
         <div
@@ -113,8 +145,8 @@ export function AdProvider({ children }: { children: ReactNode }) {
             >
               <iframe
                 title="Advertisement"
-                data-aa={cfg.unitId}
-                src={`//acceptable.a-ads.com/${cfg.unitId}`}
+                data-aa={interstitialUnit}
+                src={`//acceptable.a-ads.com/${interstitialUnit}`}
                 referrerPolicy="no-referrer"
                 style={{
                   border: 0,
