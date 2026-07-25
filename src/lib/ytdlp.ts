@@ -426,9 +426,17 @@ export class PlatformBlockedError extends Error {}
 // Turns a raw yt-dlp failure into an honest, specific message, so a deleted
 // video, a photo-only post, a login wall and a real outage don't all show the
 // same scary text. Returns the HTTP status to use alongside it.
-export function userFacingError(err: unknown): { error: string; status: number } {
+export function userFacingError(err: unknown): {
+  error: string;
+  status: number;
+  code: string;
+} {
   if (err instanceof UnsupportedSiteError) {
-    return { error: "That link isn't from a site we can download from.", status: 400 };
+    return {
+      error: "That link isn't from a site we can download from.",
+      status: 400,
+      code: "UNSUPPORTED_SITE",
+    };
   }
   const msg = err instanceof Error ? err.message : String(err);
 
@@ -437,18 +445,28 @@ export function userFacingError(err: unknown): { error: string; status: number }
       error:
         "This site is blocking our server right now. It usually clears up soon — try again in a bit, or try a link from another site.",
       status: 503,
+      code: "UPSTREAM_BLOCKED",
     };
   }
   if (/timed out|timeout/i.test(msg)) {
-    return { error: "That took too long and timed out. Please try again.", status: 504 };
+    return {
+      error: "That took too long and timed out. Please try again.",
+      status: 504,
+      code: "EXTRACTOR_TIMEOUT",
+    };
   }
   if (/is private|private video|this (?:video|post|reel) is private/i.test(msg)) {
-    return { error: "This one is private, so it can't be downloaded.", status: 422 };
+    return {
+      error: "This one is private, so it can't be downloaded.",
+      status: 422,
+      code: "PRIVATE",
+    };
   }
   if (/age.?restrict|confirm your age|inappropriate for some users/i.test(msg)) {
     return {
       error: "This video is age-restricted and needs a sign-in, so it can't be fetched.",
       status: 422,
+      code: "AGE_RESTRICTED",
     };
   }
   if (
@@ -456,7 +474,11 @@ export function userFacingError(err: unknown): { error: string; status: number }
       msg,
     )
   ) {
-    return { error: "This video was removed or is no longer available.", status: 422 };
+    return {
+      error: "This video was removed or is no longer available.",
+      status: 422,
+      code: "MEDIA_REMOVED",
+    };
   }
   if (
     /not available in your (?:country|region|location)|geo.?restrict|blocked it in your country|not available from your location/i.test(
@@ -466,6 +488,7 @@ export function userFacingError(err: unknown): { error: string; status: number }
     return {
       error: "This video is blocked in our server's region, so we can't reach it.",
       status: 451,
+      code: "GEO_BLOCKED",
     };
   }
   if (
@@ -476,16 +499,53 @@ export function userFacingError(err: unknown): { error: string; status: number }
     return {
       error: "No video found at that link — it may be a photo, a story, or a text-only post.",
       status: 422,
+      code: "NO_FORMATS",
     };
   }
   if (/login required|requires? (?:a )?login|log ?in to|you must be logged in|please log in/i.test(msg)) {
-    return { error: "This post needs a login to view, so it can't be downloaded.", status: 422 };
+    return {
+      error: "This post needs a login to view, so it can't be downloaded.",
+      status: 422,
+      code: "LOGIN_REQUIRED",
+    };
   }
   return {
     error:
       "Couldn't read that link. It may be private, region-locked, or the site changed something on their end.",
     status: 502,
+    code: "UNKNOWN",
   };
+}
+
+/**
+ * A short, safe fingerprint of a failure for the error response.
+ *
+ * Without this, every unrecognised failure looks identical from outside the
+ * server and the only way to tell them apart is to read the logs on the box.
+ * Contains no stderr, no paths and no credentials — just which yt-dlp error
+ * shapes were present, so a failure can be diagnosed remotely.
+ */
+export function failureFingerprint(err: unknown): string {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  const marks: string[] = [];
+  const add = (label: string, re: RegExp) => {
+    if (re.test(msg)) marks.push(label);
+  };
+  add("http403", /http error 403|forbidden/);
+  add("http401", /http error 401/);
+  add("http404", /http error 404|not found/);
+  add("http429", /http error 429|too many requests/);
+  add("http5xx", /http error 5\d\d/);
+  add("geo", /country|region|geo/);
+  add("login", /login|sign in|authenticat/);
+  add("m3u8", /m3u8|hls|fragment/);
+  add("noformats", /no video formats|no formats found/);
+  add("unsupported", /unsupported url|no suitable extractor/);
+  add("dns", /getaddrinfo|name or service not known|dns/);
+  add("conn", /connection (?:reset|refused|aborted)|econnreset|timed out/);
+  add("proxy", /proxy|tunnel/);
+  add("empty", /empty media response|returned empty/);
+  return marks.length ? marks.join("+") : "none";
 }
 
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {

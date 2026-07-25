@@ -1,5 +1,11 @@
 import type { NextRequest } from "next/server";
-import { fetchInfo, isSafeUrl, userFacingError, type YtDlpFormat } from "@/lib/ytdlp";
+import {
+  fetchInfo,
+  isSafeUrl,
+  userFacingError,
+  failureFingerprint,
+  type YtDlpFormat,
+} from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError, lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
@@ -278,9 +284,14 @@ export async function POST(request: NextRequest) {
         { status: 503 },
       );
     }
-    const { error, status } = userFacingError(err);
+    const { error, status, code } = userFacingError(err);
+    const fingerprint = failureFingerprint(err);
     // Only log the unexpected ones; private/removed/photo posts are normal.
-    if (status >= 500) console.error("yt-dlp info error", err);
-    return Response.json({ error }, { status });
+    if (status >= 500) {
+      console.error(`yt-dlp info error code=${code} marks=${fingerprint}`, err);
+    }
+    // code and marks describe the shape of the failure, never its contents,
+    // so a problem can be diagnosed without shell access to the server.
+    return Response.json({ error, code, marks: fingerprint }, { status });
   }
 }
