@@ -423,6 +423,27 @@ function runYtDlp(args: string[], timeoutMs = 30_000): Promise<string> {
 
 export class PlatformBlockedError extends Error {}
 
+/**
+ * Parses extractor output, failing with something recognisable.
+ *
+ * A bare JSON.parse throws "Unexpected token ..." naming the offending
+ * character, which matches none of the failure patterns and so reports as a
+ * generic unknown error. Tagging it distinguishes "the site refused us" from
+ * "yt-dlp exited cleanly but did not give us JSON", which are unrelated
+ * problems that were previously indistinguishable from outside the server.
+ */
+function parseInfoJson(stdout: string): YtDlpInfo {
+  const text = (stdout || "").trim();
+  if (!text) {
+    throw new Error("emptyout: no output from extractor");
+  }
+  try {
+    return JSON.parse(text) as YtDlpInfo;
+  } catch {
+    throw new Error(`badjson: extractor returned ${text.length} bytes that are not JSON`);
+  }
+}
+
 // Turns a raw yt-dlp failure into an honest, specific message, so a deleted
 // video, a photo-only post, a login wall and a real outage don't all show the
 // same scary text. Returns the HTTP status to use alongside it.
@@ -545,6 +566,10 @@ export function failureFingerprint(err: unknown): string {
   add("conn", /connection (?:reset|refused|aborted)|econnreset|timed out/);
   add("proxy", /proxy|tunnel/);
   add("empty", /empty media response|returned empty/);
+  add("badjson", /unexpected token|unexpected end of json|is not valid json|badjson/);
+  add("emptyout", /emptyout|no output from extractor/);
+  add("extractfail", /unable to extract|failed to extract|unable to download/);
+  add("exitcode", /exited with code/);
   return marks.length ? marks.join("+") : "none";
 }
 
@@ -569,7 +594,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
         [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
         timeout,
       );
-      return JSON.parse(stdout) as YtDlpInfo;
+      return parseInfoJson(stdout);
     } catch (err) {
       // For YouTube, one bot-block deserves a second try with a different
       // client mix before we give up.
@@ -579,7 +604,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
             [...base, ...siteArgs(url, true), ...proxyArgs(url), "--", url],
             timeout,
           );
-          return JSON.parse(stdout) as YtDlpInfo;
+          return parseInfoJson(stdout);
         } catch (retryErr) {
           if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
             throw new PlatformBlockedError(retryErr.message);
@@ -604,7 +629,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           console.warn(
             "[info] proxy rejected the sticky session; falling back to a plain proxy connection. Set YTDLP_PROXY_STICKY=0 if this persists.",
           );
-          return JSON.parse(stdout) as YtDlpInfo;
+          return parseInfoJson(stdout);
         } catch {
           // Keep the original error, which describes the real problem.
         }
@@ -630,7 +655,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           console.warn(
             `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
           );
-          return JSON.parse(stdout) as YtDlpInfo;
+          return parseInfoJson(stdout);
         } catch {
           // Fall through to the original error, which describes the real
           // problem better than a failed retry does.
