@@ -15,6 +15,8 @@ import {
   proxyAvailable,
   forceProxyArgs,
   looksLikeIpBlock,
+  plainProxyArgs,
+  looksLikeProxyAuthFailure,
 } from "./ytdlp";
 import { BusyError, jobLimiter } from "./concurrency";
 
@@ -176,6 +178,7 @@ export function startJob(opts: StartJobOptions): string {
   let current: ReturnType<typeof spawn> | null = null;
   let stderrTail = "";
   let triedProxyFallback = false;
+  let triedPlainProxy = false;
 
   // One deadline for the whole job, retry included, so a download can never
   // hold its slot indefinitely.
@@ -188,6 +191,18 @@ export function startJob(opts: StartJobOptions): string {
   const finish = () => {
     clearTimeout(killTimer);
     releaseOnce();
+  };
+
+  // Drop whatever the failed attempt wrote so the retry starts clean and
+  // cannot pick up a half-written file as its result.
+  const clearTmp = async () => {
+    try {
+      for (const f of await fsp.readdir(tmpDir)) {
+        await fsp.rm(path.join(tmpDir, f), { force: true, recursive: true });
+      }
+    } catch {
+      // nothing written yet
+    }
   };
 
   const handleLine = (line: string) => {
@@ -227,6 +242,23 @@ export function startJob(opts: StartJobOptions): string {
 
     child.on("close", async (code) => {
       if (code !== 0) {
+        // A rejected proxy login means the sticky session suffix was not
+        // understood by the provider, not that the site refused us.
+        if (
+          !triedPlainProxy &&
+          proxyFlags.length > 0 &&
+          looksLikeProxyAuthFailure(stderrTail) &&
+          job.status !== "error"
+        ) {
+          triedPlainProxy = true;
+          stderrTail = "";
+          job.percent = 0;
+          console.warn(`[job ${id}] proxy rejected the sticky session, retrying plain`);
+          await clearTmp();
+          run(plainProxyArgs());
+          return;
+        }
+
         // The lookup retries a blocked site through the residential proxy, so
         // the download has to do the same or it fails right after the formats
         // appeared. Partial files from the blocked attempt are cleared first.
@@ -241,13 +273,7 @@ export function startJob(opts: StartJobOptions): string {
           stderrTail = "";
           job.percent = 0;
           console.warn(`[job ${id}] blocked direct, retrying via proxy host=${safeHost(opts.url)}`);
-          try {
-            for (const f of await fsp.readdir(tmpDir)) {
-              await fsp.rm(path.join(tmpDir, f), { force: true });
-            }
-          } catch {
-            // nothing written yet
-          }
+          await clearTmp();
           run(forceProxyArgs());
           return;
         }

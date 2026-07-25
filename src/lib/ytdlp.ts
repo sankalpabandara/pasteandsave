@@ -85,10 +85,41 @@ export function networkArgs(): string[] {
 // Adds --proxy only for URLs whose host is in YTDLP_PROXY_HOSTS (or for every
 // URL when that list is "all"/"*"). This keeps paid proxy bandwidth spent only
 // on the sites that actually block the server, not the many that work direct.
+// Residential proxies hand out a different exit IP on every connection unless
+// a session is requested. That breaks any extractor that needs more than one
+// request: Dailymotion fetches metadata, then the m3u8 playlist, and the
+// playlist is refused with a 403 when it arrives from a different address than
+// the one that obtained the token. Pinning a single IP for the duration of one
+// yt-dlp run is enough, because extraction and download happen in the same run.
+//
+// The suffix follows Evomi's documented format (password_session-ID, where the
+// id is 6-10 alphanumeric characters). Set YTDLP_PROXY_STICKY=0 for a provider
+// that does not understand it; failures that look like a rejected login also
+// fall back to the plain proxy on their own.
+const PROXY_STICKY = (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0";
+
+function newSessionId(): string {
+  return Math.random().toString(36).slice(2, 10).padEnd(8, "0");
+}
+
+function stickyProxyUrl(raw: string): string {
+  if (!PROXY_STICKY) return raw;
+  try {
+    const u = new URL(raw);
+    // Nothing to attach the session to without credentials.
+    if (!u.password) return raw;
+    if (/_session-/.test(u.password)) return raw;
+    u.password = `${u.password}_session-${newSessionId()}`;
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
 export function proxyArgs(rawUrl: string): string[] {
   if (!YTDLP_PROXY) return [];
   if (YTDLP_PROXY_HOSTS.includes("all") || YTDLP_PROXY_HOSTS.includes("*")) {
-    return ["--proxy", YTDLP_PROXY];
+    return ["--proxy", stickyProxyUrl(YTDLP_PROXY)];
   }
   let host = "";
   try {
@@ -97,7 +128,19 @@ export function proxyArgs(rawUrl: string): string[] {
     return [];
   }
   const match = YTDLP_PROXY_HOSTS.some((h) => host === h || host.endsWith("." + h));
-  return match ? ["--proxy", YTDLP_PROXY] : [];
+  return match ? ["--proxy", stickyProxyUrl(YTDLP_PROXY)] : [];
+}
+
+/** The proxy without a session suffix, for the fallback below. */
+export function plainProxyArgs(): string[] {
+  return YTDLP_PROXY ? ["--proxy", YTDLP_PROXY] : [];
+}
+
+/** A rejected proxy login, as opposed to the platform refusing us. */
+export function looksLikeProxyAuthFailure(stderr: string): boolean {
+  return /HTTP Error 407|proxy authentication|407 Proxy|tunnel connection failed|could not connect to proxy|proxy.*(auth|denied|rejected)/i.test(
+    stderr || "",
+  );
 }
 
 // True when a download for this URL would actually go through the (metered)
@@ -123,7 +166,7 @@ export function proxyAvailable(): boolean {
 
 /** Proxy flags regardless of the host list, for the automatic retry below. */
 export function forceProxyArgs(): string[] {
-  return YTDLP_PROXY ? ["--proxy", YTDLP_PROXY] : [];
+  return YTDLP_PROXY ? ["--proxy", stickyProxyUrl(YTDLP_PROXY)] : [];
 }
 
 /**
@@ -476,6 +519,29 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           throw retryErr;
         }
       }
+      // A rejected proxy login means the session suffix was not understood,
+      // not that the site refused us. Retry once on the plain proxy so an
+      // unsupported provider degrades instead of breaking every proxied site.
+      if (
+        PROXY_STICKY &&
+        err instanceof Error &&
+        proxyArgs(url).length > 0 &&
+        looksLikeProxyAuthFailure(err.message)
+      ) {
+        try {
+          const stdout = await runYtDlp(
+            [...base, ...siteArgs(url), ...plainProxyArgs(), "--", url],
+            timeout,
+          );
+          console.warn(
+            "[info] proxy rejected the sticky session; falling back to a plain proxy connection. Set YTDLP_PROXY_STICKY=0 if this persists.",
+          );
+          return JSON.parse(stdout) as YtDlpInfo;
+        } catch {
+          // Keep the original error, which describes the real problem.
+        }
+      }
+
       // Last resort for any site: if this request did not already go through
       // the proxy and the failure looks like the platform refusing our
       // address, try once more from the residential IP. This is what lets a

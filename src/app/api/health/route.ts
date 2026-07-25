@@ -70,6 +70,7 @@ export async function GET() {
       checks: { ytdlp: ytdlpOk, ffmpeg: ffmpegOk, tmpWritable },
       load: { lookupsQueued, jobsActive },
       proxy: proxyStatus(),
+      stickySessions: (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0",
       uptimeSeconds: Math.round(process.uptime()),
     },
     {
