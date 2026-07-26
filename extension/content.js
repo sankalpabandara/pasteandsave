@@ -143,6 +143,78 @@
     return mb < 1 ? `${Math.round(bytes / 1024)} KB` : `${mb.toFixed(1)} MB`;
   }
 
+  // Shapes of a link that points at one piece of content rather than a feed,
+  // a profile or a hashtag. Covers the platforms people actually paste.
+  const PERMALINK = /\/(?:video|watch|reel|reels|shorts|status|clip|episode|p|v)\/|[?&]v=/i;
+
+  /**
+   * Works out what to send to the site for a given video.
+   *
+   * Not the media source. A player's currentSrc is a CDN address or a blob,
+   * and the extractor has no idea what to do with either: handing it
+   * v16-webapp...tiktokcdn.com gets "no suitable extractor" back, which is
+   * what the "isn't from a site we can download from" message really means.
+   * It also explains why a second attempt often worked — currentSrc is empty
+   * until the player attaches, so an early click fell back to the page URL and
+   * succeeded by accident.
+   *
+   * What the site can resolve is the page the video lives on. On a feed the
+   * address bar points at the feed rather than any one clip, so the permalink
+   * sitting next to the video in the markup is used when there is one.
+   */
+  function resolveTarget(video) {
+    // 1. A permalink inside this video's own card, which is how a feed
+    //    identifies each item.
+    //
+    //    The climb stops as soon as an ancestor holds more than one video,
+    //    because that ancestor is the feed rather than this item. Without
+    //    that guard the search reaches the whole page and happily returns a
+    //    neighbour's link, so pressing download on the fifth clip would fetch
+    //    the second one.
+    let node = video;
+    for (let depth = 0; node && depth < 8; depth++) {
+      if (depth > 0 && (node.querySelectorAll?.("video")?.length ?? 0) > 1) break;
+      const anchors = node.querySelectorAll?.("a[href]") ?? [];
+      for (const a of anchors) {
+        const href = a.getAttribute("href") || "";
+        if (!href || href.startsWith("#")) continue;
+        let abs;
+        try {
+          abs = new URL(href, location.href);
+        } catch {
+          continue;
+        }
+        if (!/^https?:$/.test(abs.protocol)) continue;
+        if (abs.hostname !== location.hostname) continue;
+        if (PERMALINK.test(abs.pathname + abs.search)) return abs.href;
+      }
+      node = node.parentElement;
+    }
+
+    // 2. The page itself, when it is already a single piece of content.
+    const here = new URL(location.href);
+    if (PERMALINK.test(here.pathname + here.search)) return here.href;
+
+    // 3. A canonical link, which most players set even inside a feed.
+    const canonical = document.querySelector('link[rel="canonical"]')?.href;
+    if (canonical) {
+      try {
+        const c = new URL(canonical);
+        if (PERMALINK.test(c.pathname + c.search)) return c.href;
+      } catch {
+        // ignore a malformed canonical
+      }
+    }
+
+    // 4. A page that is itself a media file is worth passing through; a blob
+    //    or a CDN fragment is not, so the page URL is the last resort.
+    const src = video.currentSrc || video.src || "";
+    if (/^https?:/i.test(src) && /\.(mp4|webm|m4v|mov|mp3|m4a)(\?|$)/i.test(src)) {
+      return src;
+    }
+    return location.href;
+  }
+
   function closePanel() {
     panel?.remove();
     panel = null;
@@ -177,23 +249,45 @@
     shadow.append(panel);
     positionPanel(chip);
 
-    const src = video.currentSrc || video.src || "";
-    const target = /^https?:/i.test(src) ? src : location.href;
+    const target = resolveTarget(video);
 
-    api.runtime.sendMessage({ type: "getFormats", url: target }, (res) => {
-      if (!panel) return;
-      body.textContent = "";
-      if (!res || !res.ok) {
-        title.textContent = "Couldn't read it";
-        const err = document.createElement("p");
-        err.className = "msg err";
-        err.textContent = (res && res.error) || "Couldn't reach PasteAndSave.";
-        body.append(err);
-        positionPanel(chip);
-        return;
-      }
-      renderFormats(body, title, res.data, target, chip);
-    });
+    const ask = () => {
+      api.runtime.sendMessage({ type: "getFormats", url: target }, (res) => {
+        if (!panel) return;
+        body.textContent = "";
+        if (!res || !res.ok) {
+          title.textContent = "Couldn't read it";
+          const err = document.createElement("p");
+          err.className = "msg err";
+          err.textContent = (res && res.error) || "Couldn't reach PasteAndSave.";
+          body.append(err);
+          // Sites rate-limit and time out, and the answer a moment later is
+          // often different. Offering the retry beats making someone close
+          // the menu and start again to find that out.
+          const again = document.createElement("button");
+          again.className = "row";
+          const q = document.createElement("span");
+          q.className = "q";
+          q.textContent = "Try again";
+          again.append(q);
+          again.addEventListener("click", () => {
+            body.textContent = "";
+            title.textContent = "Reading this video…";
+            const wait = document.createElement("p");
+            wait.className = "msg";
+            wait.textContent = "Fetching the available qualities…";
+            body.append(wait);
+            positionPanel(chip);
+            ask();
+          });
+          body.append(again);
+          positionPanel(chip);
+          return;
+        }
+        renderFormats(body, title, res.data, target, chip);
+      });
+    };
+    ask();
   }
 
   function renderFormats(body, title, data, target, chip) {
@@ -334,7 +428,15 @@
         if (panelFor === video) closePanel();
       } else {
         place(chip, video);
-        if (panelFor === video) positionPanel(chip);
+        if (panelFor === video) {
+          // Scrolling a feed moves the clip away without changing anything
+          // else. A menu still hanging there belongs to a video that is no
+          // longer on screen, so it goes with it.
+          const r = video.getBoundingClientRect();
+          const gone = r.bottom < 40 || r.top > innerHeight - 40;
+          if (gone) closePanel();
+          else positionPanel(chip);
+        }
       }
     }
   }
@@ -348,8 +450,26 @@
     shadow = null;
   }
 
+  // Feeds and players move between videos without ever loading a page, so
+  // there is no navigation event to hang this off. The address is watched
+  // instead, and any change resets everything: a menu left open from the last
+  // clip would otherwise sit there listing that clip's qualities over the new
+  // one, and picking one would download the video you had already scrolled
+  // past.
+  let lastUrl = location.href;
+  function resetForNewPage() {
+    closePanel();
+    for (const [, chip] of chips) chip.remove();
+    chips.clear();
+    pending.clear();
+  }
+
   function safeSync() {
     try {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        resetForNewPage();
+      }
       sync();
     } catch {
       // Never let a broken page turn into a broken extension.
