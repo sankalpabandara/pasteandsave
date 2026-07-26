@@ -144,8 +144,42 @@
   }
 
   // Shapes of a link that points at one piece of content rather than a feed,
-  // a profile or a hashtag. Covers the platforms people actually paste.
-  const PERMALINK = /\/(?:video|watch|reel|reels|shorts|status|clip|episode|p|v)\/|[?&]v=/i;
+  // a profile or a hashtag.
+  const PERMALINK =
+    /\/(?:video|videos|watch|reel|reels|shorts|status|statuses|clip|clips|episode|comments|posts|post|pin|activity|update|track|sets|media|photo|story|stories|tv|live|embed|p|v|e|s)\/|[?&](?:v|story_fbid|fbid)=/i;
+
+  // Some platforms have no word in the address to go on: a Vimeo link is a
+  // bare number, a SoundCloud track is just artist and title, and a youtu.be
+  // link is the id alone. Those are recognised by host instead, since a
+  // pattern loose enough to catch them by shape would also match every
+  // profile and category page on every other site.
+  function hostSpecificContentLink(u) {
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    const parts = u.pathname.split("/").filter(Boolean);
+
+    // youtu.be/VIDEOID
+    if (host === "youtu.be") return parts.length === 1 && parts[0].length > 4;
+    // vimeo.com/123456789 and vimeo.com/channels/x/123456789
+    if (host.endsWith("vimeo.com")) return parts.some((p) => /^\d{6,}$/.test(p));
+    // soundcloud.com/artist/track, but not soundcloud.com/artist
+    if (host.endsWith("soundcloud.com")) return parts.length >= 2 && parts[0] !== "discover";
+    // redd.it/abc123 and other short forms
+    if (host === "redd.it" || host === "v.redd.it") return parts.length >= 1;
+    // pin.it/abc
+    if (host === "pin.it") return parts.length >= 1;
+    // fb.watch/abc
+    if (host === "fb.watch") return parts.length >= 1;
+    return false;
+  }
+
+  function looksLikeContentLink(u) {
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    // A subreddit listing lives at /r/<name>/, and a subreddit called
+    // "videos" therefore looks exactly like Facebook's /videos/ permalink.
+    // On Reddit only a comments link is a single post.
+    if (host.endsWith("reddit.com")) return /\/comments\//i.test(u.pathname);
+    return PERMALINK.test(u.pathname + u.search) || hostSpecificContentLink(u);
+  }
 
   /**
    * Works out what to send to the site for a given video.
@@ -186,21 +220,21 @@
         }
         if (!/^https?:$/.test(abs.protocol)) continue;
         if (abs.hostname !== location.hostname) continue;
-        if (PERMALINK.test(abs.pathname + abs.search)) return abs.href;
+        if (looksLikeContentLink(abs)) return abs.href;
       }
       node = node.parentElement;
     }
 
     // 2. The page itself, when it is already a single piece of content.
     const here = new URL(location.href);
-    if (PERMALINK.test(here.pathname + here.search)) return here.href;
+    if (looksLikeContentLink(here)) return here.href;
 
     // 3. A canonical link, which most players set even inside a feed.
     const canonical = document.querySelector('link[rel="canonical"]')?.href;
     if (canonical) {
       try {
         const c = new URL(canonical);
-        if (PERMALINK.test(c.pathname + c.search)) return c.href;
+        if (looksLikeContentLink(c)) return c.href;
       } catch {
         // ignore a malformed canonical
       }
