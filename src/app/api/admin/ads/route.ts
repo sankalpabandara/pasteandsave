@@ -23,7 +23,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  let body: { units?: Record<string, unknown>; gaId?: unknown };
+  let body: {
+    units?: Record<string, unknown>;
+    snippets?: Record<string, unknown>;
+    gaId?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -62,8 +66,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Snippets are taken as written. Every network formats its embed
+  // differently, so a shape check would reject legitimate code; the admin
+  // session is the gate here, exactly as it is for the unit ids.
+  const snippets: Record<string, string> = {};
+  for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
+    const raw = body.snippets?.[key];
+    if (typeof raw === "string" && raw.trim()) snippets[key] = raw.trim();
+  }
+
   try {
-    await writeSettings({ units, gaId });
+    await writeSettings({ units, snippets, gaId });
   } catch {
     return Response.json({ error: "Couldn't save. Check disk permissions." }, { status: 500 });
   }

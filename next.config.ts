@@ -8,6 +8,19 @@ const isProd = process.env.NODE_ENV === "production";
 // Bump on each release so a deploy can be verified from the response headers.
 const APP_VERSION = "2026.07.19";
 
+// Extra hosts an ad network needs before its code can run. The policy here is
+// strict on purpose, which means a freshly pasted embed is blocked until its
+// domains are listed — and a blocked ad looks identical to a network that is
+// not paying, so it is worth setting before wondering why nothing appears.
+//
+// Space or comma separated, in .env.local, then restart:
+//   AD_NETWORK_DOMAINS="https://*.adsterra.com https://*.hilltopads.com"
+const adDomains = (process.env.AD_NETWORK_DOMAINS || "")
+  .split(/[\s,]+/)
+  .map((d) => d.trim())
+  .filter(Boolean);
+const adHosts = adDomains.length > 0 ? " " + adDomains.join(" ") : "";
+
 const securityHeaders = [
   { key: "X-App-Version", value: APP_VERSION },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -28,15 +41,15 @@ const securityHeaders = [
           value: [
             "default-src 'self'",
             // Inline scripts (theme, JSON-LD) and Google Analytics.
-            "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+            "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com" + adHosts,
             "style-src 'self' 'unsafe-inline'",
             // Thumbnails come from many external CDNs.
             "img-src 'self' data: https:",
             "font-src 'self' data:",
-            "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com",
+            "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com" + adHosts,
             // A-ADS banner ads are embedded as iframes (served from
             // acceptable.a-ads.com; aads.com is their newer domain).
-            "frame-src 'self' https://*.a-ads.com https://a-ads.com https://*.aads.com https://aads.com",
+            "frame-src 'self' https://*.a-ads.com https://a-ads.com https://*.aads.com https://aads.com" + adHosts,
             "object-src 'none'",
             "base-uri 'self'",
             "form-action 'self'",

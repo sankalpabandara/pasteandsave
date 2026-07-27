@@ -25,14 +25,17 @@ type AdContextValue = {
   gate: () => Promise<void>;
   /** Unit ids as configured in the admin panel, keyed by slot. */
   units: Record<string, string>;
+  /** Raw embed code per slot, for networks other than A-ADS. */
+  snippets: Record<string, string>;
 };
 
 const AdContext = createContext<AdContextValue>({
   gate: async () => {},
   units: {},
+  snippets: {},
 });
 export const useAdGate = () => useContext(AdContext);
-export const useAdUnits = () => useContext(AdContext).units;
+export const useAdConfig = () => useContext(AdContext);
 
 const LAST_SHOWN_KEY = "ad-gate-last";
 
@@ -40,6 +43,7 @@ export function AdProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [canContinue, setCanContinue] = useState(false);
   const [units, setUnits] = useState<Record<string, string>>({});
+  const [snippets, setSnippets] = useState<Record<string, string>>({});
   const unitsRef = useRef<Record<string, string>>({});
   const resolveRef = useRef<(() => void) | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -53,9 +57,12 @@ export function AdProvider({ children }: { children: ReactNode }) {
     fetch("/api/ads")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (cancelled || !data?.units) return;
-        unitsRef.current = data.units;
-        setUnits(data.units);
+        if (cancelled || !data) return;
+        if (data.units) {
+          unitsRef.current = data.units;
+          setUnits(data.units);
+        }
+        if (data.snippets) setSnippets(data.snippets);
       })
       .catch(() => {
         // Ads are never worth breaking a page over.
@@ -117,7 +124,7 @@ export function AdProvider({ children }: { children: ReactNode }) {
   const interstitialUnit = (units.interstitial ?? "").trim();
 
   return (
-    <AdContext.Provider value={{ gate, units }}>
+    <AdContext.Provider value={{ gate, units, snippets }}>
       {children}
       {open && (
         <div

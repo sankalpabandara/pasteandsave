@@ -12,9 +12,20 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "site-settings.json");
 
 export type AdUnits = Partial<Record<AdSlotKey, string>>;
+export type AdSnippets = Partial<Record<AdSlotKey, string>>;
 
 export type SiteSettings = {
   units: AdUnits;
+  /**
+   * Raw embed code per slot, for networks other than A-ADS.
+   *
+   * Being tied to one network turned out to be the expensive kind of
+   * constraint: A-ADS serves this site's traffic but has no advertisers
+   * paying for it, and switching meant a code change and a deploy. A slot
+   * with a snippet renders that instead of the A-ADS frame, so a network can
+   * be swapped from the admin panel in a minute.
+   */
+  snippets: AdSnippets;
   /** GA4 measurement id, the "G-XXXXXXX" one. Public by design. */
   gaId: string;
 };
@@ -52,15 +63,21 @@ export async function readSettings(): Promise<SiteSettings> {
         else delete units[key];
       }
     }
+    const snippets: AdSnippets = {};
+    for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
+      const value = saved.snippets?.[key];
+      if (typeof value === "string" && value.trim()) snippets[key] = value.trim();
+    }
     const savedGa = typeof saved.gaId === "string" ? saved.gaId.trim().toUpperCase() : "";
-    return { units, gaId: isValidGaId(savedGa) && savedGa ? savedGa : envGa };
+    return { units, snippets, gaId: isValidGaId(savedGa) && savedGa ? savedGa : envGa };
   } catch {
-    return { units: fallback, gaId: envGa };
+    return { units: fallback, snippets: {}, gaId: envGa };
   }
 }
 
 export async function writeSettings(input: {
   units?: AdUnits;
+  snippets?: AdSnippets;
   gaId?: string;
 }): Promise<void> {
   const units: AdUnits = {};
@@ -68,11 +85,19 @@ export async function writeSettings(input: {
     const value = (input.units?.[key] ?? "").trim();
     if (value && isValidUnitId(value)) units[key] = value;
   }
+  const snippets: AdSnippets = {};
+  for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
+    const value = (input.snippets?.[key] ?? "").trim();
+    // Capped rather than validated by shape: every network writes its embed
+    // differently, so anything stricter would reject a legitimate one. The
+    // limit only stops the settings file being used as general storage.
+    if (value) snippets[key] = value.slice(0, 8000);
+  }
   const gaRaw = (input.gaId ?? "").trim().toUpperCase();
   const gaId = isValidGaId(gaRaw) ? gaRaw : "";
 
   await fsp.mkdir(DATA_DIR, { recursive: true });
-  await fsp.writeFile(FILE, JSON.stringify({ units, gaId }, null, 2), "utf8");
+  await fsp.writeFile(FILE, JSON.stringify({ units, snippets, gaId }, null, 2), "utf8");
 }
 
 /** Convenience for callers that only care about the ad units. */

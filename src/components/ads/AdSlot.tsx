@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback } from "react";
 import {
   AD_SLOTS,
   ADS_ENABLED,
@@ -9,7 +10,7 @@ import {
 // Imported through the same alias the layout uses. A relative path here can
 // resolve to a second copy of the module, which means a second React context
 // and a provider whose value never reaches this component.
-import { useAdUnits } from "@/components/ads/AdProvider";
+import { useAdConfig } from "@/components/ads/AdProvider";
 
 // A single ad placement. It reserves its height up front so nothing shifts
 // while the banner loads, and labels itself "Advertisement".
@@ -29,14 +30,38 @@ export default function AdSlot({
   className?: string;
 }) {
   const cfg = AD_SLOTS[slot];
-  const units = useAdUnits();
+  const { units, snippets } = useAdConfig();
 
   // Configured in the admin panel; the compiled value is only a fallback.
   const unitId = (units[slot] ?? cfg.unitId ?? "").trim();
   const hasUnit = unitId.length > 0;
+  const snippet = (snippets[slot] ?? "").trim();
+
+  // A network's embed usually includes a <script>. Assigning it through
+  // innerHTML puts the tag in the document but the browser will not run it,
+  // so each script is rebuilt as a fresh element. Without this a pasted embed
+  // silently does nothing, which looks exactly like a network that is not
+  // paying.
+  const mountSnippet = useCallback(
+    (host: HTMLDivElement | null) => {
+      if (!host || !snippet) return;
+      if (host.dataset.mounted === "1") return;
+      host.dataset.mounted = "1";
+      host.innerHTML = snippet;
+      for (const old of Array.from(host.querySelectorAll("script"))) {
+        const fresh = document.createElement("script");
+        for (const attr of Array.from(old.attributes)) {
+          fresh.setAttribute(attr.name, attr.value);
+        }
+        fresh.text = old.textContent ?? "";
+        old.replaceWith(fresh);
+      }
+    },
+    [snippet],
+  );
 
   if (!ADS_ENABLED) return null;
-  if (!hasUnit && !SHOW_AD_PLACEHOLDERS) return null;
+  if (!hasUnit && !snippet && !SHOW_AD_PLACEHOLDERS) return null;
 
   return (
     <div className={`w-full ${className}`}>
@@ -56,7 +81,10 @@ export default function AdSlot({
           width: "100%",
         }}
       >
-        {hasUnit ? (
+        {snippet ? (
+          // A network other than A-ADS is configured for this slot.
+          <div ref={mountSnippet} style={{ width: "100%", height: "100%" }} />
+        ) : hasUnit ? (
           <iframe
             key={unitId}
             title="Advertisement"

@@ -32,6 +32,7 @@ const ORDER: AdSlotKey[] = [
 
 export default function AdsEditor() {
   const [units, setUnits] = useState<Record<string, string>>({});
+  const [snippets, setSnippets] = useState<Record<string, string>>({});
   const [gaId, setGaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -42,6 +43,7 @@ export default function AdsEditor() {
       .then((r) => (r.ok ? r.json() : { units: {} }))
       .then((d) => {
         setUnits(d.units ?? {});
+        setSnippets(d.snippets ?? {});
         setGaId(d.gaId ?? "");
       })
       .catch(() => setMessage({ ok: false, text: "Couldn't load the current settings." }))
@@ -55,7 +57,7 @@ export default function AdsEditor() {
       const res = await fetch("/api/admin/ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ units, gaId }),
+        body: JSON.stringify({ units, snippets, gaId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -63,6 +65,7 @@ export default function AdsEditor() {
         return;
       }
       setUnits(data.units ?? units);
+      setSnippets(data.snippets ?? snippets);
       setGaId(data.gaId ?? gaId);
       setMessage({
         ok: true,
@@ -145,7 +148,8 @@ export default function AdsEditor() {
             <tr className="border-b border-black/5 text-left text-xs uppercase tracking-wide text-neutral-400 dark:border-white/10">
               <th className="pb-2 pr-3 font-medium">Placement</th>
               <th className="pb-2 pr-3 font-medium">Create this size</th>
-              <th className="pb-2 font-medium">A-ADS unit id</th>
+              <th className="pb-2 pr-3 font-medium">A-ADS unit id</th>
+              <th className="pb-2 font-medium">Or another network&apos;s code</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-black/5 dark:divide-white/10">
@@ -177,6 +181,19 @@ export default function AdsEditor() {
                       className="w-40 rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 font-mono text-sm outline-none focus:border-violet-500 dark:border-white/10 dark:bg-black/30 dark:text-white"
                     />
                   </td>
+                  <td className="py-3 align-top">
+                    <textarea
+                      value={snippets[key] ?? ""}
+                      onChange={(e) =>
+                        setSnippets((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      rows={2}
+                      spellCheck={false}
+                      placeholder="Paste another network's code here"
+                      aria-label={`Other network code for ${info.label}`}
+                      className="w-full min-w-[240px] rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 font-mono text-[11px] outline-none focus:border-violet-500 dark:border-white/10 dark:bg-black/30 dark:text-white"
+                    />
+                  </td>
                 </tr>
               );
             })}
@@ -203,6 +220,20 @@ export default function AdsEditor() {
         <p className="mt-2">
           Leave a box empty to turn that placement off. Empty slots render nothing
           at all, so the layout stays clean rather than showing a gap.
+        </p>
+        <p className="mt-3 font-medium text-neutral-800 dark:text-neutral-200">
+          Using a different ad network
+        </p>
+        <p className="mt-1">
+          Paste that network&apos;s embed code into the right-hand column. When a
+          slot has code there, it is used instead of the A-ADS unit, so a network
+          can be swapped without a deploy. One thing has to be done on the server
+          first: this site sends a strict content policy that blocks scripts from
+          hosts it does not know, so the network&apos;s domains need adding to{" "}
+          <span className="font-mono">AD_NETWORK_DOMAINS</span> in{" "}
+          <span className="font-mono">.env.local</span>, then a restart. Without
+          that the ad is blocked and the slot simply looks empty, which is hard to
+          tell from a network that is not filling.
         </p>
       </details>
     </section>

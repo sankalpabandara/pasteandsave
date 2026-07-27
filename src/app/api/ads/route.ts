@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // here keeps the pages themselves static and fast while still letting the
 // admin panel change either one without a rebuild.
 export async function GET() {
-  const { units, gaId } = await readSettings();
+  const { units, snippets, gaId } = await readSettings();
   // Deliberately uncached. This was served with max-age and
   // stale-while-revalidate, which meant a browser kept handing back the
   // previous answer for several minutes: save an ad in the admin panel, load
@@ -16,7 +16,7 @@ export async function GET() {
   // The payload is a couple of hundred bytes once per page load, so freshness
   // is worth far more than the saving.
   return Response.json(
-    { units, gaId },
+    { units, snippets, gaId },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
