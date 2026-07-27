@@ -37,19 +37,25 @@ export type AdPlacement = {
   size?: string;
 };
 
+// Heights allow for the tallest standard creative the network may serve into
+// each slot, not just the nominal size. An iframe clips its own contents no
+// matter what the page around it does, so a 320x100 mobile banner in a 90px
+// frame loses ten pixels and the network reports the unit as partly hidden and
+// stops paying into it. The extra height costs nothing when a shorter banner
+// is served, because the frame is what reserves the space either way.
 export const AD_SLOTS = {
-  // Leaderboard-style banners (wide, short).
-  homeTop: { unitId: "", height: 90, maxWidth: 728, size: "728x90" },
-  homeBottom: { unitId: "", height: 90, maxWidth: 728, size: "728x90" },
-  toolTop: { unitId: "", height: 90, maxWidth: 728, size: "728x90" },
-  toolBottom: { unitId: "", height: 90, maxWidth: 728, size: "728x90" },
-  // Medium rectangles (between content sections).
-  homeMid: { unitId: "", height: 250, maxWidth: 336, size: "336x280" },
-  toolMid: { unitId: "", height: 250, maxWidth: 336, size: "336x280" },
-  // Desktop skyscraper (optional sidebar).
+  // Leaderboards: 728x90 on desktop, 320x100 on a phone.
+  homeTop: { unitId: "", height: 100, maxWidth: 728, size: "728x90" },
+  homeBottom: { unitId: "", height: 100, maxWidth: 728, size: "728x90" },
+  toolTop: { unitId: "", height: 100, maxWidth: 728, size: "728x90" },
+  toolBottom: { unitId: "", height: 100, maxWidth: 728, size: "728x90" },
+  // Rectangles: 336x280 is the tallest of the common pair with 300x250.
+  homeMid: { unitId: "", height: 280, maxWidth: 336, size: "336x280" },
+  toolMid: { unitId: "", height: 280, maxWidth: 336, size: "336x280" },
+  // Desktop skyscraper in the right margin.
   sidebar: { unitId: "", height: 600, maxWidth: 300, size: "300x600" },
   // Shown inside the download interstitial.
-  interstitial: { unitId: "", height: 250, maxWidth: 336, size: "336x280" },
+  interstitial: { unitId: "", height: 280, maxWidth: 336, size: "336x280" },
 } satisfies Record<string, AdPlacement>;
 
 export type AdSlotKey = keyof typeof AD_SLOTS;
