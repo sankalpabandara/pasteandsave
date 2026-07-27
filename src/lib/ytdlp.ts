@@ -202,6 +202,27 @@ export function looksLikeIpBlock(stderr: string): boolean {
   );
 }
 
+/**
+ * Whether a failed direct attempt is worth one retry through the proxy.
+ *
+ * Matching only failures that *look* like a block turned out to be too narrow.
+ * Platforms refuse a datacenter address in their own ways, and some say
+ * nothing recognisable at all: SoundCloud fails here while working perfectly
+ * from a home connection, and its error matches none of the block patterns,
+ * so no retry ever fired and the site simply looked broken.
+ *
+ * The question is inverted instead. Retry unless the failure says the video
+ * is genuinely gone or the link is not something we handle, because those are
+ * the only cases where a second attempt cannot possibly help and would spend
+ * metered traffic for nothing.
+ */
+export function worthProxyRetry(stderr: string): boolean {
+  const s = stderr || "";
+  return !/video unavailable|been removed|has been deleted|no longer available|not available anymore|account.*(terminated|closed|suspended)|removed by the (?:uploader|user)|no suitable extractor|unsupported url|is private|private video|this content isn'?t available/i.test(
+    s,
+  );
+}
+
 function youtubeClientArgs(clients: string): string[] {
   return ["--extractor-args", `youtube:player_client=${clients}`];
 }
@@ -645,7 +666,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
         !(err instanceof UnsupportedSiteError) &&
         proxyArgs(url).length === 0 &&
         proxyAvailable() &&
-        looksLikeIpBlock(err.message)
+        worthProxyRetry(err.message)
       ) {
         try {
           const stdout = await runYtDlp(

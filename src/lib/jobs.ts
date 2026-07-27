@@ -14,7 +14,7 @@ import {
   classifyFailure,
   proxyAvailable,
   forceProxyArgs,
-  looksLikeIpBlock,
+  worthProxyRetry,
   plainProxyArgs,
   looksLikeProxyAuthFailure,
 } from "./ytdlp";
@@ -266,7 +266,7 @@ export function startJob(opts: StartJobOptions): string {
           !triedProxyFallback &&
           proxyFlags.length === 0 &&
           proxyAvailable() &&
-          looksLikeIpBlock(stderrTail) &&
+          worthProxyRetry(stderrTail) &&
           job.status !== "error"
         ) {
           triedProxyFallback = true;
