@@ -87,6 +87,9 @@ export default function Home() {
           <AdSlot slot="homeSection2" />
         </div>
         <HowItWorks />
+        <div className="px-4 py-8">
+          <AdSlot slot="homeSection4" />
+        </div>
         <Bookmarklet />
         <div className="px-4 py-8">
           <AdSlot slot="homeMid" />
@@ -107,6 +110,13 @@ export default function Home() {
               as normal MP4s that play on any device, no separate MP4
               downloader software needed.
             </p>
+            {/* In-content rather than stacked against another banner: a
+                reader is already here and looking down the page, and two
+                banners back to back read as spam to both people and the
+                ranking that brings them. */}
+            <div className="py-2">
+              <AdSlot slot="homeSection5" />
+            </div>
             <p>
               If you only need the audio, each page here doubles as an MP3
               downloader. One button converts the video to MP3, encoded at

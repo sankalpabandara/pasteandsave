@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Metadata } from "next";
 import Header from "@/components/Header";
+import AdSlot from "@/components/ads/AdSlot";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -134,6 +135,10 @@ export default function ExtensionPage() {
           </div>
         </section>
 
+        <div className="px-4 py-6">
+          <AdSlot slot="extensionTop" />
+        </div>
+
         <section className="mx-auto max-w-5xl px-4 py-10">
           <h2 className="font-display text-center text-xl font-bold sm:text-3xl dark:text-white">
             What it does
@@ -202,6 +207,9 @@ export default function ExtensionPage() {
             </p>
           </div>
         </section>
+        <div className="px-4 pb-10">
+          <AdSlot slot="extensionBottom" />
+        </div>
       </main>
       <Footer />
     </>

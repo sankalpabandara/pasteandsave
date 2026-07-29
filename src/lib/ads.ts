@@ -94,6 +94,19 @@ export const AD_SLOTS = {
   // on their own; the borrow is only a fallback until an id is set.
   homeSection2: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
   homeSection3: { unitId: "", height: 100, maxWidth: 728, size: "728x90", shareWith: "homeTop" },
+  homeSection4: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
+  homeSection5: { unitId: "", height: 100, maxWidth: 728, size: "728x90", shareWith: "homeTop" },
+
+  // The platform pages take most of the search traffic and carried the fewest
+  // banners, which is the wrong way round. These are in the page markup like
+  // the rest, so each can be verified and earn on its own id.
+  toolSection2: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "toolMid" },
+  toolSection3: { unitId: "", height: 100, maxWidth: 728, size: "728x90", shareWith: "toolTop" },
+  toolSection4: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "toolMid" },
+
+  // The extension page is a real page with real content and had nothing on it.
+  extensionTop: { unitId: "", height: 100, maxWidth: 728, size: "728x90", shareWith: "homeTop" },
+  extensionBottom: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
 } satisfies Record<string, AdPlacement>;
 
 export type AdSlotKey = keyof typeof AD_SLOTS;

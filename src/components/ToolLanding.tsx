@@ -104,6 +104,10 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
+        <div className="px-4 py-8">
+          <AdSlot slot="toolSection2" />
+        </div>
+
         <section id="how" className="py-12 sm:py-16">
           <div className="mx-auto max-w-5xl px-4">
             <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
@@ -158,6 +162,10 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
+        <div className="px-4 py-8">
+          <AdSlot slot="toolSection3" />
+        </div>
+
         <section className="mx-auto max-w-5xl px-4 pb-12 sm:pb-16">
           <h2 className="font-display text-center text-lg font-bold dark:text-white">
             Other free downloaders
@@ -174,6 +182,10 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
             ))}
           </div>
         </section>
+
+        <div className="px-4 pb-8">
+          <AdSlot slot="toolSection4" />
+        </div>
 
         <div className="px-4 pb-10">
           <AdSlot slot="toolBottom" />
