@@ -89,9 +89,11 @@ export default function AdSlot({
             key={unitId}
             title="Advertisement"
             data-aa={unitId}
-            // size=auto lets the unit pick a shape that fits the width it is
-            // given, rather than rendering at a fixed size the box may not fit.
-            src={`https://acceptable.a-ads.com/${unitId}?size=auto`}
+            // Kept in the network's documented shape — trailing slash and
+            // size=Adaptive. Their verifier matches against the embed they
+            // publish, so drifting from it is a way to fail a check for a
+            // reason that never appears in any error message.
+            src={`https://acceptable.a-ads.com/${unitId}/?size=Adaptive`}
             loading="lazy"
             referrerPolicy="no-referrer"
             style={{

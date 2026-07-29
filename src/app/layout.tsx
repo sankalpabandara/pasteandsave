@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Space_Grotesk } from "next/font/google";
 import ThemeScript from "@/components/ThemeScript";
-import TermsGate from "@/components/TermsGate";
 import Analytics from "@/components/Analytics";
 import { AdProvider } from "@/components/ads/AdProvider";
 import SidebarAd from "@/components/ads/SidebarAd";
+import { readSettings } from "@/lib/ads-store";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
@@ -61,11 +61,18 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Read here rather than in the browser so the banners are part of the HTML
+  // the server sends. The ad network verifies a unit by fetching the page and
+  // looking for its data-aa attribute without running any JavaScript, so
+  // configuration that only arrived via a client fetch left it finding
+  // nothing — and an unverified unit earns nothing.
+  const { units, snippets } = await readSettings();
+
   return (
     <html
       lang="en"
@@ -74,11 +81,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeScript />
-        <AdProvider>
+        <AdProvider initialUnits={units} initialSnippets={snippets}>
           {children}
           <SidebarAd />
         </AdProvider>
-        <TermsGate />
         <Analytics />
       </body>
     </html>

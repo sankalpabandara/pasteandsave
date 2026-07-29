@@ -39,18 +39,33 @@ export const useAdConfig = () => useContext(AdContext);
 
 const LAST_SHOWN_KEY = "ad-gate-last";
 
-export function AdProvider({ children }: { children: ReactNode }) {
+export function AdProvider({
+  children,
+  initialUnits = {},
+  initialSnippets = {},
+}: {
+  children: ReactNode;
+  /**
+   * Ad configuration read on the server so the banners are in the HTML of the
+   * first response. The network verifies a unit by fetching the page and
+   * looking for its data-aa attribute, and it does not run our JavaScript, so
+   * a unit that only appears after a client fetch is invisible to it and is
+   * reported as "Not found" — which means the unit never earns.
+   */
+  initialUnits?: Record<string, string>;
+  initialSnippets?: Record<string, string>;
+}) {
   const [open, setOpen] = useState(false);
   const [canContinue, setCanContinue] = useState(false);
-  const [units, setUnits] = useState<Record<string, string>>({});
-  const [snippets, setSnippets] = useState<Record<string, string>>({});
-  const unitsRef = useRef<Record<string, string>>({});
+  const [units, setUnits] = useState<Record<string, string>>(initialUnits);
+  const [snippets, setSnippets] = useState<Record<string, string>>(initialSnippets);
+  const unitsRef = useRef<Record<string, string>>(initialUnits);
   const resolveRef = useRef<(() => void) | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Pages are prerendered, so unit ids cannot be baked in without a rebuild
-  // every time an ad changes. Fetching them once here keeps the pages static
-  // and still lets the admin panel swap an ad in on the next page load.
+  // The server value above is what the page ships with. This refresh is what
+  // lets the admin panel swap a unit in without waiting for a rebuild, and it
+  // is now a top-up rather than the only source.
   useEffect(() => {
     if (!ADS_ENABLED) return;
     let cancelled = false;
