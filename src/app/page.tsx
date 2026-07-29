@@ -83,6 +83,9 @@ export default function Home() {
           <AdSlot slot="homeTop" />
         </div>
         <Platforms />
+        <div className="px-4 py-8">
+          <AdSlot slot="homeSection2" />
+        </div>
         <HowItWorks />
         <Bookmarklet />
         <div className="px-4 py-8">
@@ -126,6 +129,9 @@ export default function Home() {
             </p>
           </div>
         </section>
+        <div className="px-4 pb-8">
+          <AdSlot slot="homeSection3" />
+        </div>
         <Faq />
         <div className="px-4 pb-10">
           <AdSlot slot="homeBottom" />

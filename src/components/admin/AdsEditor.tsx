@@ -17,15 +17,39 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
     where: "Right margin, wide desktops only (1536px and up)",
   },
   interstitial: { label: "Download interstitial", where: "Popup shown when a download starts" },
+  mobileUnderBox: {
+    label: "Phone — under the paste box",
+    where: "Phones only, directly below the link field",
+  },
+  mobileResults: {
+    label: "Phone — in the results",
+    where: "Phones only, beside the quality buttons",
+  },
+  mobileSticky: {
+    label: "Phone — sticky bottom bar",
+    where: "Phones only, pinned to the bottom of the screen",
+  },
+  clickPopup: {
+    label: "First-click popup",
+    where: "Shown once per visit, on the first click anywhere",
+  },
+  homeSection2: { label: "Home — between sections", where: "Homepage, lower down the page" },
+  homeSection3: { label: "Home — before the FAQ", where: "Homepage, above the questions" },
 };
 
 const ORDER: AdSlotKey[] = [
   "homeTop",
   "homeMid",
+  "homeSection2",
+  "homeSection3",
   "homeBottom",
   "toolTop",
   "toolMid",
   "toolBottom",
+  "mobileUnderBox",
+  "mobileResults",
+  "mobileSticky",
+  "clickPopup",
   "interstitial",
   "sidebar",
 ];

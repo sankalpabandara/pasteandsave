@@ -5,6 +5,7 @@ import {
   AD_SLOTS,
   ADS_ENABLED,
   SHOW_AD_PLACEHOLDERS,
+  type AdPlacement,
   type AdSlotKey,
 } from "@/lib/ads";
 // Imported through the same alias the layout uses. A relative path here can
@@ -29,11 +30,17 @@ export default function AdSlot({
   slot: AdSlotKey;
   className?: string;
 }) {
-  const cfg = AD_SLOTS[slot];
+  // Typed as the shared shape: `satisfies` narrows each entry to its own
+  // literal type, so optional fields are absent from slots that omit them.
+  const cfg: AdPlacement = AD_SLOTS[slot];
   const { units, snippets } = useAdConfig();
 
   // Configured in the admin panel; the compiled value is only a fallback.
-  const unitId = (units[slot] ?? cfg.unitId ?? "").trim();
+  // A slot with nothing of its own borrows from the slot named in shareWith,
+  // so a placement the crawler can never reach still carries an id that has
+  // already been verified rather than rendering nothing at all.
+  const shared = cfg.shareWith ? (units[cfg.shareWith] ?? "") : "";
+  const unitId = (units[slot] || shared || cfg.unitId || "").trim();
   const hasUnit = unitId.length > 0;
   const snippet = (snippets[slot] ?? "").trim();
 

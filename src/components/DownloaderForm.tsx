@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { detectPlatform } from "@/lib/platforms";
 import { useAdGate } from "@/components/ads/AdProvider";
+import AdSlot from "@/components/ads/AdSlot";
+import PhoneOnly from "@/components/ads/PhoneOnly";
 
 type VideoTier = {
   formatId: string;
@@ -565,6 +567,15 @@ export default function DownloaderForm({
         {loading ? "Reading that link, please wait." : ""}
       </p>
 
+      {/* Phones only: the desktop layout already carries a banner above this
+          point, and stacking a second one there would push the paste box —
+          the only thing anyone comes here for — below the fold. */}
+      <PhoneOnly>
+        <div className="mt-6">
+          <AdSlot slot="mobileUnderBox" />
+        </div>
+      </PhoneOnly>
+
       {playlist && (
         <div className="glass glass-hairline mt-6 overflow-hidden rounded-2xl">
           <div className="flex items-center justify-between gap-3 border-b border-black/5 px-4 py-3 dark:border-white/10">
@@ -635,6 +646,16 @@ export default function DownloaderForm({
               </p>
             </div>
           </div>
+
+          {/* Between the video's details and the quality buttons: the moment
+              the visitor is reading the page rather than acting on it. */}
+          {(result.video.length > 0 || result.audio.length > 0) && (
+            <PhoneOnly>
+              <div className="border-t border-black/5 px-4 pt-3 dark:border-white/10">
+                <AdSlot slot="mobileResults" />
+              </div>
+            </PhoneOnly>
+          )}
 
           {(result.video.length > 0 || result.audio.length > 0) && (
             <div className="flex gap-2 border-t border-black/5 px-4 pt-3 dark:border-white/10">

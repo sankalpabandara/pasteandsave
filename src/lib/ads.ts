@@ -35,6 +35,21 @@ export type AdPlacement = {
   /** Which A-ADS unit size to create for this slot, e.g. "728x90" or
    *  "Adaptive". A reference for you when making units; not sent to A-ADS. */
   size?: string;
+  /**
+   * Slot to borrow a unit id from when this one has none of its own.
+   *
+   * A unit only earns once the network's crawler has found it on the page it
+   * is assigned to, and a placement it cannot reach — one inside a popup, or
+   * one that only exists on a phone-width layout — can never pass that check.
+   * The network's own guidance says the same code may be reused anywhere on
+   * the same domain, so these borrow an id that is already verified instead
+   * of sitting empty waiting for a check that will not come.
+   *
+   * Typed as a plain string rather than AdSlotKey: the key type is derived
+   * from the slot table below, so referring to it here makes the table's own
+   * type circular and collapses every slot to `any`.
+   */
+  shareWith?: string;
 };
 
 // Heights allow for the tallest standard creative the network may serve into
@@ -52,10 +67,33 @@ export const AD_SLOTS = {
   // Rectangles: 336x280 is the tallest of the common pair with 300x250.
   homeMid: { unitId: "", height: 280, maxWidth: 336, size: "336x280" },
   toolMid: { unitId: "", height: 280, maxWidth: 336, size: "336x280" },
-  // Desktop skyscraper in the right margin.
-  sidebar: { unitId: "", height: 600, maxWidth: 300, size: "300x600" },
+  // Desktop skyscraper in the right margin. Mounted only on wide screens, so
+  // the crawler never sees it — it borrows a verified id.
+  sidebar: { unitId: "", height: 600, maxWidth: 300, size: "300x600", shareWith: "homeMid" },
   // Shown inside the download interstitial.
-  interstitial: { unitId: "", height: 280, maxWidth: 336, size: "336x280" },
+  interstitial: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
+
+  // --- phone layouts -------------------------------------------------------
+  // Most of this site's traffic is a phone, and the layout above is built
+  // around desktop banner shapes. These are the positions that only exist on
+  // a narrow screen, so none of them can be crawled and all of them borrow.
+  //
+  // Directly under the paste box: the first thing seen after the one action
+  // everybody comes here to do.
+  mobileUnderBox: { unitId: "", height: 100, maxWidth: 336, size: "320x100", shareWith: "homeTop" },
+  // Beside the quality buttons, while the visitor is deciding which to press.
+  mobileResults: { unitId: "", height: 250, maxWidth: 300, size: "300x250", shareWith: "homeMid" },
+  // Pinned to the bottom of the screen. Kept deliberately short so it takes a
+  // strip rather than a third of a phone screen.
+  mobileSticky: { unitId: "", height: 50, maxWidth: 320, size: "320x50", shareWith: "homeBottom" },
+  // Shown on the first click of a session, then not again.
+  clickPopup: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
+
+  // Further down the page, between the explanatory blocks. These are in the
+  // server-rendered markup like the rest of the page, so they can be verified
+  // on their own; the borrow is only a fallback until an id is set.
+  homeSection2: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
+  homeSection3: { unitId: "", height: 100, maxWidth: 728, size: "728x90", shareWith: "homeTop" },
 } satisfies Record<string, AdPlacement>;
 
 export type AdSlotKey = keyof typeof AD_SLOTS;
