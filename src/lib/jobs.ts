@@ -19,6 +19,7 @@ import {
   looksLikeProxyAuthFailure,
 } from "./ytdlp";
 import { BusyError, jobLimiter } from "./concurrency";
+import { recordProxyBytes, proxyBudgetLeft } from "./proxy-usage";
 
 export type JobStatus =
   | "starting"
@@ -39,6 +40,11 @@ export type Job = {
 };
 
 const jobs = new Map<string, Job>();
+
+// The extracted metadata, kept in the job's own directory so it is cleaned up
+// with everything else. Named here because three separate places have to know
+// not to treat it as a downloaded file.
+const INFO_NAME = "info.json";
 
 const JOB_TTL_MS = 15 * 60 * 1000;
 const JOB_TIMEOUT_MS = 10 * 60 * 1000;
@@ -140,7 +146,13 @@ export function startJob(opts: StartJobOptions): string {
   const audioFormat = opts.mode === "audio" ? (opts.audioFormat ?? "mp3") : "mp3";
   const audioQuality =
     opts.mode === "audio" && opts.bitrate ? `${opts.bitrate}K` : "0";
-  const buildArgs = (proxyFlags: string[]) =>
+  // Where yt-dlp gets the video from: either the page (which means extracting
+  // it again) or a metadata file already extracted. The second form is what
+  // keeps the media off the metered proxy — see runProxied below.
+  const sourceArgs = (infoJson: string | null) =>
+    infoJson ? ["--load-info-json", infoJson] : ["--", opts.url];
+
+  const buildArgs = (proxyFlags: string[], infoJson: string | null = null) =>
     opts.mode === "audio"
       ? [
           "-x",
@@ -156,8 +168,7 @@ export function startJob(opts: StartJobOptions): string {
           ...hardeningWith(proxyFlags),
           "-o",
           outputTemplate,
-          "--",
-          opts.url,
+          ...sourceArgs(infoJson),
         ]
       : [
           "-f",
@@ -171,14 +182,20 @@ export function startJob(opts: StartJobOptions): string {
           ...hardeningWith(proxyFlags),
           "-o",
           outputTemplate,
-          "--",
-          opts.url,
+          ...sourceArgs(infoJson),
         ];
 
   let current: ReturnType<typeof spawn> | null = null;
   let stderrTail = "";
   let triedProxyFallback = false;
   let triedPlainProxy = false;
+  let triedProxyForMedia = false;
+
+  // A single proxy session for the whole job. Generated once on purpose:
+  // every call to proxyArgs mints a new sticky session, and a stream link
+  // signed for one session's address is refused from another's, so extracting
+  // and any later proxied fetch have to share the one address.
+  const jobProxy = proxyArgs(opts.url);
 
   // One deadline for the whole job, retry included, so a download can never
   // hold its slot indefinitely.
@@ -194,10 +211,13 @@ export function startJob(opts: StartJobOptions): string {
   };
 
   // Drop whatever the failed attempt wrote so the retry starts clean and
-  // cannot pick up a half-written file as its result.
+  // cannot pick up a half-written file as its result. The metadata is kept:
+  // it is what the retry reads its stream links from, and it cost proxy data
+  // to fetch, so deleting it would both break the retry and make it pay twice.
   const clearTmp = async () => {
     try {
       for (const f of await fsp.readdir(tmpDir)) {
+        if (f === INFO_NAME) continue;
         await fsp.rm(path.join(tmpDir, f), { force: true, recursive: true });
       }
     } catch {
@@ -218,8 +238,8 @@ export function startJob(opts: StartJobOptions): string {
     }
   };
 
-  const run = (proxyFlags: string[]) => {
-    const child = spawn(YTDLP_PATH, buildArgs(proxyFlags), { windowsHide: true });
+  const run = (proxyFlags: string[], infoJson: string | null = null) => {
+    const child = spawn(YTDLP_PATH, buildArgs(proxyFlags, infoJson), { windowsHide: true });
     current = child;
 
     child.stdout.on("data", (chunk: Buffer) => {
@@ -255,7 +275,32 @@ export function startJob(opts: StartJobOptions): string {
           job.percent = 0;
           console.warn(`[job ${id}] proxy rejected the sticky session, retrying plain`);
           await clearTmp();
-          run(plainProxyArgs());
+          run(plainProxyArgs(), infoJson);
+          return;
+        }
+
+        // The media was fetched straight from the CDN to keep it off the
+        // metered proxy, and the CDN refused. YouTube signs its stream links
+        // against the address that asked for them, so a link obtained through
+        // the proxy is not always valid from the server's own address. Only
+        // then is the file worth pulling through the proxy, on the same
+        // session that extracted it so the address matches.
+        if (
+          infoJson &&
+          proxyFlags.length === 0 &&
+          !triedProxyForMedia &&
+          jobProxy.length > 0 &&
+          proxyBudgetLeft().allowed &&
+          job.status !== "error"
+        ) {
+          triedProxyForMedia = true;
+          stderrTail = "";
+          job.percent = 0;
+          console.warn(
+            `[job ${id}] CDN refused the direct fetch, paying for the proxy host=${safeHost(opts.url)}`,
+          );
+          await clearTmp();
+          run(jobProxy, infoJson);
           return;
         }
 
@@ -265,7 +310,9 @@ export function startJob(opts: StartJobOptions): string {
         if (
           !triedProxyFallback &&
           proxyFlags.length === 0 &&
+          !infoJson &&
           proxyAvailable() &&
+          proxyBudgetLeft().allowed &&
           worthProxyRetry(stderrTail) &&
           job.status !== "error"
         ) {
@@ -274,7 +321,7 @@ export function startJob(opts: StartJobOptions): string {
           job.percent = 0;
           console.warn(`[job ${id}] blocked direct, retrying via proxy host=${safeHost(opts.url)}`);
           await clearTmp();
-          run(forceProxyArgs());
+          run(forceProxyArgs(), infoJson);
           return;
         }
 
@@ -295,8 +342,12 @@ export function startJob(opts: StartJobOptions): string {
       }
 
       try {
+        // The metadata file lives here too and is not a result. Without this
+        // it is a candidate output, and the only thing keeping it from being
+        // served to a visitor is that "file.mp4" happens to sort before
+        // "info.json".
         const files = (await fsp.readdir(tmpDir)).filter(
-          (f) => !f.endsWith(".part") && !f.endsWith(".ytdl"),
+          (f) => !f.endsWith(".part") && !f.endsWith(".ytdl") && f !== INFO_NAME,
         );
         if (files.length === 0) {
           console.error(`[job ${id}] no output file url_host=${safeHost(opts.url)}`);
@@ -307,6 +358,16 @@ export function startJob(opts: StartJobOptions): string {
           return;
         }
         const filePath = path.join(tmpDir, files[0]);
+        // Media that really did travel over the proxy is charged at its actual
+        // size. This is the expensive path, and it is the one that has to show
+        // up in the ledger for the totals to mean anything.
+        if (proxyFlags.length > 0) {
+          try {
+            recordProxyBytes("media", (await fsp.stat(filePath)).size);
+          } catch {
+            // A missing size must not fail a finished download.
+          }
+        }
         const ext = path.extname(files[0]);
         job.filePath = filePath;
         job.filename = `${sanitizeFilename(opts.title)}${ext}`;
@@ -320,7 +381,69 @@ export function startJob(opts: StartJobOptions): string {
     });
   };
 
-  run(proxyArgs(opts.url));
+  // Pulls just the metadata through the proxy: a hundred kilobytes or so of
+  // JSON that already contains the direct CDN links for every format. This is
+  // the only part of a download that the platform's bot check actually looks
+  // at, so it is the only part worth paying residential rates for.
+  const extractInfo = (): Promise<string | null> =>
+    new Promise((resolve) => {
+      const target = path.join(tmpDir, INFO_NAME);
+      const out = fs.createWriteStream(target);
+      const child = spawn(
+        YTDLP_PATH,
+        [
+          "--dump-single-json",
+          "--no-playlist",
+          "--no-warnings",
+          ...EXTRACTOR_ARGS,
+          ...networkArgs(),
+          ...siteArgs(opts.url),
+          ...jobProxy,
+          "--",
+          opts.url,
+        ],
+        { windowsHide: true },
+      );
+      current = child;
+      child.stdout.pipe(out);
+      child.stderr.on("data", (c: Buffer) => {
+        stderrTail = (stderrTail + c.toString()).slice(-2000);
+      });
+      child.on("error", () => resolve(null));
+      child.on("close", (code) => {
+        out.end();
+        if (code !== 0) return resolve(null);
+        let size = 0;
+        try {
+          size = fs.statSync(target).size;
+        } catch {
+          return resolve(null);
+        }
+        if (size <= 0) return resolve(null);
+        // The metadata is the one thing that genuinely crossed the proxy, so
+        // it is the one thing charged against the day's allowance.
+        recordProxyBytes("metadata", size);
+        resolve(target);
+      });
+    });
+
+  if (jobProxy.length > 0) {
+    // A proxied site. Extract through the proxy, then take the media straight
+    // from the CDN, which does not bot-check the way the page does. This is
+    // what turns a 300 MB download into 100 KB of metered traffic.
+    void extractInfo().then((infoJson) => {
+      if (job.status === "error") return finish();
+      if (!infoJson) {
+        // Extraction failed outright. Fall back to the old single-stage run so
+        // a metadata problem cannot take downloads down with it.
+        stderrTail = "";
+        return run(jobProxy);
+      }
+      run([], infoJson);
+    });
+  } else {
+    run([]);
+  }
 
   return id;
 }

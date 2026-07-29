@@ -295,6 +295,16 @@
           err.className = "msg err";
           err.textContent = (res && res.error) || "Couldn't reach PasteAndSave.";
           body.append(err);
+          // The cause, in small print. Every failure otherwise reads as the
+          // same sentence, so a screenshot of one says nothing about which
+          // of them it was, and the same investigation gets repeated.
+          if (res && res.code && res.code !== "UNKNOWN") {
+            const why = document.createElement("p");
+            why.className = "msg";
+            why.style.cssText = "opacity:.6;font-size:11px;margin-top:4px";
+            why.textContent = `Reason: ${res.code}`;
+            body.append(why);
+          }
           // Sites rate-limit and time out, and the answer a moment later is
           // often different. Offering the retry beats making someone close
           // the menu and start again to find that out.

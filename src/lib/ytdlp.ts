@@ -1,6 +1,7 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
+import { recordProxyAttempt, looksLikeProxyFailure } from "./proxy-health";
 
 // BIN_DIR is overridable so a production deploy can point at an absolute path
 // regardless of the working directory (e.g. Next.js standalone output).
@@ -482,6 +483,19 @@ export function userFacingError(err: unknown): {
   }
   const msg = err instanceof Error ? err.message : String(err);
 
+  // Checked before anything else, because a dead proxy makes a platform look
+  // like it is refusing us. Reporting that as "this video may be private"
+  // sends the reader hunting the video, the site and the extractor, when the
+  // one thing at fault is our own connection out.
+  if (looksLikeProxyFailure(msg)) {
+    return {
+      error:
+        "Our connection for this site is down at the moment, so we can't reach it. This is on our side, not yours — please try again shortly.",
+      status: 503,
+      code: "PROXY_UNAVAILABLE",
+    };
+  }
+
   if (err instanceof PlatformBlockedError || isBlockedByPlatform(msg)) {
     return {
       error:
@@ -610,80 +624,103 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     // YouTube gets a longer budget: multiple player clients plus retries take
     // more wall time than a single clean fetch.
     const timeout = yt ? 60_000 : 30_000;
-    try {
-      const stdout = await runYtDlp(
-        [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
-        timeout,
-      );
-      return parseInfoJson(stdout);
-    } catch (err) {
-      // For YouTube, one bot-block deserves a second try with a different
-      // client mix before we give up.
-      if (yt && err instanceof Error && !(err instanceof UnsupportedSiteError) && isBlockedByPlatform(err.message)) {
-        try {
-          const stdout = await runYtDlp(
-            [...base, ...siteArgs(url, true), ...proxyArgs(url), "--", url],
-            timeout,
-          );
-          return parseInfoJson(stdout);
-        } catch (retryErr) {
-          if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
-            throw new PlatformBlockedError(retryErr.message);
-          }
-          throw retryErr;
-        }
-      }
-      // A rejected proxy login means the session suffix was not understood,
-      // not that the site refused us. Retry once on the plain proxy so an
-      // unsupported provider degrades instead of breaking every proxied site.
-      if (
-        PROXY_STICKY &&
-        err instanceof Error &&
-        proxyArgs(url).length > 0 &&
-        looksLikeProxyAuthFailure(err.message)
-      ) {
-        try {
-          const stdout = await runYtDlp(
-            [...base, ...siteArgs(url), ...plainProxyArgs(), "--", url],
-            timeout,
-          );
-          console.warn(
-            "[info] proxy rejected the sticky session; falling back to a plain proxy connection. Set YTDLP_PROXY_STICKY=0 if this persists.",
-          );
-          return parseInfoJson(stdout);
-        } catch {
-          // Keep the original error, which describes the real problem.
-        }
-      }
+    // Whether this lookup leaves through the residential proxy. The outcome
+    // feeds the proxy health signal, which is how a dead or exhausted proxy
+    // gets noticed as itself instead of as every proxied platform suddenly
+    // deciding our videos are private.
+    const proxied = proxyArgs(url).length > 0;
 
-      // Last resort for any site: if this request did not already go through
-      // the proxy and the failure looks like the platform refusing our
-      // address, try once more from the residential IP. This is what lets a
-      // site that newly starts blocking datacenters keep working without
-      // anyone editing the host list first.
-      if (
-        err instanceof Error &&
-        !(err instanceof UnsupportedSiteError) &&
-        proxyArgs(url).length === 0 &&
-        proxyAvailable() &&
-        worthProxyRetry(err.message)
-      ) {
-        try {
-          const stdout = await runYtDlp(
-            [...base, ...siteArgs(url), ...forceProxyArgs(), "--", url],
-            timeout,
-          );
-          console.warn(
-            `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
-          );
-          return parseInfoJson(stdout);
-        } catch {
-          // Fall through to the original error, which describes the real
-          // problem better than a failed retry does.
+    // The retry ladder, kept separate so its result can be observed once
+    // rather than at each of the places it can succeed or give up.
+    const attempt = async (): Promise<YtDlpInfo> => {
+      try {
+        const stdout = await runYtDlp(
+          [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
+          timeout,
+        );
+        return parseInfoJson(stdout);
+      } catch (err) {
+        // For YouTube, one bot-block deserves a second try with a different
+        // client mix before we give up.
+        if (yt && err instanceof Error && !(err instanceof UnsupportedSiteError) && isBlockedByPlatform(err.message)) {
+          try {
+            const stdout = await runYtDlp(
+              [...base, ...siteArgs(url, true), ...proxyArgs(url), "--", url],
+              timeout,
+            );
+            return parseInfoJson(stdout);
+          } catch (retryErr) {
+            if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
+              throw new PlatformBlockedError(retryErr.message);
+            }
+            throw retryErr;
+          }
         }
+        // A rejected proxy login means the session suffix was not understood,
+        // not that the site refused us. Retry once on the plain proxy so an
+        // unsupported provider degrades instead of breaking every proxied site.
+        if (
+          PROXY_STICKY &&
+          err instanceof Error &&
+          proxyArgs(url).length > 0 &&
+          looksLikeProxyAuthFailure(err.message)
+        ) {
+          try {
+            const stdout = await runYtDlp(
+              [...base, ...siteArgs(url), ...plainProxyArgs(), "--", url],
+              timeout,
+            );
+            console.warn(
+              "[info] proxy rejected the sticky session; falling back to a plain proxy connection. Set YTDLP_PROXY_STICKY=0 if this persists.",
+            );
+            return parseInfoJson(stdout);
+          } catch {
+            // Keep the original error, which describes the real problem.
+          }
+        }
+
+        // Last resort for any site: if this request did not already go through
+        // the proxy and the failure looks like the platform refusing our
+        // address, try once more from the residential IP. This is what lets a
+        // site that newly starts blocking datacenters keep working without
+        // anyone editing the host list first.
+        if (
+          err instanceof Error &&
+          !(err instanceof UnsupportedSiteError) &&
+          proxyArgs(url).length === 0 &&
+          proxyAvailable() &&
+          worthProxyRetry(err.message)
+        ) {
+          try {
+            const stdout = await runYtDlp(
+              [...base, ...siteArgs(url), ...forceProxyArgs(), "--", url],
+              timeout,
+            );
+            console.warn(
+              `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
+            );
+            return parseInfoJson(stdout);
+          } catch {
+            // Fall through to the original error, which describes the real
+            // problem better than a failed retry does.
+          }
+        }
+        if (err instanceof Error && isBlockedByPlatform(err.message)) {
+          throw new PlatformBlockedError(err.message);
+        }
+        throw err;
       }
-      if (err instanceof Error && isBlockedByPlatform(err.message)) {
-        throw new PlatformBlockedError(err.message);
+    };
+
+    try {
+      const info = await attempt();
+      if (proxied) recordProxyAttempt(true);
+      return info;
+    } catch (err) {
+      // An unsupported site is a fact about the link, not about the proxy,
+      // so it must not count against the connection's health.
+      if (proxied && !(err instanceof UnsupportedSiteError)) {
+        recordProxyAttempt(false);
       }
       throw err;
     }
