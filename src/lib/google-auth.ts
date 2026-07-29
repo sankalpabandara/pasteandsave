@@ -1,30 +1,65 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 
 // Authenticates to Google APIs with a service account, with no external
 // libraries. It builds an RS256 JWT with node:crypto, exchanges it for an
 // access token, and caches the token until it nears expiry.
 //
-// Set GOOGLE_SERVICE_ACCOUNT_JSON to the service account key file, either as
-// raw JSON or base64-encoded (base64 avoids newline problems in .env files).
+// GOOGLE_SERVICE_ACCOUNT_JSON accepts any of three forms:
+//   - an absolute path to the downloaded key file (preferred: the key can be
+//     chmod 600 and never has to sit in an env file)
+//   - the raw JSON
+//   - that JSON base64-encoded, which avoids newline trouble in .env
+//
+// The path form is handled because the admin panel has been telling operators
+// to use one. Without it, a path was base64-decoded into rubbish, the parse
+// failed, and the panel reported "not configured" — pointing at the setup
+// rather than at the instruction that caused it.
 
 type ServiceAccount = { client_email: string; private_key: string };
 
+/** Why the key could not be loaded, for the admin panel to show. */
+let lastLoadError = "";
+
+export function serviceAccountError(): string {
+  return lastLoadError;
+}
+
 function loadServiceAccount(): ServiceAccount | null {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
-  if (!raw) return null;
+  if (!raw) {
+    lastLoadError = "GOOGLE_SERVICE_ACCOUNT_JSON is not set.";
+    return null;
+  }
+
+  let json: string;
   try {
-    const json = raw.startsWith("{")
-      ? raw
-      : Buffer.from(raw, "base64").toString("utf8");
+    if (raw.startsWith("{")) {
+      json = raw;
+    } else if (raw.startsWith("/") || /^[A-Za-z]:[\\/]/.test(raw)) {
+      json = fs.readFileSync(raw, "utf8");
+    } else {
+      json = Buffer.from(raw, "base64").toString("utf8");
+    }
+  } catch {
+    lastLoadError = "Could not read the service account key file at that path.";
+    return null;
+  }
+
+  try {
     const parsed = JSON.parse(json);
     if (parsed.client_email && parsed.private_key) {
+      lastLoadError = "";
       return {
         client_email: parsed.client_email,
         private_key: parsed.private_key,
       };
     }
+    lastLoadError =
+      "That file parsed but has no client_email/private_key — it may be an OAuth client secret rather than a service account key.";
   } catch {
-    // fall through to null
+    lastLoadError =
+      "The value is not valid JSON, a readable file path, or base64-encoded JSON.";
   }
   return null;
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getStats } from "@/lib/analytics";
 import { getGaSummary } from "@/lib/ga-data";
+import { serviceAccountError } from "@/lib/google-auth";
 import { proxyUsageToday } from "@/lib/proxy-budget";
 import AdminBar from "./AdminBar";
 import AdsEditor from "@/components/admin/AdsEditor";
@@ -316,6 +317,15 @@ export default async function AdminDashboard() {
                 ? "Client tracking is on. To show numbers here, connect the GA Data API:"
                 : "Not connected. To pull GA numbers into this dashboard:"}
             </p>
+            {/* The specific reason, not just the generic steps. "Not
+                configured" covers a missing variable, an unreadable file and a
+                key of the wrong type, and guessing which is a slow way to
+                spend an evening. */}
+            {serviceAccountError() && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                {serviceAccountError()}
+              </p>
+            )}
             <ol className="mt-2 list-decimal space-y-2 pl-5 text-neutral-500 dark:text-neutral-400">
               <li>
                 At console.cloud.google.com, create a project, enable the{" "}
@@ -343,7 +353,7 @@ sudo chmod 600 /opt/pasteandsave/ga-key.json
 
 # add these two lines to /opt/pasteandsave/.env.local
 GOOGLE_SERVICE_ACCOUNT_JSON=/opt/pasteandsave/ga-key.json
-GA4_PROPERTY_ID=123456789
+GA4_PROPERTY_ID=547077098
 
 pm2 restart pasteandsave --update-env`}
                 </pre>
