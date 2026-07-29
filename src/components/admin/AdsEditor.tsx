@@ -42,6 +42,14 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
   toolSection4: { label: "Tool page — before the footer", where: "All 16 platform pages, near the end" },
   extensionTop: { label: "Extension page — top", where: "The /extension page, under the hero" },
   extensionBottom: { label: "Extension page — bottom", where: "The /extension page, above the footer" },
+  extensionGate: {
+    label: "Extension — download wait",
+    where: "In the dialog while the extension download is prepared",
+  },
+  extensionThanks: {
+    label: "Extension — after download",
+    where: "In the dialog with the install steps, after the download starts",
+  },
 };
 
 const ORDER: AdSlotKey[] = [
@@ -60,6 +68,8 @@ const ORDER: AdSlotKey[] = [
   "toolBottom",
   "extensionTop",
   "extensionBottom",
+  "extensionGate",
+  "extensionThanks",
   "mobileUnderBox",
   "mobileResults",
   "mobileSticky",

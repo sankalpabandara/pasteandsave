@@ -107,6 +107,13 @@ export const AD_SLOTS = {
   // The extension page is a real page with real content and had nothing on it.
   extensionTop: { unitId: "", height: 100, maxWidth: 728, size: "728x90", shareWith: "homeTop" },
   extensionBottom: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
+
+  // The extension is given away, and the download is the one moment on this
+  // site where somebody is willing to wait. Two placements sit in that flow:
+  // one while the file is being prepared, one on the install instructions
+  // afterwards, which people actually read.
+  extensionGate: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
+  extensionThanks: { unitId: "", height: 280, maxWidth: 336, size: "336x280", shareWith: "homeMid" },
 } satisfies Record<string, AdPlacement>;
 
 export type AdSlotKey = keyof typeof AD_SLOTS;
