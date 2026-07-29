@@ -284,15 +284,7 @@ async function fetchFormats(target) {
     body: JSON.stringify({ url: target }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // The code is appended so a failure can be identified from a screenshot.
-    // Without it every cause reads as the same sentence about the video maybe
-    // being private, and telling a dead proxy apart from a genuinely private
-    // video means going to the server and reproducing it by hand.
-    const err = new Error(data.error || "Couldn't read that link.");
-    err.code = data.code || "UNKNOWN";
-    throw err;
-  }
+  if (!res.ok) throw new Error(data.error || "Couldn't read that link.");
   return data;
 }
 
@@ -470,7 +462,7 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "getFormats") {
     fetchFormats(msg.url)
       .then((data) => sendResponse({ ok: true, data }))
-      .catch((err) => sendResponse({ ok: false, error: err.message, code: err.code }));
+      .catch((err) => sendResponse({ ok: false, error: err.message }));
     return true; // async response
   }
   if (msg?.type === "startDownload") {

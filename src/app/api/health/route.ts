@@ -3,8 +3,6 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { YTDLP_PATH, FFMPEG_DIR, proxyStatus } from "@/lib/ytdlp";
 import { jobLimiter, lookupLimiter } from "@/lib/concurrency";
-import { proxyHealth } from "@/lib/proxy-health";
-import { proxyUsage } from "@/lib/proxy-usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -105,38 +103,13 @@ export async function GET() {
     tmpWritable = false;
   }
 
-  // Nothing is probed through the proxy here — it is metered, and a check
-  // every two minutes would spend real money. Instead the recent outcomes of
-  // live traffic are read back. When the proxy dies, every proxied platform
-  // fails at once while direct ones keep working, and that pattern is what
-  // this reports so the watchdog can raise it as the proxy outage it is.
-  const proxy = proxyHealth();
-
-  // Deliberately separate from the HTTP status. A dead proxy is not something
-  // a restart repairs, and the samples behind it live in memory, so answering
-  // 503 would have the watchdog restart the process, wipe the evidence, see
-  // green, and repeat — burning its daily restart budget while never saying
-  // what was wrong. The process is genuinely still serving every direct site,
-  // so this stays 200 and is reported as a degraded status the watchdog
-  // alerts on instead.
   const healthy = ytdlpOk && ffmpegOk && tmpWritable;
 
   return Response.json(
     {
-      status: healthy ? (proxy.failing ? "degraded" : "ok") : "degraded",
-      checks: {
-        ytdlp: ytdlpOk,
-        ffmpeg: ffmpegOk,
-        tmpWritable,
-        impersonation,
-        proxyWorking: !proxy.failing,
-      },
+      status: healthy ? "ok" : "degraded",
+      checks: { ytdlp: ytdlpOk, ffmpeg: ffmpegOk, tmpWritable, impersonation },
       load: { lookupsQueued, jobsActive },
-      proxyHealth: proxy,
-      // What the metered connection has actually cost today. Without this the
-      // only place the spend is visible is the provider's dashboard, which is
-      // how 18 GB went in six days without anyone noticing.
-      proxyUsage: proxyUsage(),
       proxy: proxyStatus(),
       stickySessions: (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0",
       uptimeSeconds: Math.round(process.uptime()),

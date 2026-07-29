@@ -15,7 +15,6 @@ HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 STATE_DIR="${STATE_DIR:-/var/lib/pasteandsave}"
 FAIL_FILE="$STATE_DIR/health-fails"
 RESTART_FILE="$STATE_DIR/restarts-today"
-PROXY_ALERT_FILE="$STATE_DIR/proxy-alert-sent"
 ALERT_EMAIL="${ALERT_EMAIL:-}"
 
 # Consecutive bad checks before acting (2 checks x 2 min = ~4 minutes down).
@@ -44,22 +43,6 @@ code="$(curl -sS -o /tmp/ps-health.json -w '%{http_code}' --max-time 20 "$HEALTH
 
 if [ "$code" = "200" ]; then
   [ -f "$FAIL_FILE" ] && rm -f "$FAIL_FILE"
-
-  # The process is fine, but the residential proxy may not be. That is checked
-  # here rather than through the http status on purpose: restarting the app
-  # cannot repair a proxy, and doing so would only clear the counters that
-  # prove it is broken. It needs a person to look at the provider's balance,
-  # so it alerts instead — once, because it will keep being true until then.
-  if grep -q '"failing":true' /tmp/ps-health.json 2>/dev/null; then
-    if [ "$(cat "$PROXY_ALERT_FILE" 2>/dev/null || echo)" != "$today" ]; then
-      echo "$today" > "$PROXY_ALERT_FILE"
-      echo "$(stamp) proxy failing $(head -c 200 /tmp/ps-health.json 2>/dev/null)"
-      alert "residential proxy is failing" \
-        "Every lookup that routes through the proxy is failing, while direct sites still work. Restarting will not fix this. Check the proxy provider for remaining data or balance, and check that the credentials in .env.local are still valid. Health: $(head -c 400 /tmp/ps-health.json 2>/dev/null)"
-    fi
-  else
-    [ -f "$PROXY_ALERT_FILE" ] && rm -f "$PROXY_ALERT_FILE"
-  fi
   exit 0
 fi
 
