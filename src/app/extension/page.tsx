@@ -4,6 +4,13 @@ import type { Metadata } from "next";
 import Header from "@/components/Header";
 import AdSlot from "@/components/ads/AdSlot";
 import ExtensionDownloadGate from "@/components/ExtensionDownloadGate";
+
+// Rendered per request, like the homepage, so the ad unit ids in the markup
+// are the ones currently saved. Prerendered, this page shipped whatever was
+// configured at build time — and the network's verifier reads this exact
+// page, so a unit reassigned here would stay "not found" until the next
+// deploy, for no reason the panel could show.
+export const dynamic = "force-dynamic";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
