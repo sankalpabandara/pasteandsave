@@ -52,22 +52,32 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
   },
 };
 
-const ORDER: AdSlotKey[] = [
+// The slots A-ADS can actually carry a unit in. Everything else is capped out
+// by their three-per-page limit or sits in a popup, which they do not serve —
+// so a unit id in one of those earns nothing and risks the "partly or fully
+// hidden" mark spreading to the ids that do work.
+const AADS_ORDER: AdSlotKey[] = [
   "homeTop",
-  "homeSection2",
-  "homeSection4",
   "homeMid",
-  "homeSection5",
-  "homeSection3",
   "homeBottom",
   "toolTop",
-  "toolSection2",
   "toolMid",
-  "toolSection3",
-  "toolSection4",
   "toolBottom",
   "extensionTop",
   "extensionBottom",
+];
+
+// Kept, but out of the way. These are real placements that render as soon as
+// another network's code is pasted in; they were showing as a wall of empty
+// boxes that looked like work left undone.
+const OTHER_ORDER: AdSlotKey[] = [
+  "homeSection2",
+  "homeSection4",
+  "homeSection5",
+  "homeSection3",
+  "toolSection2",
+  "toolSection3",
+  "toolSection4",
   "extensionGate",
   "extensionThanks",
   "mobileUnderBox",
@@ -77,6 +87,8 @@ const ORDER: AdSlotKey[] = [
   "interstitial",
   "sidebar",
 ];
+
+const ORDER: AdSlotKey[] = [...AADS_ORDER, ...OTHER_ORDER];
 
 export default function AdsEditor() {
   const [units, setUnits] = useState<Record<string, string>>({});
@@ -126,7 +138,9 @@ export default function AdsEditor() {
     }
   }
 
-  const active = ORDER.filter((k) => (units[k] ?? "").trim()).length;
+  const active = AADS_ORDER.filter((k) => (units[k] ?? "").trim()).length;
+  const [showOther, setShowOther] = useState(false);
+  const rows = showOther ? ORDER : AADS_ORDER;
 
   return (
     <section className="glass glass-hairline mt-6 rounded-2xl p-5">
@@ -136,8 +150,11 @@ export default function AdsEditor() {
             Ads &amp; analytics
           </h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-            {active} of {ORDER.length} ad slots active. Paste the numeric unit id
-            from a-ads.com — the digits only, not the whole embed code.
+            {active} of {AADS_ORDER.length} A-ADS slots filled. Paste the numeric
+            unit id from a-ads.com — the digits only, not the whole embed code.
+            <br />
+            A-ADS serves at most three units on a page and does not serve
+            popups, so only these eight can carry one.
           </p>
         </div>
         <button
@@ -201,7 +218,7 @@ export default function AdsEditor() {
             </tr>
           </thead>
           <tbody className="divide-y divide-black/5 dark:divide-white/10">
-            {ORDER.map((key) => {
+            {rows.map((key) => {
               const cfg = AD_SLOTS[key];
               const info = SLOT_INFO[key];
               return (
@@ -248,6 +265,18 @@ export default function AdsEditor() {
           </tbody>
         </table>
       </div>
+
+      {/* The remaining placements are real and render the moment another
+          network's code is pasted in. They are folded away because, sitting
+          open and empty, they read as work outstanding rather than as spare
+          capacity. */}
+      <button
+        type="button"
+        onClick={() => setShowOther((v) => !v)}
+        className="mt-3 text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
+      >
+        {showOther ? "Hide" : "Show"} {OTHER_ORDER.length} placements for a second network
+      </button>
 
       <details className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
         <summary className="cursor-pointer font-medium text-neutral-800 dark:text-neutral-200">
