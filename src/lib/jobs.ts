@@ -388,7 +388,14 @@ export function startJob(opts: StartJobOptions): string {
   const extractInfo = (): Promise<string | null> =>
     new Promise((resolve) => {
       const target = path.join(tmpDir, INFO_NAME);
-      const out = fs.createWriteStream(target);
+      // Collected in memory and written in one go. Piping to a write stream
+      // and stat-ing the file on the process's close event is a race: end()
+      // returns before the data is flushed, so the size reads back as zero,
+      // extraction looks like it failed, and the job silently falls back to
+      // dragging the whole video through the proxy — the exact thing this is
+      // here to avoid. The metadata is a megabyte at most, so holding it is
+      // cheaper than getting the flush wrong.
+      const chunks: Buffer[] = [];
       const child = spawn(
         YTDLP_PATH,
         [
@@ -405,24 +412,23 @@ export function startJob(opts: StartJobOptions): string {
         { windowsHide: true },
       );
       current = child;
-      child.stdout.pipe(out);
+      child.stdout.on("data", (c: Buffer) => chunks.push(c));
       child.stderr.on("data", (c: Buffer) => {
         stderrTail = (stderrTail + c.toString()).slice(-2000);
       });
       child.on("error", () => resolve(null));
       child.on("close", (code) => {
-        out.end();
         if (code !== 0) return resolve(null);
-        let size = 0;
+        const body = Buffer.concat(chunks);
+        if (body.length === 0) return resolve(null);
         try {
-          size = fs.statSync(target).size;
+          fs.writeFileSync(target, body);
         } catch {
           return resolve(null);
         }
-        if (size <= 0) return resolve(null);
         // The metadata is the one thing that genuinely crossed the proxy, so
         // it is the one thing charged against the day's allowance.
-        recordProxyBytes("metadata", size);
+        recordProxyBytes("metadata", body.length);
         resolve(target);
       });
     });
