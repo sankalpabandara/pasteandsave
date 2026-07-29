@@ -79,9 +79,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
-        <div className="px-4 py-6">
-          <AdSlot slot="toolTop" />
-        </div>
+        <AdSlot slot="toolTop" className="px-4 py-6" />
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
           <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
@@ -104,9 +102,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
-        <div className="px-4 py-8">
-          <AdSlot slot="toolSection2" />
-        </div>
+        <AdSlot slot="toolSection2" className="px-4 py-8" />
 
         <section id="how" className="py-12 sm:py-16">
           <div className="mx-auto max-w-5xl px-4">
@@ -135,9 +131,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
-        <div className="px-4 py-8">
-          <AdSlot slot="toolMid" />
-        </div>
+        <AdSlot slot="toolMid" className="px-4 py-8" />
 
         <section id="faq" className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
           <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
@@ -162,9 +156,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
-        <div className="px-4 py-8">
-          <AdSlot slot="toolSection3" />
-        </div>
+        <AdSlot slot="toolSection3" className="px-4 py-8" />
 
         <section className="mx-auto max-w-5xl px-4 pb-12 sm:pb-16">
           <h2 className="font-display text-center text-lg font-bold dark:text-white">
@@ -183,13 +175,9 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
-        <div className="px-4 pb-8">
-          <AdSlot slot="toolSection4" />
-        </div>
+        <AdSlot slot="toolSection4" className="px-4 pb-8" />
 
-        <div className="px-4 pb-10">
-          <AdSlot slot="toolBottom" />
-        </div>
+        <AdSlot slot="toolBottom" className="px-4 pb-10" />
       </main>
       <Footer />
     </>

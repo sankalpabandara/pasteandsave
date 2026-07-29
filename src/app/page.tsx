@@ -79,21 +79,13 @@ export default function Home() {
             ))}
           </div>
         </section>
-        <div className="px-4 py-6">
-          <AdSlot slot="homeTop" />
-        </div>
+        <AdSlot slot="homeTop" className="px-4 py-6" />
         <Platforms />
-        <div className="px-4 py-8">
-          <AdSlot slot="homeSection2" />
-        </div>
+        <AdSlot slot="homeSection2" className="px-4 py-8" />
         <HowItWorks />
-        <div className="px-4 py-8">
-          <AdSlot slot="homeSection4" />
-        </div>
+        <AdSlot slot="homeSection4" className="px-4 py-8" />
         <Bookmarklet />
-        <div className="px-4 py-8">
-          <AdSlot slot="homeMid" />
-        </div>
+        <AdSlot slot="homeMid" className="px-4 py-8" />
         <section className="px-4 py-12 sm:py-16">
           <div className="glass glass-hairline mx-auto max-w-3xl space-y-4 rounded-3xl p-6 text-sm leading-relaxed text-neutral-600 sm:p-8 dark:text-neutral-300">
             <h2 className="font-display text-center text-xl font-bold text-neutral-900 sm:text-2xl dark:text-white">
@@ -114,9 +106,7 @@ export default function Home() {
                 reader is already here and looking down the page, and two
                 banners back to back read as spam to both people and the
                 ranking that brings them. */}
-            <div className="py-2">
-              <AdSlot slot="homeSection5" />
-            </div>
+            <AdSlot slot="homeSection5" className="py-2" />
             <p>
               If you only need the audio, each page here doubles as an MP3
               downloader. One button converts the video to MP3, encoded at
@@ -139,13 +129,9 @@ export default function Home() {
             </p>
           </div>
         </section>
-        <div className="px-4 pb-8">
-          <AdSlot slot="homeSection3" />
-        </div>
+        <AdSlot slot="homeSection3" className="px-4 pb-8" />
         <Faq />
-        <div className="px-4 pb-10">
-          <AdSlot slot="homeBottom" />
-        </div>
+        <AdSlot slot="homeBottom" className="px-4 pb-10" />
       </main>
       <Footer />
     </>

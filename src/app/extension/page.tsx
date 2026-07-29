@@ -135,9 +135,7 @@ export default function ExtensionPage() {
           </div>
         </section>
 
-        <div className="px-4 py-6">
-          <AdSlot slot="extensionTop" />
-        </div>
+        <AdSlot slot="extensionTop" className="px-4 py-6" />
 
         <section className="mx-auto max-w-5xl px-4 py-10">
           <h2 className="font-display text-center text-xl font-bold sm:text-3xl dark:text-white">
@@ -207,9 +205,7 @@ export default function ExtensionPage() {
             </p>
           </div>
         </section>
-        <div className="px-4 pb-10">
-          <AdSlot slot="extensionBottom" />
-        </div>
+        <AdSlot slot="extensionBottom" className="px-4 pb-10" />
       </main>
       <Footer />
     </>

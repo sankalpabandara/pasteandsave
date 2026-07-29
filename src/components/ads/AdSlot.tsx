@@ -72,6 +72,10 @@ export default function AdSlot({
     [snippet],
   );
 
+  // Returning null takes the slot's own spacing with it. The padding used to
+  // sit on a wrapper in the page, so a slot with nothing to show still left a
+  // band of empty page behind it — several of them, once the placements that
+  // A-ADS will not serve stopped rendering.
   if (!ADS_ENABLED) return null;
   if (!hasUnit && !snippet && !SHOW_AD_PLACEHOLDERS) return null;
 
