@@ -1,6 +1,7 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
+import { putInfo } from "./info-cache";
 
 // BIN_DIR is overridable so a production deploy can point at an absolute path
 // regardless of the working directory (e.g. Next.js standalone output).
@@ -23,15 +24,25 @@ export const EXTRACTOR_ARGS = ["--ies", "default,-generic"];
 // tolerant of server IPs makes lookups and downloads work far more often. The
 // set is env-overridable so the box operator can retune when YouTube shifts
 // again, without a code change or redeploy.
-// Each extra client is another full round trip to YouTube, and for us that
-// trip goes through a residential proxy, so four clients cost tens of seconds
-// on every paste. Two is enough to stay reliable: android_vr survives the
-// datacenter block, tv supplies the combined video+audio streams. The rest are
-// kept for the fallback attempt below.
-const YT_CLIENTS =
-  process.env.YTDLP_YOUTUBE_CLIENTS || "android_vr,tv";
-// A different mix tried once if the first attempt fails, since which clients
-// work drifts week to week.
+//
+// One client, and that is worth stating plainly because it used to be two.
+// Every client is a full round trip, and for us that trip goes through a
+// metered proxy. Measured against the same three videos:
+//
+//   android_vr,tv   1,027,319 bytes
+//   android_vr        159,280 bytes
+//   tv              1,010,426 bytes, and fails on its own
+//
+// The second client was carrying 85% of the cost of every extraction. It was
+// kept on the belief that it supplied the combined video+audio streams, and
+// that turned out not to be so: the format lists from both sets are identical,
+// same heights, same muxed stream, same audio tracks, same count. It was
+// paying for a duplicate.
+//
+// If YouTube changes and one client stops being enough, the fallback set below
+// is tried automatically, and YTDLP_YOUTUBE_CLIENTS overrides this without a
+// deploy.
+const YT_CLIENTS = process.env.YTDLP_YOUTUBE_CLIENTS || "android_vr";
 const YT_FALLBACK_CLIENTS =
   process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS || "default,web_safari,mweb,ios";
 
@@ -615,6 +626,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
         [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
         timeout,
       );
+      putInfo(url, stdout);
       return parseInfoJson(stdout);
     } catch (err) {
       // For YouTube, one bot-block deserves a second try with a different
@@ -625,7 +637,8 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
             [...base, ...siteArgs(url, true), ...proxyArgs(url), "--", url],
             timeout,
           );
-          return parseInfoJson(stdout);
+          putInfo(url, stdout);
+      return parseInfoJson(stdout);
         } catch (retryErr) {
           if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
             throw new PlatformBlockedError(retryErr.message);
@@ -650,7 +663,8 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           console.warn(
             "[info] proxy rejected the sticky session; falling back to a plain proxy connection. Set YTDLP_PROXY_STICKY=0 if this persists.",
           );
-          return parseInfoJson(stdout);
+          putInfo(url, stdout);
+      return parseInfoJson(stdout);
         } catch {
           // Keep the original error, which describes the real problem.
         }
@@ -676,7 +690,8 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           console.warn(
             `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
           );
-          return parseInfoJson(stdout);
+          putInfo(url, stdout);
+      return parseInfoJson(stdout);
         } catch {
           // Fall through to the original error, which describes the real
           // problem better than a failed retry does.

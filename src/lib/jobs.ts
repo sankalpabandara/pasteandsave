@@ -21,6 +21,7 @@ import {
 import { BusyError, jobLimiter } from "./concurrency";
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
+import { takeInfo } from "./info-cache";
 
 export type JobStatus =
   | "starting"
@@ -483,7 +484,22 @@ export function startJob(opts: StartJobOptions): string {
   }
 
   void (async () => {
-    const infoJson = await extractInfo();
+    // The lookup that produced the quality list already extracted all of this,
+    // seconds ago, through the same proxy. Re-asking would double the metered
+    // cost of every download to answer a question already answered.
+    let infoJson: string | null = null;
+    const cached = takeInfo(opts.url);
+    if (cached) {
+      const target = path.join(tmpDir, INFO_NAME);
+      try {
+        fs.writeFileSync(target, cached);
+        infoJson = target;
+        console.log(`[job ${id}] reused the lookup's metadata, no second extraction`);
+      } catch {
+        // Could not stage it; fall through and extract as normal.
+      }
+    }
+    if (!infoJson) infoJson = await extractInfo();
     if (job.status === "error") return finish();
 
     // Could not read the page. Fall back to the single-stage run, which is
