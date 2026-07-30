@@ -3,6 +3,7 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { YTDLP_PATH, FFMPEG_DIR, proxyStatus } from "@/lib/ytdlp";
 import { jobLimiter, lookupLimiter } from "@/lib/concurrency";
+import { routingReport } from "@/lib/proxy-routing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,6 +112,10 @@ export async function GET() {
       checks: { ytdlp: ytdlpOk, ffmpeg: ffmpegOk, tmpWritable, impersonation },
       load: { lookupsQueued, jobsActive },
       proxy: proxyStatus(),
+      // Which sites have proved they need the proxy and which answer without
+      // it. Routing is learned rather than configured, so this is the only
+      // place the decision in effect can be seen.
+      routing: routingReport(),
       stickySessions: (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0",
       uptimeSeconds: Math.round(process.uptime()),
     },

@@ -22,6 +22,7 @@ import { BusyError, jobLimiter } from "./concurrency";
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
 import { takeInfo } from "./info-cache";
+import { shouldTryDirect } from "./proxy-routing";
 
 export type JobStatus =
   | "starting"
@@ -248,7 +249,13 @@ export function startJob(opts: StartJobOptions): string {
   // One sticky proxy session for the whole job. proxyArgs mints a new session
   // on every call, and a link signed for one session's address is refused
   // from another's, so extraction and any proxied fetch must share one.
-  const jobProxy = proxyArgs(opts.url);
+  //
+  // Empty when the lookup established this site answers without a proxy. That
+  // matters for more than cost: whichever address fetched the links is the
+  // address they are signed for, so extraction and the media fetch have to
+  // agree. Extracting directly and then falling back to the proxy for the
+  // media would present links from one address while connecting from another.
+  const jobProxy = shouldTryDirect(safeHost(opts.url)) ? [] : proxyArgs(opts.url);
   let triedProxyFallback = false;
   let triedPlainProxy = false;
 

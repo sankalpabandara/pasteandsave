@@ -2,6 +2,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 import { putInfo } from "./info-cache";
+import { shouldTryDirect, recordDirectResult } from "./proxy-routing";
 
 // BIN_DIR is overridable so a production deploy can point at an absolute path
 // regardless of the working directory (e.g. Next.js standalone output).
@@ -621,6 +622,42 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     // YouTube gets a longer budget: multiple player clients plus retries take
     // more wall time than a single clean fetch.
     const timeout = yt ? 60_000 : 30_000;
+
+    // Try without the proxy first, when this site has not recently proved it
+    // needs one. The host list was written when datacenter addresses were
+    // being refused and has not been re-checked since; blocks lift, and the
+    // only way to know today's answer is to ask. A success here means the
+    // request cost no metered data at all.
+    const host = safeHostname(url);
+    const wouldProxy = proxyArgs(url).length > 0;
+    if (wouldProxy && shouldTryDirect(host)) {
+      try {
+        // A shorter leash than the proxied attempt gets. A refusal normally
+        // comes back in seconds, so this only bites when the site is silent
+        // rather than saying no, and in that case waiting the full budget
+        // before falling back would just make a blocked lookup feel broken.
+        const stdout = await runYtDlp(
+          [...base, ...siteArgs(url), "--", url],
+          Math.min(timeout, 25_000),
+        );
+        recordDirectResult(host, true);
+        console.log(`[info] ${host} answered without the proxy`);
+        putInfo(url, stdout);
+        return parseInfoJson(stdout);
+      } catch (directErr) {
+        // Only a refusal of this address teaches us anything. A deleted video
+        // or an unsupported link says nothing about routing, so it is left to
+        // the normal path below rather than blamed on the connection.
+        if (directErr instanceof UnsupportedSiteError) throw directErr;
+        const blocked =
+          directErr instanceof Error && isBlockedByPlatform(directErr.message);
+        if (blocked) {
+          recordDirectResult(host, false);
+          console.log(`[info] ${host} refused this address, using the proxy`);
+        }
+      }
+    }
+
     try {
       const stdout = await runYtDlp(
         [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
