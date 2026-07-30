@@ -18,7 +18,18 @@ export const PROXY_DAILY_MB = (() => {
 
 // We don't know a download's exact size when it starts, so estimate
 // conservatively (better to pause a little early than overspend).
-const EST_BYTES = { audio: 6 * 1024 * 1024, video: 50 * 1024 * 1024 };
+//
+// "metadata" is the page read that the proxy genuinely has to carry. Media
+// only appears here when the CDN refused to serve this server directly and
+// the file had to come through the proxy as well; when it goes direct, which
+// is the normal case, none of those bytes are metered and none are charged.
+const EST_BYTES = {
+  metadata: 2 * 1024 * 1024,
+  audio: 6 * 1024 * 1024,
+  video: 50 * 1024 * 1024,
+};
+
+export type ProxySpend = keyof typeof EST_BYTES;
 
 type Usage = { day: string; downloads: number; bytes: number };
 
@@ -62,12 +73,14 @@ export async function proxyBudgetOk(): Promise<boolean> {
 // the only writer.
 let writeQueue: Promise<void> = Promise.resolve();
 
-export function recordProxyUsage(mode: "audio" | "video"): Promise<void> {
+export function recordProxyUsage(mode: ProxySpend): Promise<void> {
   writeQueue = writeQueue
     .catch(() => {})
     .then(async () => {
       const u = await read();
-      u.downloads += 1;
+      // Metadata is part of a download already counted, not a download of
+      // its own, so it adds bytes without inflating the number of downloads.
+      if (mode !== "metadata") u.downloads += 1;
       u.bytes += EST_BYTES[mode] ?? EST_BYTES.video;
       await write(u);
     });

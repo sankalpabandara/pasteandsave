@@ -4,7 +4,7 @@ import { isSafeUrl, isValidFormatId, usesProxy } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
-import { proxyBudgetOk, recordProxyUsage } from "@/lib/proxy-budget";
+import { proxyBudgetOk } from "@/lib/proxy-budget";
 
 export const runtime = "nodejs";
 
@@ -79,7 +79,6 @@ export async function POST(request: NextRequest) {
           })
         : startJob({ mode: "audio", url, title, audioFormat, bitrate });
     void logEvent({ type: "download", mode });
-    if (proxied) void recordProxyUsage(mode);
     return Response.json({ jobId: id });
   } catch (err) {
     if (err instanceof BusyError) {
