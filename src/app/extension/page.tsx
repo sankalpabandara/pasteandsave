@@ -3,7 +3,6 @@ import path from "node:path";
 import type { Metadata } from "next";
 import Header from "@/components/Header";
 import AdSlot from "@/components/ads/AdSlot";
-import ExtensionDownloadGate from "@/components/ExtensionDownloadGate";
 
 // Rendered per request, like the homepage, so the ad unit ids in the markup
 // are the ones currently saved. Prerendered, this page shipped whatever was
@@ -125,10 +124,18 @@ export default function ExtensionPage() {
             no copying links and no switching tabs.
           </p>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <ExtensionDownloadGate
+            <a
               href="/pasteandsave-extension.zip"
-              sizeLabel={zipSizeLabel()}
-            />
+              download
+              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:bg-violet-700"
+            >
+              <svg width="16" height="16" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                <path d="M20 9.5 V22" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+                <path d="M14.3 16.7 L20 22.6 L25.7 16.7" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 27.5 H28" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+              </svg>
+              Download the extension
+            </a>
             <span className="text-xs text-neutral-500 dark:text-neutral-400">
               {zipSizeLabel()} zip · no account · no tracking
             </span>

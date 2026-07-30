@@ -12,44 +12,8 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
   toolTop: { label: "Tool page — top", where: "All 16 platform pages, under the paste box" },
   toolMid: { label: "Tool page — mid", where: "All 16 platform pages, between sections" },
   toolBottom: { label: "Tool page — bottom", where: "All 16 platform pages, above the footer" },
-  sidebar: {
-    label: "Desktop sidebar",
-    where: "Right margin, wide desktops only (1536px and up)",
-  },
-  interstitial: { label: "Download interstitial", where: "Popup shown when a download starts" },
-  mobileUnderBox: {
-    label: "Phone — under the paste box",
-    where: "Phones only, directly below the link field",
-  },
-  mobileResults: {
-    label: "Phone — in the results",
-    where: "Phones only, beside the quality buttons",
-  },
-  mobileSticky: {
-    label: "Phone — sticky bottom bar",
-    where: "Phones only, pinned to the bottom of the screen",
-  },
-  clickPopup: {
-    label: "First-click popup",
-    where: "Shown once per visit, on the first click anywhere",
-  },
-  homeSection2: { label: "Home — after Platforms", where: "Homepage, under the site tiles" },
-  homeSection3: { label: "Home — before the FAQ", where: "Homepage, above the questions" },
-  homeSection4: { label: "Home — after How it works", where: "Homepage, mid page" },
-  homeSection5: { label: "Home — inside the article", where: "Homepage, between paragraphs" },
-  toolSection2: { label: "Tool page — after features", where: "All 16 platform pages, mid page" },
-  toolSection3: { label: "Tool page — after the FAQ", where: "All 16 platform pages, lower down" },
-  toolSection4: { label: "Tool page — before the footer", where: "All 16 platform pages, near the end" },
   extensionTop: { label: "Extension page — top", where: "The /extension page, under the hero" },
   extensionBottom: { label: "Extension page — bottom", where: "The /extension page, above the footer" },
-  extensionGate: {
-    label: "Extension — download wait",
-    where: "In the dialog while the extension download is prepared",
-  },
-  extensionThanks: {
-    label: "Extension — after download",
-    where: "In the dialog with the install steps, after the download starts",
-  },
 };
 
 // The slots A-ADS can actually carry a unit in. Everything else is capped out
@@ -67,28 +31,7 @@ const AADS_ORDER: AdSlotKey[] = [
   "extensionBottom",
 ];
 
-// Kept, but out of the way. These are real placements that render as soon as
-// another network's code is pasted in; they were showing as a wall of empty
-// boxes that looked like work left undone.
-const OTHER_ORDER: AdSlotKey[] = [
-  "homeSection2",
-  "homeSection4",
-  "homeSection5",
-  "homeSection3",
-  "toolSection2",
-  "toolSection3",
-  "toolSection4",
-  "extensionGate",
-  "extensionThanks",
-  "mobileUnderBox",
-  "mobileResults",
-  "mobileSticky",
-  "clickPopup",
-  "interstitial",
-  "sidebar",
-];
-
-const ORDER: AdSlotKey[] = [...AADS_ORDER, ...OTHER_ORDER];
+const ORDER: AdSlotKey[] = AADS_ORDER;
 
 export default function AdsEditor() {
   const [units, setUnits] = useState<Record<string, string>>({});
@@ -139,8 +82,7 @@ export default function AdsEditor() {
   }
 
   const active = AADS_ORDER.filter((k) => (units[k] ?? "").trim()).length;
-  const [showOther, setShowOther] = useState(false);
-  const rows = showOther ? ORDER : AADS_ORDER;
+  const rows = ORDER;
 
   return (
     <section className="glass glass-hairline mt-6 rounded-2xl p-5">
@@ -266,17 +208,6 @@ export default function AdsEditor() {
         </table>
       </div>
 
-      {/* The remaining placements are real and render the moment another
-          network's code is pasted in. They are folded away because, sitting
-          open and empty, they read as work outstanding rather than as spare
-          capacity. */}
-      <button
-        type="button"
-        onClick={() => setShowOther((v) => !v)}
-        className="mt-3 text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
-      >
-        {showOther ? "Hide" : "Show"} {OTHER_ORDER.length} placements for a second network
-      </button>
 
       <details className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
         <summary className="cursor-pointer font-medium text-neutral-800 dark:text-neutral-200">

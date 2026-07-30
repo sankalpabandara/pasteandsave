@@ -81,9 +81,7 @@ export default function Home() {
         </section>
         <AdSlot slot="homeTop" className="px-4 py-6" />
         <Platforms />
-        <AdSlot slot="homeSection2" className="px-4 py-8" />
         <HowItWorks />
-        <AdSlot slot="homeSection4" className="px-4 py-8" />
         <Bookmarklet />
         <AdSlot slot="homeMid" className="px-4 py-8" />
         <section className="px-4 py-12 sm:py-16">
@@ -106,7 +104,6 @@ export default function Home() {
                 reader is already here and looking down the page, and two
                 banners back to back read as spam to both people and the
                 ranking that brings them. */}
-            <AdSlot slot="homeSection5" className="py-2" />
             <p>
               If you only need the audio, each page here doubles as an MP3
               downloader. One button converts the video to MP3, encoded at
@@ -129,7 +126,6 @@ export default function Home() {
             </p>
           </div>
         </section>
-        <AdSlot slot="homeSection3" className="px-4 pb-8" />
         <Faq />
         <AdSlot slot="homeBottom" className="px-4 pb-10" />
       </main>

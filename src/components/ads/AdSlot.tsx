@@ -39,13 +39,8 @@ export default function AdSlot({
   // A slot with nothing of its own borrows from the slot named in shareWith,
   // so a placement the crawler can never reach still carries an id that has
   // already been verified rather than rendering nothing at all.
-  // Slots marked noAads carry no A-ADS banner at any price. A-ADS caps a page
-  // at three units and does not serve popups, and a unit it decides is hidden
-  // stops earning everywhere that id appears — so an extra placement is not
-  // free, it is a way to break the ones that work.
-  const shared = cfg.noAads || !cfg.shareWith ? "" : (units[cfg.shareWith] ?? "");
-  const ownUnit = cfg.noAads ? "" : units[slot] || cfg.unitId || "";
-  const unitId = (ownUnit || shared || "").trim();
+  const shared = cfg.shareWith ? (units[cfg.shareWith] ?? "") : "";
+  const unitId = (units[slot] || cfg.unitId || shared || "").trim();
   const hasUnit = unitId.length > 0;
   const snippet = (snippets[slot] ?? "").trim();
 

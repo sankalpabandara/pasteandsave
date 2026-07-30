@@ -3,9 +3,6 @@ import { Geist, Space_Grotesk } from "next/font/google";
 import ThemeScript from "@/components/ThemeScript";
 import Analytics from "@/components/Analytics";
 import { AdProvider } from "@/components/ads/AdProvider";
-import SidebarAd from "@/components/ads/SidebarAd";
-import StickyBottomAd from "@/components/ads/StickyBottomAd";
-import ClickPopupAd from "@/components/ads/ClickPopupAd";
 import { readSettings } from "@/lib/ads-store";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -85,9 +82,6 @@ export default async function RootLayout({
         <ThemeScript />
         <AdProvider initialUnits={units} initialSnippets={snippets}>
           {children}
-          <SidebarAd />
-          <StickyBottomAd />
-          <ClickPopupAd />
         </AdProvider>
         <Analytics />
       </body>
