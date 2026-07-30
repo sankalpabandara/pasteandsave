@@ -43,6 +43,49 @@ const jobs = new Map<string, Job>();
 const JOB_TTL_MS = 15 * 60 * 1000;
 const JOB_TIMEOUT_MS = 10 * 60 * 1000;
 
+// Job folders are named with this prefix so orphans can be recognised later.
+const TMP_PREFIX = "pasteandsave-";
+
+// Removes job folders left behind by a previous run of the process.
+//
+// A finished job deletes its own folder, and a stalled one is swept by TTL,
+// but both rely on the job map, which lives in memory. A restart, a crash or a
+// deploy loses that map while the folders stay on disk, holding a part-written
+// video each. Nothing ever came back for them, so on a server that restarts
+// regularly they only accumulate, and at forty-odd megabytes a download that
+// fills a disk quietly.
+//
+// Only folders older than the job TTL are touched. Anything younger could
+// belong to a download running right now.
+function sweepOrphanedTmpDirs() {
+  const root = os.tmpdir();
+  let names: string[];
+  try {
+    names = fs.readdirSync(root);
+  } catch {
+    return;
+  }
+  const cutoff = Date.now() - JOB_TTL_MS;
+  let removed = 0;
+  for (const name of names) {
+    if (!name.startsWith(TMP_PREFIX)) continue;
+    const dir = path.join(root, name);
+    try {
+      if (fs.statSync(dir).mtimeMs > cutoff) continue;
+      fs.rmSync(dir, { recursive: true, force: true });
+      removed++;
+    } catch {
+      // Someone else's folder, or already gone. Neither is our problem.
+    }
+  }
+  if (removed > 0) {
+    console.log(`[jobs] cleared ${removed} temp folder(s) left by a previous run`);
+  }
+}
+
+// Runs once when the module loads, which is once per server start.
+sweepOrphanedTmpDirs();
+
 function sweepStaleJobs() {
   const now = Date.now();
   for (const [id, job] of jobs) {
@@ -100,7 +143,7 @@ export function startJob(opts: StartJobOptions): string {
   };
 
   const id = randomUUID();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pasteandsave-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
   const job: Job = {
     id,
     status: "starting",
