@@ -13,8 +13,8 @@ import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Rendered per request so the ad unit ids in the HTML are the ones currently
 // saved in the admin panel. Prerendered, this page would ship whatever was
-// configured at build time, and the network's verifier — which reads the HTML
-// of this exact page — would be checking a stale id after any change.
+// configured at build time, and the network's verifier, which reads the HTML
+// of this exact page, would be checking a stale id after any change.
 export const dynamic = "force-dynamic";
 
 const JSON_LD = [

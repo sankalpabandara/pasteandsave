@@ -6,7 +6,7 @@ import AdSlot from "@/components/ads/AdSlot";
 
 // Rendered per request, like the homepage, so the ad unit ids in the markup
 // are the ones currently saved. Prerendered, this page shipped whatever was
-// configured at build time — and the network's verifier reads this exact
+// configured at build time, and the network's verifier reads this exact
 // page, so a unit reassigned here would stay "not found" until the next
 // deploy, for no reason the panel could show.
 export const dynamic = "force-dynamic";
@@ -24,11 +24,11 @@ export const metadata: Metadata = {
 const FEATURES = [
   {
     title: "Download without leaving the page",
-    body: "A Download now button sits on the corner of any real video. Press it and the quality list opens right there — 1080p, 720p, 360p, MP3 — with sizes. Pick one and it saves to your downloads folder while you carry on watching. No new tab, no copying links.",
+    body: "A Download now button sits on the corner of any real video. Press it and the quality list opens right there, 1080p, 720p, 360p, MP3, with sizes. Pick one and it saves to your downloads folder while you carry on watching. No new tab, no copying links.",
   },
   {
     title: "YouTube, TikTok, Instagram and more",
-    body: "On any supported video page, hit the extension and it hands the link to PasteAndSave, which fetches the real file — YouTube included. One button, no copying links, works across 1,200+ sites.",
+    body: "On any supported video page, hit the extension and it hands the link to PasteAndSave, which fetches the real file, YouTube included. One button, no copying links, works across 1,200+ sites.",
   },
   {
     title: "Finds media on its own",
@@ -36,7 +36,7 @@ const FEATURES = [
   },
   {
     title: "Off whenever you want it off",
-    body: "A switch in the popup stops the extension on a site completely — the in-page button and the traffic watching both go quiet, subdomains included. Turn it back on in the same place, no reload needed.",
+    body: "A switch in the popup stops the extension on a site completely, the in-page button and the traffic watching both go quiet, subdomains included. Turn it back on in the same place, no reload needed.",
   },
   {
     title: "One click to save",

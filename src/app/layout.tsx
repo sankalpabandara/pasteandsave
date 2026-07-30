@@ -12,7 +12,7 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-// Display font for headings and the wordmark — modern, geometric, premium.
+// Display font for headings and the wordmark, modern, geometric, premium.
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-display",
   subsets: ["latin"],
@@ -69,7 +69,7 @@ export default async function RootLayout({
   // the server sends. The ad network verifies a unit by fetching the page and
   // looking for its data-aa attribute without running any JavaScript, so
   // configuration that only arrived via a client fetch left it finding
-  // nothing — and an unverified unit earns nothing.
+  // nothing, and an unverified unit earns nothing.
   const { units, snippets } = await readSettings();
 
   return (

@@ -69,7 +69,7 @@ export default function AdSlot({
 
   // Returning null takes the slot's own spacing with it. The padding used to
   // sit on a wrapper in the page, so a slot with nothing to show still left a
-  // band of empty page behind it — several of them, once the placements that
+  // band of empty page behind it, several of them, once the placements that
   // A-ADS will not serve stopped rendering.
   if (!ADS_ENABLED) return null;
   if (!hasUnit && !snippet && !SHOW_AD_PLACEHOLDERS) return null;
@@ -100,7 +100,7 @@ export default function AdSlot({
             key={unitId}
             title="Advertisement"
             data-aa={unitId}
-            // Kept in the network's documented shape — trailing slash and
+            // Kept in the network's documented shape, trailing slash and
             // size=Adaptive. Their verifier matches against the embed they
             // publish, so drifting from it is a way to fail a check for a
             // reason that never appears in any error message.

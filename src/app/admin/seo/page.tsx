@@ -134,7 +134,7 @@ export default async function SeoAuditPage() {
                       ? "▲ trending up"
                       : brain.trend.direction === "down"
                         ? "▼ trending down"
-                        : "— steady"}
+                        : "steady"}
                   </span>
                 </div>
                 <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
@@ -362,7 +362,7 @@ export default async function SeoAuditPage() {
       <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
-            Search Console — real search queries
+            Search Console: real search queries
           </h2>
           <span className="text-xs text-neutral-400">last 28 days</span>
         </div>

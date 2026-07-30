@@ -1,5 +1,5 @@
 // Display metadata for yt-dlp's most common extractor_key values. This is
-// purely cosmetic (badge name + color) — it does not gate which sites work.
+// purely cosmetic (badge name + color), it does not gate which sites work.
 // Anything not listed here still works and falls back to a generic badge
 // built from the extractor's own name.
 const KNOWN: Record<string, { name: string; color: string }> = {

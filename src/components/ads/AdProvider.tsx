@@ -43,7 +43,7 @@ export function AdProvider({
    * first response. The network verifies a unit by fetching the page and
    * looking for its data-aa attribute, and it does not run our JavaScript, so
    * a unit that only appears after a client fetch is invisible to it and is
-   * reported as "Not found" — which means the unit never earns.
+   * reported as "Not found", which means the unit never earns.
    */
   initialUnits?: Record<string, string>;
   initialSnippets?: Record<string, string>;

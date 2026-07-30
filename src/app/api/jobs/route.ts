@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     return Response.json(
       {
         error:
-          "YouTube has hit today's download limit here. It resets tomorrow — everything else still works now.",
+          "YouTube has hit today's download limit here. It resets tomorrow. Everything else still works now.",
       },
       { status: 429 },
     );

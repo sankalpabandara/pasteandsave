@@ -4,7 +4,7 @@ import path from "node:path";
 
 // First-party analytics. Events are appended to a JSON-lines file so the admin
 // dashboard has real numbers even without Google Analytics. No cookies, no IPs,
-// no personal data is stored — only what was done and when.
+// no personal data is stored, only what was done and when.
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const EVENTS_FILE = path.join(DATA_DIR, "events.jsonl");

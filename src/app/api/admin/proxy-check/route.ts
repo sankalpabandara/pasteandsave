@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 // Swapping the proxy provider is otherwise done blind: paste a URL into the
 // environment, restart, and find out from visitors whether it works. That is
 // how two days went into blaming YouTube for what was a connection problem.
-// This answers the two questions that actually decide it — can it still read a
-// YouTube page, and what address does YouTube see when it does — without
+// This answers the two questions that actually decide it, can it still read a
+// YouTube page, and what address does YouTube see when it does, without
 // touching the live configuration.
 //
 // It is also what makes moving off a metered provider a decision rather than a
@@ -32,7 +32,7 @@ function parseProxy(raw: string): { ok: true; safe: string } | { ok: false; why:
     return { ok: false, why: `Unsupported scheme "${u.protocol.replace(":", "")}".` };
   }
   if (!u.hostname) return { ok: false, why: "No host in that URL." };
-  // Only ever shown back as host:port — the credentials stay out of the reply.
+  // Only ever shown back as host:port, the credentials stay out of the reply.
   return { ok: true, safe: `${u.protocol}//${u.hostname}${u.port ? ":" + u.port : ""}` };
 }
 

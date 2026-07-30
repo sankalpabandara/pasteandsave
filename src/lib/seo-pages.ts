@@ -11,7 +11,7 @@ export type ToolPage = {
   slug: string;
   /** Short name used in nav/footer links */
   navLabel: string;
-  /** <title> — complete, no template applied */
+  /** <title>, complete, no template applied */
   title: string;
   description: string;
   keywords: string[];

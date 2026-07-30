@@ -6,7 +6,7 @@ const isProd = process.env.NODE_ENV === "production";
 // Policy is production-only so it doesn't interfere with the dev server's
 // hot-reload (which needs eval and websockets).
 // Bump on each release so a deploy can be verified from the response headers.
-const APP_VERSION = "2026.07.19";
+const APP_VERSION = "2026.07.30";
 
 // Extra hosts an ad network needs before its code can run. The policy here is
 // strict on purpose, which means a freshly pasted embed is blocked until its
@@ -64,6 +64,11 @@ const nextConfig: NextConfig = {
   // Produces a self-contained server bundle for easy VPS/Docker deployment.
   output: "standalone",
   poweredByHeader: false,
+  // Nothing here uses next/image, but the framework still ships sharp, and
+  // sharp carries whatever libvips CVEs are open at the time. Turning
+  // optimisation off means the image route never hands a file to libvips, so
+  // those advisories cannot apply to this site whatever their state.
+  images: { unoptimized: true },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

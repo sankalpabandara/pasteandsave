@@ -13,7 +13,7 @@ export const FFMPEG_DIR = BIN_DIR;
 
 // Keeps yt-dlp restricted to its ~1750 named site extractors and disables
 // the "generic" fallback, which would otherwise scrape the HTML of
-// *any* URL we hand it — turning this server into an open SSRF proxy.
+// *any* URL we hand it, turning this server into an open SSRF proxy.
 // A URL that doesn't match a specific extractor fails cleanly instead.
 export const EXTRACTOR_ARGS = ["--ies", "default,-generic"];
 
@@ -23,7 +23,7 @@ export const EXTRACTOR_ARGS = ["--ies", "default,-generic"];
 // tolerant of server IPs makes lookups and downloads work far more often. The
 // set is env-overridable so the box operator can retune when YouTube shifts
 // again, without a code change or redeploy.
-// Each extra client is another full round trip to YouTube — and for us that
+// Each extra client is another full round trip to YouTube, and for us that
 // trip goes through a residential proxy, so four clients cost tens of seconds
 // on every paste. Two is enough to stay reliable: android_vr survives the
 // datacenter block, tv supplies the combined video+audio streams. The rest are
@@ -44,14 +44,14 @@ const YT_FALLBACK_CLIENTS =
 const YTDLP_PROXY = process.env.YTDLP_PROXY;
 // Only sites proven to refuse this server's address belong here. Everything
 // else goes direct and, if it turns out to be blocked, is retried through the
-// proxy automatically by the fallback in fetchInfo — so being absent from
+// proxy automatically by the fallback in fetchInfo, so being absent from
 // this list costs a slow first attempt, never a broken site.
 //
 // Instagram and Threads refuse datacenter addresses outright: the same reel
 // that extracts fine from a home connection fails in about four seconds from
 // the server. TikTok and Facebook work direct and stay off.
 //
-// Dailymotion was listed here historically and was failing *because* of it —
+// Dailymotion was listed here historically and was failing *because* of it, 
 // it extracts fine direct but returns errors through the proxy, which points
 // at the exit node's location rather than the extractor. Direct-first with
 // the automatic fallback covers both cases.
@@ -152,14 +152,14 @@ export function looksLikeProxyAuthFailure(stderr: string): boolean {
 }
 
 // True when a download for this URL would actually go through the (metered)
-// proxy — used to decide whether it counts against the daily proxy budget.
+// proxy, used to decide whether it counts against the daily proxy budget.
 export function usesProxy(rawUrl: string): boolean {
   return proxyArgs(rawUrl).length > 0;
 }
 
 /**
  * Which sites are routed through the proxy, for the health endpoint. Reports
- * only whether a proxy is set and the hostnames it applies to — never the
+ * only whether a proxy is set and the hostnames it applies to, never the
  * proxy URL, which carries credentials. Wrong routing here is invisible from
  * the outside otherwise, and is exactly what made Instagram fail.
  */
@@ -188,7 +188,7 @@ export function forceProxyArgs(): string[] {
  * residential proxy, so a newly blocking site fixes itself.
  *
  * Deliberately excludes "removed" and "unavailable", which mean the video is
- * really gone — retrying those would spend metered proxy traffic for nothing.
+ * really gone, retrying those would spend metered proxy traffic for nothing.
  */
 export function looksLikeIpBlock(stderr: string): boolean {
   const s = stderr || "";
@@ -245,7 +245,7 @@ export function isBlockedByPlatform(stderr: string): boolean {
 
 // Categories used to turn a raw extractor failure into something safe to show.
 // Downloads report progress over SSE, so whatever lands here reaches the
-// visitor's browser — raw stderr must never be forwarded, because yt-dlp
+// visitor's browser, raw stderr must never be forwarded, because yt-dlp
 // embeds the full proxy URL (credentials included) in connection errors and
 // temp-directory paths in write errors.
 export type FailureCategory =
@@ -485,7 +485,7 @@ export function userFacingError(err: unknown): {
   if (err instanceof PlatformBlockedError || isBlockedByPlatform(msg)) {
     return {
       error:
-        "This site is blocking our server right now. It usually clears up soon — try again in a bit, or try a link from another site.",
+        "This site is blocking our server right now. It usually clears up soon, try again in a bit, or try a link from another site.",
       status: 503,
       code: "UPSTREAM_BLOCKED",
     };
@@ -539,7 +539,7 @@ export function userFacingError(err: unknown): {
     )
   ) {
     return {
-      error: "No video found at that link — it may be a photo, a story, or a text-only post.",
+      error: "No video found at that link, it may be a photo, a story, or a text-only post.",
       status: 422,
       code: "NO_FORMATS",
     };
@@ -564,7 +564,7 @@ export function userFacingError(err: unknown): {
  *
  * Without this, every unrecognised failure looks identical from outside the
  * server and the only way to tell them apart is to read the logs on the box.
- * Contains no stderr, no paths and no credentials — just which yt-dlp error
+ * Contains no stderr, no paths and no credentials, just which yt-dlp error
  * shapes were present, so a failure can be diagnosed remotely.
  */
 export function failureFingerprint(err: unknown): string {

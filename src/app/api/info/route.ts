@@ -42,7 +42,7 @@ const VIDEO_TIERS = [2160, 1440, 1080, 720, 480, 360, 240, 144];
 
 // Fixed MP3 choices, mirroring what people expect from a converter. The
 // source is re-encoded to the chosen rate, so a high number can't add detail
-// that was never in the original — it only sets the output bitrate.
+// that was never in the original, it only sets the output bitrate.
 const AUDIO_OPTIONS: AudioOption[] = [
   { id: "mp3-320", label: "320kbps", audioFormat: "mp3", bitrate: 320 },
   { id: "mp3-256", label: "256kbps", audioFormat: "mp3", bitrate: 256 },

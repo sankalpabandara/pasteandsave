@@ -13,7 +13,7 @@ import fs from "node:fs";
 //
 // The path form is handled because the admin panel has been telling operators
 // to use one. Without it, a path was base64-decoded into rubbish, the parse
-// failed, and the panel reported "not configured" — pointing at the setup
+// failed, and the panel reported "not configured", pointing at the setup
 // rather than at the instruction that caused it.
 
 type ServiceAccount = { client_email: string; private_key: string };
@@ -56,7 +56,7 @@ function loadServiceAccount(): ServiceAccount | null {
       };
     }
     lastLoadError =
-      "That file parsed but has no client_email/private_key — it may be an OAuth client secret rather than a service account key.";
+      "That file parsed but has no client_email or private_key. It may be an OAuth client secret rather than a service account key.";
   } catch {
     lastLoadError =
       "The value is not valid JSON, a readable file path, or base64-encoded JSON.";

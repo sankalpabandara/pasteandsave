@@ -21,13 +21,13 @@ function loadGtag(gaId: string) {
   };
   w.dataLayer = w.dataLayer || [];
   // This has to push the `arguments` object itself, exactly as Google's
-  // snippet does — not a rest parameter.
+  // snippet does, not a rest parameter.
   //
   // A rest parameter produces a real Array, and gtag.js does not read arrays
   // as commands: it silently ignored every js/config/event we queued, so the
   // library loaded, the dataLayer filled up, and not one hit was ever sent.
   // Nothing about it looked broken from the outside, which is why it went
-  // unnoticed — the only visible symptom was an empty report.
+  // unnoticed, the only visible symptom was an empty report.
   function gtag() {
     // eslint-disable-next-line prefer-rest-params
     w.dataLayer!.push(arguments);

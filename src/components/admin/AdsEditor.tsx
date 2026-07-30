@@ -6,18 +6,18 @@ import { AD_SLOTS, type AdSlotKey } from "@/lib/ads";
 // Where each slot actually appears, so the numbers can be matched to the page
 // without going and looking.
 const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
-  homeTop: { label: "Home — above the fold", where: "Homepage, under the paste box" },
-  homeMid: { label: "Home — mid page", where: "Homepage, between sections" },
-  homeBottom: { label: "Home — footer area", where: "Homepage, above the footer" },
-  toolTop: { label: "Tool page — top", where: "All 16 platform pages, under the paste box" },
-  toolMid: { label: "Tool page — mid", where: "All 16 platform pages, between sections" },
-  toolBottom: { label: "Tool page — bottom", where: "All 16 platform pages, above the footer" },
-  extensionTop: { label: "Extension page — top", where: "The /extension page, under the hero" },
-  extensionBottom: { label: "Extension page — bottom", where: "The /extension page, above the footer" },
+  homeTop: { label: "Home: above the fold", where: "Homepage, under the paste box" },
+  homeMid: { label: "Home: mid page", where: "Homepage, between sections" },
+  homeBottom: { label: "Home: footer area", where: "Homepage, above the footer" },
+  toolTop: { label: "Tool page: top", where: "All 16 platform pages, under the paste box" },
+  toolMid: { label: "Tool page: mid", where: "All 16 platform pages, between sections" },
+  toolBottom: { label: "Tool page: bottom", where: "All 16 platform pages, above the footer" },
+  extensionTop: { label: "Extension page: top", where: "The /extension page, under the hero" },
+  extensionBottom: { label: "Extension page: bottom", where: "The /extension page, above the footer" },
 };
 
 // The slots A-ADS can actually carry a unit in. Everything else is capped out
-// by their three-per-page limit or sits in a popup, which they do not serve —
+// by their three-per-page limit or sits in a popup, which they do not serve, 
 // so a unit id in one of those earns nothing and risks the "partly or fully
 // hidden" mark spreading to the ids that do work.
 const AADS_ORDER: AdSlotKey[] = [
@@ -72,7 +72,7 @@ export default function AdsEditor() {
       setGaId(data.gaId ?? gaId);
       setMessage({
         ok: true,
-        text: "Saved. Takes effect on the next page load — no deploy needed.",
+        text: "Saved. Takes effect on the next page load, no deploy needed.",
       });
     } catch {
       setMessage({ ok: false, text: "Couldn't reach the server." });
@@ -93,7 +93,7 @@ export default function AdsEditor() {
           </h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             {active} of {AADS_ORDER.length} A-ADS slots filled. Paste the numeric
-            unit id from a-ads.com — the digits only, not the whole embed code.
+            unit id from a-ads.com. The digits only, not the whole embed code.
             <br />
             A-ADS serves at most three units on a page and does not serve
             popups, so only these eight can carry one.
@@ -217,7 +217,7 @@ export default function AdsEditor() {
           <li>Sign in at a-ads.com and open Ad units.</li>
           <li>
             Create a unit for each size in the table above. The size only has to
-            be close — the banner scales to the space it is given.
+            be close, the banner scales to the space it is given.
           </li>
           <li>
             Open the unit. Its address ends in a number, for example

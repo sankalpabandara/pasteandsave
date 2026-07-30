@@ -1,6 +1,6 @@
 // Runs as part of the initial HTML parse (before hydration) to avoid a
 // light/dark flash. A tiny inline script like this belongs directly in the
-// body, not behind next/script — that API is for loading external resources.
+// body, not behind next/script, that API is for loading external resources.
 const THEME_INIT = `
 (function () {
   try {

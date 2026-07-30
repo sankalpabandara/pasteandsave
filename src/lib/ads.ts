@@ -3,7 +3,7 @@
 // To go live:
 //   1. Create ad units at https://a-ads.com (each gives a numeric unit id).
 //   2. Paste each unit id into the matching slot below.
-//   3. That's it — empty ids render nothing in production, so the site works
+//   3. That's it, empty ids render nothing in production, so the site works
 //      fully before you add codes.
 //
 // A-ADS is a cookieless, privacy-friendly banner network (no personal data,
@@ -18,7 +18,7 @@ export const SHOW_AD_PLACEHOLDERS = process.env.NODE_ENV !== "production";
 export type AdPlacement = {
   /** A-ADS numeric unit id. Empty string = slot is inactive. */
   unitId: string;
-  /** Reserved height in px — prevents layout shift while the ad loads. */
+  /** Reserved height in px, prevents layout shift while the ad loads. */
   height: number;
   /** Max width in px (banner shape). Full width up to this on smaller screens. */
   maxWidth: number;

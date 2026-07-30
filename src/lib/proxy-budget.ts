@@ -31,7 +31,7 @@ async function read(): Promise<Usage> {
     const u = JSON.parse(await fsp.readFile(FILE, "utf8")) as Usage;
     if (u && u.day === today()) return u;
   } catch {
-    // no file yet, or a new day — start fresh
+    // no file yet, or a new day, start fresh
   }
   return { day: today(), downloads: 0, bytes: 0 };
 }

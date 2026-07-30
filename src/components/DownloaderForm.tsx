@@ -92,7 +92,7 @@ function statusLabel(job: JobState): string {
 }
 
 // A lookup can be slow (the source site is fetched live), but it must never
-// hang forever — without a ceiling a stalled request leaves the spinner
+// hang forever, without a ceiling a stalled request leaves the spinner
 // running with no way out.
 const LOOKUP_TIMEOUT_MS = 120_000;
 
@@ -144,7 +144,7 @@ function postJson(path: string, body: unknown): Promise<Response> {
 // Anything that stops the request reaching a real answer, said plainly.
 function networkErrorMessage(err: unknown): string {
   if (err instanceof DOMException && err.name === "AbortError") {
-    return "That link took too long to read. The site may be busy right now — please try again.";
+    return "That link took too long to read. The site may be busy right now, please try again.";
   }
   return "Couldn't reach the server. Check your connection and try again.";
 }
@@ -252,8 +252,8 @@ export default function DownloaderForm({
           return;
         }
         setResult(data);
-        // Open on the tab that actually has something in it — photo posts and
-        // music links have no video ladder — or on Audio when the visitor
+        // Open on the tab that actually has something in it, photo posts and
+        // music links have no video ladder, or on Audio when the visitor
         // arrived from the extension's MP3 shortcut.
         const preferAudio =
           mp3PrefRef.current || (data.video?.length ?? 0) === 0;
@@ -349,7 +349,7 @@ export default function DownloaderForm({
       const text = await navigator.clipboard.readText();
       if (text) setUrl(text);
     } catch {
-      // clipboard permission denied — ignore, user can paste manually
+      // clipboard permission denied, ignore, user can paste manually
     }
   }
 
