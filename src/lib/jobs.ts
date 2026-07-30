@@ -57,19 +57,28 @@ const TMP_PREFIX = "pasteandsave-";
 //
 // Only folders older than the job TTL are touched. Anything younger could
 // belong to a download running right now.
+//
+// Directories only, and that is not a detail. The deploy script keeps its
+// flock at /tmp/pasteandsave-deploy.lock, which shares this prefix and is a
+// file. Deleting it would not stop the deploy holding the lock, but the next
+// one would create a new file, take the lock on a different inode, and run at
+// the same time as the first, which is the exact thing that lock prevents.
+// mkdtemp only ever makes directories, so requiring one separates our folders
+// from anything else that happens to be named alike.
 function sweepOrphanedTmpDirs() {
   const root = os.tmpdir();
-  let names: string[];
+  let entries: fs.Dirent[];
   try {
-    names = fs.readdirSync(root);
+    entries = fs.readdirSync(root, { withFileTypes: true });
   } catch {
     return;
   }
   const cutoff = Date.now() - JOB_TTL_MS;
   let removed = 0;
-  for (const name of names) {
-    if (!name.startsWith(TMP_PREFIX)) continue;
-    const dir = path.join(root, name);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (!entry.name.startsWith(TMP_PREFIX)) continue;
+    const dir = path.join(root, entry.name);
     try {
       if (fs.statSync(dir).mtimeMs > cutoff) continue;
       fs.rmSync(dir, { recursive: true, force: true });

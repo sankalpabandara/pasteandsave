@@ -20,9 +20,10 @@ const JOB_TTL_MS = 15 * 60 * 1000;
 function sweep(root) {
   const cutoff = Date.now() - JOB_TTL_MS;
   let removed = 0;
-  for (const name of fs.readdirSync(root)) {
-    if (!name.startsWith(TMP_PREFIX)) continue;
-    const dir = path.join(root, name);
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (!entry.name.startsWith(TMP_PREFIX)) continue;
+    const dir = path.join(root, entry.name);
     try {
       if (fs.statSync(dir).mtimeMs > cutoff) continue;
       fs.rmSync(dir, { recursive: true, force: true });
@@ -62,4 +63,18 @@ test("other programs' folders are never touched", () => {
   assert.equal(sweep(root), 0);
   assert.equal(fs.existsSync(other), true);
   assert.equal(fs.existsSync(npm), true);
+});
+
+test("the deploy lock is never removed", () => {
+  // /tmp/pasteandsave-deploy.lock shares the prefix and is the flock that
+  // stops two deploys overlapping. Deleting it lets the next deploy take the
+  // lock on a fresh inode and run alongside one already in progress.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "sweeptest-"));
+  const lock = path.join(root, TMP_PREFIX + "deploy.lock");
+  fs.writeFileSync(lock, "");
+  const t = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  fs.utimesSync(lock, t, t);
+
+  assert.equal(sweep(root), 0);
+  assert.equal(fs.existsSync(lock), true, "a file must never be swept, only directories");
 });
