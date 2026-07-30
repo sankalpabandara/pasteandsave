@@ -52,11 +52,26 @@ export async function proxyBudgetOk(): Promise<boolean> {
 }
 
 /** Add one proxied download's estimated size to today's running total. */
-export async function recordProxyUsage(mode: "audio" | "video"): Promise<void> {
-  const u = await read();
-  u.downloads += 1;
-  u.bytes += EST_BYTES[mode] ?? EST_BYTES.video;
-  await write(u);
+// Every update runs to completion before the next one starts.
+//
+// Read-modify-write on a shared file is lossy the moment two downloads
+// overlap: both read the same total, both add their own size, and whichever
+// writes last erases the other. Downloads run concurrently here by design, so
+// the day's total drifted below the truth and the cap let more through than
+// it was set to allow. Chaining the writes is enough, because this process is
+// the only writer.
+let writeQueue: Promise<void> = Promise.resolve();
+
+export function recordProxyUsage(mode: "audio" | "video"): Promise<void> {
+  writeQueue = writeQueue
+    .catch(() => {})
+    .then(async () => {
+      const u = await read();
+      u.downloads += 1;
+      u.bytes += EST_BYTES[mode] ?? EST_BYTES.video;
+      await write(u);
+    });
+  return writeQueue;
 }
 
 /** For the admin panel: how much proxied data has been used today. */

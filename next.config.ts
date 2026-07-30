@@ -8,6 +8,10 @@ const isProd = process.env.NODE_ENV === "production";
 // Bump on each release so a deploy can be verified from the response headers.
 const APP_VERSION = "2026.07.30";
 
+// The Content-Security-Policy is not here. It carries a per-request nonce, so
+// it is built in middleware.ts, where a fresh value can be generated for each
+// response; anything set in this file is fixed at build time.
+//
 // Extra hosts an ad network needs before its code can run. The policy here is
 // strict on purpose, which means a freshly pasted embed is blocked until its
 // domains are listed — and a blocked ad looks identical to a network that is
@@ -35,26 +39,6 @@ const securityHeaders = [
         {
           key: "Strict-Transport-Security",
           value: "max-age=31536000; includeSubDomains",
-        },
-        {
-          key: "Content-Security-Policy",
-          value: [
-            "default-src 'self'",
-            // Inline scripts (theme, JSON-LD) and Google Analytics.
-            "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com" + adHosts,
-            "style-src 'self' 'unsafe-inline'",
-            // Thumbnails come from many external CDNs.
-            "img-src 'self' data: https:",
-            "font-src 'self' data:",
-            "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com" + adHosts,
-            // A-ADS banner ads are embedded as iframes (served from
-            // acceptable.a-ads.com; aads.com is their newer domain).
-            "frame-src 'self' https://*.a-ads.com https://a-ads.com https://*.aads.com https://aads.com" + adHosts,
-            "object-src 'none'",
-            "base-uri 'self'",
-            "form-action 'self'",
-            "frame-ancestors 'none'",
-          ].join("; "),
         },
       ]
     : []),
