@@ -150,3 +150,104 @@ test("the same clip linked twice in a card is still one answer", () => {
   );
   assert.equal(resolveFromCard(video, HOST), "https://www.tiktok.com/@me/video/555");
 });
+
+
+// --- feeds that carry no link to the clip at all ---------------------------
+//
+// TikTok's For You feed was the real failure. Confirmed on the live page: no
+// /video/ anchor anywhere in the clip's ancestry, page address /foryou,
+// canonical /foryou?lang=en-GB. Every route came back empty, so the page
+// address went to the server and was refused. The id was there all along,
+// just not as a link.
+
+function tiktokPermalink(video, hostname, docQueryAll) {
+  if (!/(^|\.)tiktok\.com$/i.test(hostname)) return null;
+  let id = null;
+  let node = video;
+  for (let d = 0; node && d < 8 && !id; d++) {
+    const raw = node.getAttribute?.("id") || "";
+    const m = /^xgwrapper-\d+-(\d{6,})$/.exec(raw);
+    if (m) id = m[1];
+    node = node.parentElement;
+  }
+  if (!id) return null;
+  let card = video;
+  for (let d = 0; card && d < 10; d++) {
+    if (card.getAttribute?.("data-e2e") === "recommend-list-item-container") break;
+    card = card.parentElement;
+  }
+  const scope = card || { querySelectorAll: docQueryAll };
+  let handle = null;
+  for (const a of scope.querySelectorAll("a[href]")) {
+    const href = a.getAttribute("href") || "";
+    const m = /^\/(@[\w.\-]+)\/?$/.exec(href);
+    if (m) { handle = m[1]; break; }
+  }
+  if (!handle) return null;
+  return `https://www.tiktok.com/${handle}/video/${id}`;
+}
+
+function feedCard(id, handle) {
+  const video = new El("video");
+  const wrapper = new El("div", { id: `xgwrapper-0-${id}` }).append(video);
+  const card = new El("article", { "data-e2e": "recommend-list-item-container" }).append(
+    wrapper,
+    new El("a", { href: `/@${handle}` }),
+    new El("a", { href: "/tag/fyp" }),
+  );
+  return { video, card };
+}
+
+test("a feed clip with no permalink anywhere is still identified", () => {
+  const { video } = feedCard("7664974377280212244", "_vinzyon_");
+  assert.equal(
+    tiktokPermalink(video, "www.tiktok.com", () => []),
+    "https://www.tiktok.com/@_vinzyon_/video/7664974377280212244",
+  );
+});
+
+test("each clip gets its own author, not the neighbour's", () => {
+  // The failure this guards against: a feed handing back the handle of the
+  // clip above, so pressing download on one video fetches another's account.
+  const a = feedCard("111111111111111111", "first_user");
+  const b = feedCard("222222222222222222", "second_user");
+  new El("div").append(a.card, b.card);
+
+  assert.equal(
+    tiktokPermalink(a.video, "www.tiktok.com", () => []),
+    "https://www.tiktok.com/@first_user/video/111111111111111111",
+  );
+  assert.equal(
+    tiktokPermalink(b.video, "www.tiktok.com", () => []),
+    "https://www.tiktok.com/@second_user/video/222222222222222222",
+  );
+});
+
+test("hashtag and music links are not mistaken for a handle", () => {
+  const video = new El("video");
+  const wrapper = new El("div", { id: "xgwrapper-0-999999999999999999" }).append(video);
+  new El("article", { "data-e2e": "recommend-list-item-container" }).append(
+    wrapper,
+    new El("a", { href: "/tag/cute" }),
+    new El("a", { href: "/music/original-sound-7657155472763439894" }),
+    new El("a", { href: "/@realhandle" }),
+  );
+  assert.equal(
+    tiktokPermalink(video, "www.tiktok.com", () => []),
+    "https://www.tiktok.com/@realhandle/video/999999999999999999",
+  );
+});
+
+test("it does nothing on other sites", () => {
+  const { video } = feedCard("123456789012345678", "someone");
+  assert.equal(tiktokPermalink(video, "www.youtube.com", () => []), null);
+});
+
+test("no id means no guess", () => {
+  const video = new El("video");
+  new El("article", { "data-e2e": "recommend-list-item-container" }).append(
+    video,
+    new El("a", { href: "/@someone" }),
+  );
+  assert.equal(tiktokPermalink(video, "www.tiktok.com", () => []), null);
+});

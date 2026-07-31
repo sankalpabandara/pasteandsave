@@ -248,7 +248,12 @@
       }
     }
 
-    // 4. The nearest content link anywhere on the page, measured by how much
+    // 4. A permalink assembled from the page's own identifiers, for feeds
+    //    that carry no link to the clip at all.
+    const built = tiktokPermalink(video);
+    if (built) return built;
+
+    // 5. The nearest content link anywhere on the page, measured by how much
     //    of the document sits between it and this video.
     //
     //    A last resort for feeds that keep the permalink outside the card the
@@ -257,7 +262,7 @@
     const nearest = nearestContentLink(video);
     if (nearest) return nearest;
 
-    // 5. A page that is itself a media file is worth passing through.
+    // 6. A page that is itself a media file is worth passing through.
     const src = video.currentSrc || video.src || "";
     if (/^https?:/i.test(src) && /\.(mp4|webm|m4v|mov|mp3|m4a)(\?|$)/i.test(src)) {
       return src;
@@ -268,6 +273,56 @@
     // site, for a problem that is only about which address was picked. The
     // caller says something the visitor can act on instead.
     return null;
+  }
+
+  /**
+   * Builds a permalink for feeds that have none in the markup.
+   *
+   * TikTok's For You feed carries no /video/ anchor anywhere near the clip:
+   * the page address is /foryou, the canonical is /foryou?lang=en-GB, and
+   * climbing the whole ancestry finds nothing. Verified on the live page.
+   * Every route through resolveTarget therefore came back empty and the page
+   * address was sent, which is what produced "that link isn't from a site we
+   * can download from" while the clip itself was perfectly downloadable.
+   *
+   * The id is there, just not as a link. TikTok names the player wrapper
+   * xgwrapper-<index>-<videoId>, and the author's handle is the one /@name
+   * anchor inside the card. Together they make the address the site expects:
+   * confirmed by building one on the live feed and looking it up successfully.
+   */
+  function tiktokPermalink(video) {
+    if (!/(^|\.)tiktok\.com$/i.test(location.hostname)) return null;
+
+    let id = null;
+    let node = video;
+    for (let d = 0; node && d < 8 && !id; d++) {
+      const raw = node.getAttribute?.("id") || "";
+      const m = /^xgwrapper-\d+-(\d{6,})$/.exec(raw);
+      if (m) id = m[1];
+      node = node.parentElement;
+    }
+    if (!id) return null;
+
+    // The handle from this clip's own card, so a feed cannot hand back the
+    // author of the clip above or below.
+    let card = video;
+    for (let d = 0; card && d < 10; d++) {
+      if (card.getAttribute?.("data-e2e") === "recommend-list-item-container") break;
+      card = card.parentElement;
+    }
+    const scope = card || document;
+    let handle = null;
+    for (const a of scope.querySelectorAll("a[href]")) {
+      const href = a.getAttribute("href") || "";
+      const m = /^\/(@[\w.\-]+)\/?$/.exec(href);
+      if (m) {
+        handle = m[1];
+        break;
+      }
+    }
+    if (!handle) return null;
+
+    return `https://www.tiktok.com/${handle}/video/${id}`;
   }
 
   /**
