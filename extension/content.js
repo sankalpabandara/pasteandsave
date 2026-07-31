@@ -200,14 +200,17 @@
     // 1. A permalink inside this video's own card, which is how a feed
     //    identifies each item.
     //
-    //    The climb stops as soon as an ancestor holds more than one video,
-    //    because that ancestor is the feed rather than this item. Without
-    //    that guard the search reaches the whole page and happily returns a
-    //    neighbour's link, so pressing download on the fifth clip would fetch
-    //    the second one.
+    //    The climb stops when a level holds links to more than one distinct
+    //    piece of content, because that level is the feed rather than this
+    //    item. It used to stop when a level held more than one <video>, and
+    //    that is a different thing: a feed preloads its neighbours into the
+    //    same card, so the climb broke before it ever reached the anchor and
+    //    fell all the way through to the page address. On a profile or a For
+    //    You feed that address has no video id in it, the site refuses it,
+    //    and the extension reported that TikTok was not supported.
     let node = video;
-    for (let depth = 0; node && depth < 8; depth++) {
-      if (depth > 0 && (node.querySelectorAll?.("video")?.length ?? 0) > 1) break;
+    for (let depth = 0; node && depth < 10; depth++) {
+      const found = [];
       const anchors = node.querySelectorAll?.("a[href]") ?? [];
       for (const a of anchors) {
         const href = a.getAttribute("href") || "";
@@ -220,8 +223,13 @@
         }
         if (!/^https?:$/.test(abs.protocol)) continue;
         if (abs.hostname !== location.hostname) continue;
-        if (looksLikeContentLink(abs)) return abs.href;
+        if (looksLikeContentLink(abs) && !found.includes(abs.href)) found.push(abs.href);
       }
+      // Exactly one is this item's own link. More than one means the climb
+      // has reached a container holding several items, and anything it
+      // returned from here would be a coin toss between neighbours.
+      if (found.length === 1) return found[0];
+      if (found.length > 1) break;
       node = node.parentElement;
     }
 
@@ -240,13 +248,75 @@
       }
     }
 
-    // 4. A page that is itself a media file is worth passing through; a blob
-    //    or a CDN fragment is not, so the page URL is the last resort.
+    // 4. The nearest content link anywhere on the page, measured by how much
+    //    of the document sits between it and this video.
+    //
+    //    A last resort for feeds that keep the permalink outside the card the
+    //    video sits in. Proximity is a guess, but a guess at the right video
+    //    beats the certainty of sending an address the site cannot use.
+    const nearest = nearestContentLink(video);
+    if (nearest) return nearest;
+
+    // 5. A page that is itself a media file is worth passing through.
     const src = video.currentSrc || video.src || "";
     if (/^https?:/i.test(src) && /\.(mp4|webm|m4v|mov|mp3|m4a)(\?|$)/i.test(src)) {
       return src;
     }
-    return location.href;
+
+    // Nothing usable. Returning the page address here is what produced
+    // "that link isn't from a site we can download from": a message about the
+    // site, for a problem that is only about which address was picked. The
+    // caller says something the visitor can act on instead.
+    return null;
+  }
+
+  /**
+   * The content link whose position in the document is closest to this video.
+   *
+   * Document order is a reasonable stand-in for visual grouping in a feed:
+   * the anchor belonging to a clip is almost always adjacent to it in the
+   * markup, even when it sits outside the element the video is nested in.
+   */
+  function nearestContentLink(video) {
+    const all = [...document.querySelectorAll("a[href]")];
+    if (all.length === 0) return null;
+    let best = null;
+    let bestDistance = Infinity;
+    for (const a of all) {
+      const href = a.getAttribute("href") || "";
+      if (!href || href.startsWith("#")) continue;
+      let abs;
+      try {
+        abs = new URL(href, location.href);
+      } catch {
+        continue;
+      }
+      if (!/^https?:$/.test(abs.protocol)) continue;
+      if (abs.hostname !== location.hostname) continue;
+      if (!looksLikeContentLink(abs)) continue;
+
+      // How far apart the two sit, counted in shared ancestry: the deeper
+      // their common ancestor, the more closely they belong together.
+      const distance = separation(video, a);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = abs.href;
+      }
+    }
+    return best;
+  }
+
+  /** Depth of the lowest ancestor the two nodes share, as a distance. */
+  function separation(a, b) {
+    const chain = [];
+    for (let n = a; n; n = n.parentElement) chain.push(n);
+    let steps = 0;
+    for (let n = b; n; n = n.parentElement) {
+      const idx = chain.indexOf(n);
+      if (idx !== -1) return idx + steps;
+      steps++;
+    }
+    return Infinity;
   }
 
   function closePanel() {
@@ -284,6 +354,20 @@
     positionPanel(chip);
 
     const target = resolveTarget(video);
+
+    // Nothing on this page identifies which clip this is. Sending the page
+    // address anyway is what produced "that link isn't from a site we can
+    // download from", which reads as though the site is unsupported when the
+    // truth is only that this particular view does not name the video.
+    if (!target) {
+      title.textContent = "Open the video first";
+      const p = document.createElement("p");
+      p.className = "msg";
+      p.textContent =
+        "This page doesn't say which clip this is. Tap the video to open it on its own page, then press Download now.";
+      body.append(p);
+      return;
+    }
 
     const ask = () => {
       api.runtime.sendMessage({ type: "getFormats", url: target }, (res) => {
