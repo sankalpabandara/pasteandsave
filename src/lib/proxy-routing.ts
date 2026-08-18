@@ -12,6 +12,53 @@
 // of correct routing, and the day the block lifts this notices on its own
 // instead of waiting for someone to edit an environment variable.
 
+// Which sites refuse this server's address.
+//
+// Only sites proven to refuse it belong here. Everything else goes direct and,
+// if it turns out to be blocked, is retried through the proxy automatically by
+// the fallback in fetchInfo, so being absent from this list costs a slow first
+// attempt, never a broken site.
+//
+// Instagram and Threads refuse datacenter addresses outright: the same reel
+// that extracts fine from a home connection fails in about four seconds from
+// the server. TikTok and Facebook work direct and stay off.
+//
+// Dailymotion was listed here historically and was failing *because* of it:
+// it extracts fine direct but returns errors through the proxy, which points
+// at the exit node's location rather than the extractor. Direct-first with
+// the automatic fallback covers both cases.
+export const PROXY_HOSTS = (
+  process.env.YTDLP_PROXY_HOSTS ||
+  "youtube.com,youtu.be,youtube-nocookie.com,instagram.com,threads.net,bilibili.com"
+)
+  .toLowerCase()
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/**
+ * Whether this site is one that refuses our datacenter address, independent of
+ * whether a proxy is configured to do anything about it.
+ *
+ * These are two different questions and the code used to answer only one. The
+ * proxy-argument builder returns nothing both when a site does not need the
+ * proxy and when there is no proxy to give it, and those cases want opposite
+ * handling: the first should go direct, the second should stop and say so.
+ * Conflating them is what made a YouTube link on a proxy-less server spend two
+ * full extractor timeouts rediscovering something already known.
+ */
+export function hostNeedsProxy(rawUrl: string): boolean {
+  if (PROXY_HOSTS.includes("all") || PROXY_HOSTS.includes("*")) return true;
+  let host = "";
+  try {
+    host = new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  // Suffix alone is not enough: "notyoutube.com" ends with "youtube.com".
+  return PROXY_HOSTS.some((h) => host === h || host.endsWith("." + h));
+}
+
 type Verdict = { direct: boolean; at: number };
 
 // How long a verdict stands before it is worth testing again. Long enough that

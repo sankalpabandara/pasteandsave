@@ -191,7 +191,7 @@ export default async function AdminDashboard() {
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
-            Top sites downloaded
+            Top sites looked up
           </h2>
           {stats.topSites.length === 0 ? (
             <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
@@ -213,6 +213,49 @@ export default async function AdminDashboard() {
             <span>Video: {stats.downloadsByMode.video.toLocaleString()}</span>
             <span>Audio (MP3): {stats.downloadsByMode.audio.toLocaleString()}</span>
           </div>
+        </section>
+
+        {/*
+          Downloads, not lookups, and the share of them that could cost metered
+          proxy data. This is the panel to read before deciding whether a
+          platform is worth paying to support.
+        */}
+        <section className="glass glass-hairline rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
+            Downloads by platform
+          </h2>
+          {stats.downloadSites.length === 0 ? (
+            <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+              No downloads recorded yet. Platform is recorded from the lookup that
+              preceded the download, so older events are unlabelled.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {stats.downloadSites.map((s) => {
+                const share = stats.totalDownloads
+                  ? Math.round((s.count / stats.totalDownloads) * 100)
+                  : 0;
+                return (
+                  <li key={s.site} className="flex items-center justify-between text-sm">
+                    <span className="text-neutral-700 dark:text-neutral-300">
+                      {s.site}
+                      {s.proxied > 0 ? (
+                        <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                          {s.proxied.toLocaleString()} metered
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="font-medium text-neutral-900 dark:text-white">
+                      {s.count.toLocaleString()}
+                      <span className="ml-1.5 text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                        {share}%
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
 
         <section className="glass glass-hairline rounded-2xl p-5">

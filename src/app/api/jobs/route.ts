@@ -4,6 +4,7 @@ import { isSafeUrl, isValidFormatId, usesProxy } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
+import { peekExtractorKey } from "@/lib/info-cache";
 import { proxyBudgetOk } from "@/lib/proxy-budget";
 
 export const runtime = "nodejs";
@@ -78,7 +79,14 @@ export async function POST(request: NextRequest) {
             hasAudio: body.hasAudio === true,
           })
         : startJob({ mode: "audio", url, title, audioFormat, bitrate });
-    void logEvent({ type: "download", mode });
+    // The lookup a moment ago already named the platform, so reuse its answer
+    // rather than guessing from the hostname; a miss just leaves it unlabelled.
+    void logEvent({
+      type: "download",
+      mode,
+      site: peekExtractorKey(url) ?? undefined,
+      proxied,
+    });
     return Response.json({ jobId: id });
   } catch (err) {
     if (err instanceof BusyError) {

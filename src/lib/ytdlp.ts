@@ -2,7 +2,12 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 import { putInfo } from "./info-cache";
-import { shouldTryDirect, recordDirectResult } from "./proxy-routing";
+import {
+  shouldTryDirect,
+  recordDirectResult,
+  hostNeedsProxy,
+  PROXY_HOSTS,
+} from "./proxy-routing";
 
 // BIN_DIR is overridable so a production deploy can point at an absolute path
 // regardless of the working directory (e.g. Next.js standalone output).
@@ -54,27 +59,6 @@ const YT_FALLBACK_CLIENTS =
 // the 1,200+ others that work fine direct. Set YTDLP_PROXY_HOSTS="all" to
 // route every site through the proxy instead.
 const YTDLP_PROXY = process.env.YTDLP_PROXY;
-// Only sites proven to refuse this server's address belong here. Everything
-// else goes direct and, if it turns out to be blocked, is retried through the
-// proxy automatically by the fallback in fetchInfo, so being absent from
-// this list costs a slow first attempt, never a broken site.
-//
-// Instagram and Threads refuse datacenter addresses outright: the same reel
-// that extracts fine from a home connection fails in about four seconds from
-// the server. TikTok and Facebook work direct and stay off.
-//
-// Dailymotion was listed here historically and was failing *because* of it, 
-// it extracts fine direct but returns errors through the proxy, which points
-// at the exit node's location rather than the extractor. Direct-first with
-// the automatic fallback covers both cases.
-const YTDLP_PROXY_HOSTS = (
-  process.env.YTDLP_PROXY_HOSTS ||
-  "youtube.com,youtu.be,youtube-nocookie.com,instagram.com,threads.net,bilibili.com"
-)
-  .toLowerCase()
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
 // Escape hatch: any extra flags the operator wants (a PO-token provider,
 // a cookies file they manage themselves, geo options, etc.), space separated.
 const YTDLP_EXTRA_ARGS = (process.env.YTDLP_EXTRA_ARGS || "").trim();
@@ -138,17 +122,9 @@ function stickyProxyUrl(raw: string): string {
 
 export function proxyArgs(rawUrl: string): string[] {
   if (!YTDLP_PROXY) return [];
-  if (YTDLP_PROXY_HOSTS.includes("all") || YTDLP_PROXY_HOSTS.includes("*")) {
-    return ["--proxy", stickyProxyUrl(YTDLP_PROXY)];
-  }
-  let host = "";
-  try {
-    host = new URL(rawUrl).hostname.toLowerCase();
-  } catch {
-    return [];
-  }
-  const match = YTDLP_PROXY_HOSTS.some((h) => host === h || host.endsWith("." + h));
-  return match ? ["--proxy", stickyProxyUrl(YTDLP_PROXY)] : [];
+  // One definition of which hosts match, shared with the no-proxy path, so the
+  // two can never drift apart and disagree about the same URL.
+  return hostNeedsProxy(rawUrl) ? ["--proxy", stickyProxyUrl(YTDLP_PROXY)] : [];
 }
 
 /** The proxy without a session suffix, for the fallback below. */
@@ -176,7 +152,7 @@ export function usesProxy(rawUrl: string): boolean {
  * the outside otherwise, and is exactly what made Instagram fail.
  */
 export function proxyStatus(): { configured: boolean; hosts: string[] } {
-  return { configured: Boolean(YTDLP_PROXY), hosts: [...YTDLP_PROXY_HOSTS] };
+  return { configured: Boolean(YTDLP_PROXY), hosts: [...PROXY_HOSTS] };
 }
 
 /** True when a proxy exists to fall back to. */
@@ -457,6 +433,15 @@ function runYtDlp(args: string[], timeoutMs = 30_000): Promise<string> {
 export class PlatformBlockedError extends Error {}
 
 /**
+ * This site refuses our address and there is no other address configured.
+ *
+ * Distinct from PlatformBlockedError, which means we tried and were turned
+ * away. This one means there is nothing left to try, so it is worth failing
+ * immediately rather than spending a concurrency slot proving it again.
+ */
+export class SiteUnavailableHereError extends Error {}
+
+/**
  * Parses extractor output, failing with something recognisable.
  *
  * A bare JSON.parse throws "Unexpected token ..." naming the offending
@@ -494,6 +479,20 @@ export function userFacingError(err: unknown): {
   }
   const msg = err instanceof Error ? err.message : String(err);
 
+  // Deliberately not the "try again in a bit" wording used for a temporary
+  // block. Retrying will not help: there is no address here this site accepts,
+  // and telling someone to wait for a state that will not change is worse than
+  // telling them plainly to use a different link.
+  if (err instanceof SiteUnavailableHereError) {
+    const site = msg.replace(/^www\./, "");
+    return {
+      error: site
+        ? `We can't fetch from ${site} here. Everything else on the site still works.`
+        : "We can't fetch from that site here. Everything else still works.",
+      status: 503,
+      code: "SITE_UNAVAILABLE_HERE",
+    };
+  }
   if (err instanceof PlatformBlockedError || isBlockedByPlatform(msg)) {
     return {
       error:
@@ -629,8 +628,18 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     // only way to know today's answer is to ask. A success here means the
     // request cost no metered data at all.
     const host = safeHostname(url);
-    const wouldProxy = proxyArgs(url).length > 0;
-    if (wouldProxy && shouldTryDirect(host)) {
+    const needsProxy = hostNeedsProxy(url);
+    const haveProxy = proxyAvailable();
+
+    // Nothing left to try. This site is on the list of ones that refuse a
+    // datacenter address, it has recently proved it still does, and there is
+    // no other address configured. Answering now costs nothing and keeps the
+    // lookup slot free for the many sites that do work.
+    if (needsProxy && !haveProxy && !shouldTryDirect(host)) {
+      throw new SiteUnavailableHereError(host);
+    }
+
+    if (needsProxy && shouldTryDirect(host)) {
       try {
         // A shorter leash than the proxied attempt gets. A refusal normally
         // comes back in seconds, so this only bites when the site is silent
@@ -653,7 +662,16 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           directErr instanceof Error && isBlockedByPlatform(directErr.message);
         if (blocked) {
           recordDirectResult(host, false);
-          console.log(`[info] ${host} refused this address, using the proxy`);
+          console.log(
+            haveProxy
+              ? `[info] ${host} refused this address, using the proxy`
+              : `[info] ${host} refused this address and no proxy is configured`,
+          );
+        }
+        // With no proxy there is no second address to try, and the path below
+        // would run the identical command again. Stop here instead.
+        if (!haveProxy) {
+          throw blocked ? new SiteUnavailableHereError(host) : directErr;
         }
       }
     }

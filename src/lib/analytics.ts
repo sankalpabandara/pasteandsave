@@ -27,6 +27,13 @@ export type AnalyticsEvent = {
   path?: string;
   /** External referrer hostname, only set when the visit came from another site. */
   ref?: string;
+  /**
+   * Whether this download was eligible for the metered proxy, which is the
+   * same test the daily budget gate uses. Not a promise that the proxy was
+   * dialled: proxy-routing may still have found the site reachable direct.
+   * Recorded so spend can be attributed to a platform after the fact.
+   */
+  proxied?: boolean;
 };
 
 let dirReady = false;
@@ -98,6 +105,12 @@ export type Stats = {
   lookupSuccessRate: number;
   downloadsByMode: { video: number; audio: number };
   topSites: { site: string; count: number }[];
+  /**
+   * Downloads per platform, and how many of them cost metered proxy data.
+   * Lookups alone cannot answer this: a visitor who pastes a link and leaves
+   * costs nothing, and only the ones who press save do.
+   */
+  downloadSites: { site: string; count: number; proxied: number }[];
   topPages: { path: string; count: number }[];
   byDay: { day: string; pageviews: number; downloads: number }[];
   recent: AnalyticsEvent[];
@@ -151,6 +164,7 @@ export async function getStats(): Promise<Stats> {
   let lookupOk = 0;
   const modeCounts = { video: 0, audio: 0 };
   const siteCounts = new Map<string, number>();
+  const dlSites = new Map<string, { site: string; count: number; proxied: number }>();
   const pageCounts = new Map<string, number>();
   const dayMap = new Map<string, { pageviews: number; downloads: number }>();
 
@@ -171,13 +185,23 @@ export async function getStats(): Promise<Stats> {
     } else if (ev.type === "lookup") {
       totalLookups++;
       if (ev.ok) lookupOk++;
-      if (ev.site) siteCounts.set(ev.site, (siteCounts.get(ev.site) ?? 0) + 1);
+      if (ev.site) {
+        const key = ev.site.toLowerCase();
+        siteCounts.set(key, (siteCounts.get(key) ?? 0) + 1);
+      }
     } else if (ev.type === "download") {
       totalDownloads++;
       if (ev.t >= dayAgo) downloads24h++;
       if (ev.mode === "audio") modeCounts.audio++;
       else modeCounts.video++;
       if (bucket) bucket.downloads++;
+      if (ev.site) {
+        const key = ev.site.toLowerCase();
+        const row = dlSites.get(key) ?? { site: ev.site, count: 0, proxied: 0 };
+        row.count++;
+        if (ev.proxied) row.proxied++;
+        dlSites.set(key, row);
+      }
     }
   }
 
@@ -185,6 +209,8 @@ export async function getStats(): Promise<Stats> {
     .map(([site, count]) => ({ site, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
+
+  const downloadSites = [...dlSites.values()].sort((a, b) => b.count - a.count);
 
   const topPages = [...pageCounts.entries()]
     .map(([path, count]) => ({ path, count }))
@@ -205,6 +231,7 @@ export async function getStats(): Promise<Stats> {
     lookupSuccessRate: totalLookups ? lookupOk / totalLookups : 0,
     downloadsByMode: modeCounts,
     topSites,
+    downloadSites,
     topPages,
     byDay,
     recent,

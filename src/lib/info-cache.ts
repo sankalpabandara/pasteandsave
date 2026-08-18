@@ -64,3 +64,21 @@ export function infoCacheSize(): number {
   evictExpired(Date.now());
   return cache.size;
 }
+
+/**
+ * The extractor name from a cached lookup, without parsing the whole entry.
+ *
+ * The download side wants to record which platform it was for, and the lookup
+ * seconds earlier already asked yt-dlp that question. Reading it back off the
+ * cached JSON keeps the two sides labelled identically, so the dashboard does
+ * not show "Youtube" from one event and "youtube.com" from the other as if
+ * they were different sites. A regex rather than JSON.parse because the entry
+ * is ~160 KB and this is only wanted for one short string.
+ */
+export function peekExtractorKey(url: string): string | null {
+  const raw = takeInfo(url);
+  if (!raw) return null;
+  const m =
+    /"extractor_key"\s*:\s*"([^"]+)"/.exec(raw) ?? /"extractor"\s*:\s*"([^"]+)"/.exec(raw);
+  return m ? m[1]! : null;
+}
