@@ -8,6 +8,23 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/bin"
 mkdir -p "$BIN"
 
+# Replaces a binary that may be running right now.
+#
+# Writing straight to the destination fails with "Text file busy" (ETXTBSY):
+# Linux refuses to open a file for writing while it is being executed, and this
+# server spawns yt-dlp on almost every request. That is not a permissions
+# problem and no amount of sudo fixes it. Renaming over the top does work,
+# because rename only replaces the directory entry: any process mid-execution
+# keeps the old inode until it exits, and the next spawn picks up the new file.
+#
+# This is also why `yt-dlp -U` quietly did nothing on this box for two months.
+install_binary() {
+  src="$1"
+  dest="$2"
+  chmod +x "$src"
+  mv -f "$src" "$dest"
+}
+
 os="$(uname -s)"
 arch="$(uname -m)"
 
@@ -17,8 +34,8 @@ if [ "$os" = "Darwin" ]; then
 else
   yturl="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
 fi
-curl -L -o "$BIN/yt-dlp" "$yturl"
-chmod +x "$BIN/yt-dlp"
+curl -L -o "$BIN/yt-dlp.new" "$yturl"
+install_binary "$BIN/yt-dlp.new" "$BIN/yt-dlp"
 
 # Deno solves the JavaScript challenges YouTube presents. yt-dlp has deprecated
 # running YouTube extraction without a runtime, and the fallback player clients
@@ -34,8 +51,8 @@ esac
 if [ -n "$denotarget" ]; then
   dtmp="$(mktemp -d)"
   if curl -fL -o "$dtmp/deno.zip"       "https://github.com/denoland/deno/releases/latest/download/deno-$denotarget.zip"; then
-    unzip -o -q "$dtmp/deno.zip" -d "$BIN"
-    chmod +x "$BIN/deno"
+    unzip -o -q "$dtmp/deno.zip" -d "$dtmp"
+    install_binary "$dtmp/deno" "$BIN/deno"
     "$BIN/deno" --version | head -1
   else
     echo "  deno download failed; YouTube fallback clients may not work" >&2
@@ -52,9 +69,8 @@ if [ "$os" = "Linux" ] && { [ "$arch" = "x86_64" ] || [ "$arch" = "amd64" ]; }; 
   curl -L -o "$tmp/ffmpeg.tar.xz" "$url"
   tar -xf "$tmp/ffmpeg.tar.xz" -C "$tmp"
   d="$(find "$tmp" -maxdepth 1 -type d -name 'ffmpeg-*' | head -1)"
-  cp "$d/bin/ffmpeg" "$BIN/ffmpeg"
-  cp "$d/bin/ffprobe" "$BIN/ffprobe"
-  chmod +x "$BIN/ffmpeg" "$BIN/ffprobe"
+  install_binary "$d/bin/ffmpeg" "$BIN/ffmpeg"
+  install_binary "$d/bin/ffprobe" "$BIN/ffprobe"
 else
   echo "Automatic ffmpeg download only covers Linux x86_64."
   echo "Install ffmpeg with your package manager (e.g. 'brew install ffmpeg' or"

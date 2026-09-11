@@ -121,7 +121,27 @@ cp -f "$BIN" "$BACKUP" 2>/dev/null || true
 
 echo "$(stamp) updating yt-dlp (current: $before)"
 update_log="$(mktemp)"
-"$BIN" -U >"$update_log" 2>&1 || true
+
+# Not `yt-dlp -U`. That replaces the binary in place, and on a live server the
+# binary is being executed constantly, so the write fails with "Text file busy"
+# (ETXTBSY). Linux will not open a file for writing while it is running. The
+# update therefore did nothing, every night, for two months, and because -U's
+# output was discarded it looked like success.
+#
+# Downloading beside it and renaming over the top does work: rename only swaps
+# the directory entry, so a yt-dlp mid-run keeps the old inode until it exits
+# and the next spawn gets the new one. No downtime, no need to stop the app.
+case "$(uname -s)" in
+  Darwin) asset="yt-dlp_macos" ;;
+  *)      asset="yt-dlp" ;;
+esac
+if curl -fL --max-time 300 -o "$BIN.new"      "https://github.com/yt-dlp/yt-dlp/releases/latest/download/$asset" >"$update_log" 2>&1; then
+  chmod +x "$BIN.new"
+  mv -f "$BIN.new" "$BIN"
+else
+  echo "download failed" >>"$update_log"
+  rm -f "$BIN.new"
+fi
 after="$("$BIN" --version 2>/dev/null || echo unknown)"
 
 # What the newest release actually is. Without this, "before equals after" was
