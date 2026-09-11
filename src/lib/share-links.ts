@@ -53,8 +53,45 @@ function sameFamily(rawUrl: string): boolean {
  * Returns null when it does not resolve to something better, and the caller
  * then uses the original address, so a failure here is never worse than today.
  */
+/**
+ * Asks the relay where a share link goes, when one is configured.
+ *
+ * Facebook shows a datacenter address a login wall rather than the video, so
+ * resolving from the server usually learns nothing. The relay sits on a home
+ * connection and gets a real answer, and it is already reachable on the loopback
+ * through the reverse tunnel. Falls through to resolving locally when there is
+ * no relay, so a box without one behaves as it did before.
+ */
+async function askRelay(rawUrl: string): Promise<string | null> {
+  const proxy = process.env.YTDLP_PROXY;
+  if (!proxy) return null;
+  let base: string;
+  try {
+    const u = new URL(proxy);
+    base = `${u.protocol}//${u.host}`;
+  } catch {
+    return null;
+  }
+  try {
+    const res = await fetch(`${base}/resolve?url=${encodeURIComponent(rawUrl)}`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS + 4000),
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { url?: string | null };
+    const out = typeof body.url === "string" ? body.url : null;
+    return out && sameFamily(out) && !isShareLink(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveShareLink(rawUrl: string): Promise<string | null> {
   if (!isShareLink(rawUrl)) return null;
+
+  // The relay first: it is the only party here with an address Facebook will
+  // answer honestly.
+  const viaRelay = await askRelay(rawUrl);
+  if (viaRelay) return viaRelay;
 
   let current = rawUrl;
   for (let hop = 0; hop < MAX_HOPS; hop++) {
@@ -65,11 +102,22 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
         redirect: "manual",
         signal: AbortSignal.timeout(TIMEOUT_MS),
         headers: {
-          // Facebook serves the canonical address to a browser and a login
-          // wall to anything that looks automated.
+          // A Chrome User-Agent on its own gets a 400 from Facebook: it notices
+          // a browser that does not send what browsers send. Measured on the
+          // same link, same address, seconds apart: UA alone 400, UA with the
+          // rest of the browser headers 302 to the canonical address. Sending
+          // no headers at all also works, but the full set is what a real share
+          // click looks like and is least likely to be singled out later.
           "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.9",
+          "Upgrade-Insecure-Requests": "1",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
         },
       });
     } catch {

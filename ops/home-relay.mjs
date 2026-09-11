@@ -95,7 +95,96 @@ function logLine(msg) {
   process.stdout.write(`${new Date().toISOString().slice(11, 19)} ${msg}\n`);
 }
 
+// Where does this share link actually go?
+//
+// Facebook's Share button hands out fb.watch and /share/ addresses that no
+// extractor matches, and the canonical address is only discoverable by following
+// the redirect. The server cannot usefully do that itself: Facebook shows a
+// datacenter address a login wall rather than the video, which is the same
+// reason this relay exists at all. Asking from here means the question is asked
+// from a home connection, which gets a real answer.
+//
+// Restricted to Facebook, the same way the proxy path is restricted away from
+// the LAN. An unrestricted "fetch this and tell me where it went" endpoint is a
+// request forgery tool.
+const FB_HOST = /^(?:[a-z0-9-]+[.])*(?:facebook[.]com|fb[.]watch|fb[.]com)$/i;
+
+async function resolveShare(target) {
+  let current = target;
+  for (let hop = 0; hop < 5; hop++) {
+    let res;
+    try {
+      res = await fetch(current, {
+        method: "GET",
+        redirect: "manual",
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          // A Chrome User-Agent on its own gets a 400 from Facebook: it notices
+          // a browser that does not send what browsers send. Measured on the
+          // same link, same address, seconds apart: UA alone 400, UA with the
+          // rest of the browser headers 302 to the canonical address. Sending
+          // no headers at all also works, but the full set is what a real share
+          // click looks like and is least likely to be singled out later.
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Upgrade-Insecure-Requests": "1",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "none",
+          "Sec-Fetch-User": "?1",
+        },
+      });
+    } catch {
+      return null;
+    }
+    await res.arrayBuffer().catch(() => undefined);
+    const loc = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && loc) {
+      let next;
+      try {
+        next = new URL(loc, current).toString();
+      } catch {
+        return null;
+      }
+      if (!FB_HOST.test(new URL(next).hostname)) return null;
+      current = next;
+      continue;
+    }
+    break;
+  }
+  return current === target ? null : current;
+}
+
 const server = http.createServer((req, res) => {
+  const reqUrl = new URL(req.url || "/", "http://127.0.0.1");
+  if (req.method === "GET" && reqUrl.pathname === "/resolve") {
+    const target = reqUrl.searchParams.get("url") || "";
+    let host = "";
+    try {
+      host = new URL(target).hostname;
+    } catch {
+      host = "";
+    }
+    if (!host || !FB_HOST.test(host)) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "only facebook share links are resolved here" }));
+      return;
+    }
+    resolveShare(target)
+      .then((final) => {
+        logLine(`resolve ${target} -> ${final || "(no redirect)"}`);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ url: final }));
+      })
+      .catch(() => {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ url: null }));
+      });
+    return;
+  }
   // Plain HTTP through a proxy is rare here; almost everything is CONNECT.
   res.writeHead(405, { "Content-Type": "text/plain" });
   res.end("This relay handles CONNECT only.\n");
