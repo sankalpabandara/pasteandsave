@@ -527,6 +527,12 @@ export type YtDlpFormat = {
   filesize_approx?: number | null;
   format_note?: string;
   tbr?: number;
+  /**
+   * How the stream is delivered: "https" and "http" can be fetched from the CDN
+   * directly, while "m3u8_native", "dash" and friends are manifests of further
+   * requests. The difference decides whether a download can bypass the proxy.
+   */
+  protocol?: string;
 };
 
 export type YtDlpInfo = {

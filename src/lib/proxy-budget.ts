@@ -24,9 +24,19 @@ export const PROXY_DAILY_MB = (() => {
 // the file had to come through the proxy as well; when it goes direct, which
 // is the normal case, none of those bytes are metered and none are charged.
 const EST_BYTES = {
-  metadata: 2 * 1024 * 1024,
-  audio: 6 * 1024 * 1024,
-  video: 50 * 1024 * 1024,
+  // Measured against the relay's own byte counters rather than guessed. The
+  // previous figures were written when the proxy carried metadata only, and
+  // once media started going through it they undercounted by roughly ten
+  // times: the ledger read 500 MB for a day in which 5.2 GB had actually
+  // crossed the connection, so a cap meant to protect a home line let ten
+  // times the intended amount through before it stopped anything.
+  //
+  // Erring high on purpose. Being wrong in this direction pauses downloads a
+  // little early; being wrong the other way spends somebody's data allowance
+  // without telling them.
+  metadata: 1 * 1024 * 1024,
+  audio: 12 * 1024 * 1024,
+  video: 120 * 1024 * 1024,
 };
 
 export type ProxySpend = keyof typeof EST_BYTES;

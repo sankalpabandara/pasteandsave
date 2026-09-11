@@ -103,7 +103,32 @@ function tierFor(quality: number): number | null {
 
 // Within one bucket, keep the stream that plays everywhere: MP4/H.264 first,
 // then whichever carries the most bitrate.
+/**
+ * A stream the server can fetch from the CDN itself, rather than a manifest.
+ *
+ * This decides far more than it looks. A manifest format is a playlist of
+ * further requests, so the CDN probe cannot check it and the job falls back to
+ * pulling the media through the proxy. With the proxy being a relay on a home
+ * connection, that is the difference between a download costing about 160 KB of
+ * somebody's home data and costing the entire video.
+ *
+ * It was being chosen by accident: ranking was extension then bitrate, and
+ * YouTube's HLS variants are mp4 with a healthy bitrate, so they won every tier
+ * and 122 of the last 124 downloads went through the house.
+ */
+function isDirectlyFetchable(f: YtDlpFormat): boolean {
+  const p = (f.protocol || "").toLowerCase();
+  return p === "" || p === "https" || p === "http";
+}
+
 function isBetterVideo(a: YtDlpFormat, b: YtDlpFormat): boolean {
+  // Before quality, because at the same height these are the same picture and
+  // only one of them can be fetched without a detour. Sites that only publish
+  // HLS are unaffected: this orders what is there, it does not discard
+  // anything.
+  const aDirect = isDirectlyFetchable(a) ? 1 : 0;
+  const bDirect = isDirectlyFetchable(b) ? 1 : 0;
+  if (aDirect !== bDirect) return aDirect > bDirect;
   const aMp4 = a.ext === "mp4" ? 1 : 0;
   const bMp4 = b.ext === "mp4" ? 1 : 0;
   if (aMp4 !== bMp4) return aMp4 > bMp4;
