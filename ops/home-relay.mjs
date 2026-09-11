@@ -22,25 +22,63 @@
 // The existing routing, budget and CDN-probe logic all key off YTDLP_PROXY, so
 // nothing in the app changes. This is a drop-in replacement for the paid proxy.
 
+import dns from "node:dns";
 import net from "node:net";
 import http from "node:http";
 
 const PORT = Number(process.env.RELAY_PORT || 8081);
 const HOST = "127.0.0.1";
 
-// Only what a video lookup actually needs. An open CONNECT proxy will be found
-// and abused the moment it is reachable, and while the tunnel keeps this off the
-// internet, a whitelist means a mistake in the tunnel is not also a mistake here.
-const ALLOWED = [
-  /(^|\.)youtube\.com$/i,
-  /(^|\.)youtu\.be$/i,
-  /(^|\.)youtube-nocookie\.com$/i,
-  /(^|\.)googlevideo\.com$/i,
-  /(^|\.)ytimg\.com$/i,
-  /(^|\.)google\.com$/i,
-];
+// What this refuses, and why it is not a list of sites.
+//
+// It began as a YouTube-only host allowlist, and that broke a real visitor's
+// Instagram download within the hour: Instagram is in the server's proxy host
+// list, the last-resort retry sends any failing site through the proxy as well,
+// and both arrived here to be answered with 403. A list of permitted sites must
+// be kept in step with the server's routing or it silently breaks downloads, and
+// it was never the thing worth protecting against anyway.
+//
+// The real risk is different. This proxy runs inside a home network, so whatever
+// can reach it could otherwise reach the router, a NAS, a printer, anything on
+// the LAN. That is what is refused: destinations resolving to a private,
+// loopback, link-local or carrier-NAT address, whatever hostname was used to ask
+// for them. Public destinations are allowed, which is what makes this a working
+// substitute for the paid proxy rather than a narrower one.
+//
+// Ports are limited to plain web traffic, and the reverse tunnel binds the
+// server's loopback, so this is not reachable from the internet either.
+const ALLOWED_PORTS = new Set([80, 443]);
 
-const allowed = (host) => ALLOWED.some((re) => re.test(host));
+function isPrivateAddress(ip) {
+  const plain = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(plain);
+  if (v4) {
+    const a = Number(v4[1]);
+    const b = Number(v4[2]);
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a >= 224) return true;
+    return false;
+  }
+  const v6 = ip.toLowerCase();
+  if (v6 === "::1" || v6 === "::") return true;
+  if (/^f[cd]/.test(v6)) return true;
+  if (/^fe[89ab]/.test(v6)) return true;
+  if (/^ff/.test(v6)) return true;
+  return false;
+}
+
+/** The first address a name resolves to, so the destination can be judged. */
+function resolveFirst(host) {
+  return new Promise((resolve) => {
+    dns.lookup(host, { all: false, verbatim: true }, (err, address) =>
+      resolve(err ? null : address),
+    );
+  });
+}
 
 let active = 0;
 let served = 0;
@@ -64,18 +102,34 @@ const server = http.createServer((req, res) => {
 });
 
 // HTTPS arrives as CONNECT host:port, then raw bytes are piped both ways.
-server.on("connect", (req, clientSocket, head) => {
+server.on("connect", async (req, clientSocket, head) => {
   const [rawHost, rawPort] = String(req.url || "").split(":");
   const host = (rawHost || "").toLowerCase();
   const port = Number(rawPort || 443);
 
-  if (!host || !allowed(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
+  const deny = (why) => {
     refused++;
-    logLine(`refused ${host}:${rawPort}`);
+    logLine(`refused ${host}:${rawPort} (${why})`);
     clientSocket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
     clientSocket.destroy();
+  };
+
+  if (!host || !ALLOWED_PORTS.has(port)) {
+    deny("port not allowed");
     return;
   }
+
+  const addr = await resolveFirst(host);
+  if (!addr) {
+    deny("does not resolve");
+    return;
+  }
+  if (isPrivateAddress(addr)) {
+    deny(`resolves to private address ${addr}`);
+    return;
+  }
+  // The client may have given up while we were resolving.
+  if (clientSocket.destroyed) return;
 
   const upstream = net.connect(port, host, () => {
     active++;
@@ -122,7 +176,7 @@ server.on("connect", (req, clientSocket, head) => {
 
 server.listen(PORT, HOST, () => {
   logLine(`relay listening on ${HOST}:${PORT}`);
-  logLine(`allowed: youtube.com, youtu.be, googlevideo.com and friends only`);
+  logLine(`public destinations on ports 80/443 only; private and LAN addresses refused`);
   logLine(`expose it with: ssh -N -R ${PORT}:127.0.0.1:${PORT} root@YOUR_SERVER`);
 });
 
