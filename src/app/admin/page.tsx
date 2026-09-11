@@ -5,6 +5,7 @@ import { getStats } from "@/lib/analytics";
 import { getGaSummary } from "@/lib/ga-data";
 import { serviceAccountError } from "@/lib/google-auth";
 import { proxyUsageToday } from "@/lib/proxy-budget";
+import { routingReport } from "@/lib/proxy-routing";
 import AdminBar from "./AdminBar";
 import AdsEditor from "@/components/admin/AdsEditor";
 
@@ -53,6 +54,10 @@ export default async function AdminDashboard() {
   const ga = await getGaSummary();
   const proxyOn = !!process.env.YTDLP_PROXY;
   const proxy = proxyOn ? await proxyUsageToday() : null;
+  // What the server has actually learned about reaching each site. This is the
+  // number to watch before cancelling the proxy: a site sitting at "direct"
+  // is costing nothing today, whatever the host list says.
+  const routing = Object.entries(routingReport()).sort((a, b) => a[0].localeCompare(b[0]));
 
   const maxDay = Math.max(
     1,
@@ -106,6 +111,52 @@ export default async function AdminDashboard() {
           sub="conversion rate"
         />
       </div>
+
+      <section className="glass glass-hairline mt-4 rounded-2xl p-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-sm font-semibold text-neutral-900 dark:text-white">
+            How each site is being reached
+          </h2>
+          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+            {proxyOn ? "proxy configured" : "no proxy configured"}
+          </span>
+        </div>
+        {routing.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
+            Nothing learned yet. These verdicts are held in memory, so they start
+            empty after a restart and fill in as links are looked up.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {routing.map(([host, v]) => (
+              <li key={host} className="flex items-center justify-between text-sm">
+                <span className="text-neutral-700 dark:text-neutral-300">{host}</span>
+                <span className="flex items-center gap-2">
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                      v.direct
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                        : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {v.direct ? "direct, free" : proxyOn ? "via paid proxy" : "unavailable"}
+                  </span>
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {v.ageMinutes < 60
+                      ? `${v.ageMinutes}m ago`
+                      : `${Math.round(v.ageMinutes / 60)}h ago`}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+          Checked again after 6 hours when a site answers directly, 12 hours after
+          a refusal. If every row here says direct, the proxy is being paid for
+          and not used.
+        </p>
+      </section>
 
       {proxy && (
         <section className="glass glass-hairline mt-4 rounded-2xl p-5">
