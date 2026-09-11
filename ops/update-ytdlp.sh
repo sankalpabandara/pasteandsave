@@ -32,12 +32,49 @@ if [ -f "$APP_DIR/.env.local" ]; then
   [ -n "${proxy_value:-}" ] && PROXY_ARG=(--proxy "$proxy_value")
 fi
 
+# Proves the binary can still DOWNLOAD, not merely describe, a known-good video.
+#
+# The old version asked for --dump-single-json and grepped for "formats". That
+# only ever tested extraction, and extraction never broke: through the whole
+# outage in which no visitor could download anything, this test passed every
+# night. Whatever this checks is what we are actually protecting, so it has to
+# be the thing that failed.
+#
+# It also hardcoded player_client=android_vr,tv. That client is dead, and
+# pinning the test to it meant the test disagreed with the app about what it was
+# even testing. The app decides the client now; only an explicit override in
+# .env.local is honoured here.
+CLIENT_ARG=()
+if [ -f "$APP_DIR/.env.local" ]; then
+  client_value="$(grep -E '^YTDLP_YOUTUBE_CLIENTS=' "$APP_DIR/.env.local" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d '"'"'"'')"
+  [ -n "${client_value:-}" ] && CLIENT_ARG=(--extractor-args "youtube:player_client=$client_value")
+fi
+
+# Passed explicitly because yt-dlp only looks for a runtime on PATH, and ours
+# lives beside the binary.
+JSR_ARG=()
+[ -x "$APP_DIR/bin/deno" ] && JSR_ARG=(--js-runtimes "deno:$APP_DIR/bin/deno")
+
+# Tries without the proxy first. Routing every attempt through the proxy meant a
+# proxy that was out of credit failed the test, rolled back a perfectly good
+# binary, and did it again the next night: a dead proxy could pin the extractor
+# to an old version indefinitely.
+_download_attempt() {
+  local out
+  out="$(mktemp -d)"
+  if "$BIN" -f worstaudio --no-warnings --no-playlist       --socket-timeout 20 --extractor-retries 1       "${JSR_ARG[@]}" "${CLIENT_ARG[@]}" "$@"       -o "$out/t.%(ext)s" -- "$SELFTEST_URL" >/dev/null 2>&1      && [ -n "$(find "$out" -type f -size +8k 2>/dev/null | head -1)" ]; then
+    rm -rf "$out"
+    return 0
+  fi
+  rm -rf "$out"
+  return 1
+}
+
 selftest() {
-  "$BIN" --dump-single-json --no-warnings --no-playlist \
-    --socket-timeout 20 --extractor-retries 1 \
-    --extractor-args "youtube:player_client=android_vr,tv" \
-    "${PROXY_ARG[@]}" -- "$SELFTEST_URL" 2>/dev/null \
-    | head -c 2000 | grep -q '"formats"'
+  _download_attempt && return 0
+  # Only worth a second attempt when there is a different address to try.
+  [ ${#PROXY_ARG[@]} -gt 0 ] && _download_attempt "${PROXY_ARG[@]}" && return 0
+  return 1
 }
 
 # Dailymotion and a growing number of other sites refuse a plain TLS
@@ -49,14 +86,59 @@ impersonation_ok() {
   "$BIN" --list-impersonate-targets 2>/dev/null | grep -qiE 'chrome|firefox|safari|edge'
 }
 
+# A JS runtime is now required for YouTube: the player clients that still work
+# are given a JavaScript challenge to solve, and without one they fail. This
+# installs it if it is absent rather than waiting for someone to notice, because
+# the symptom is downloads failing while everything else looks healthy.
+#
+# A failure here is worth an alert on its own. If this cannot write to bin/ then
+# neither can yt-dlp -U, which is the likeliest reason the extractor fell two
+# months behind without complaint.
+ensure_js_runtime() {
+  [ -x "$APP_DIR/bin/deno" ] && return 0
+  case "$(uname -s)/$(uname -m)" in
+    Linux/x86_64|Linux/amd64)   t="x86_64-unknown-linux-gnu" ;;
+    Linux/aarch64|Linux/arm64)  t="aarch64-unknown-linux-gnu" ;;
+    Darwin/arm64)               t="aarch64-apple-darwin" ;;
+    Darwin/x86_64)              t="x86_64-apple-darwin" ;;
+    *) echo "$(stamp) no deno build for this platform, skipping"; return 0 ;;
+  esac
+  echo "$(stamp) no JS runtime found, installing deno"
+  d="$(mktemp -d)"
+  if curl -fsSL --max-time 180 -o "$d/deno.zip"        "https://github.com/denoland/deno/releases/latest/download/deno-$t.zip"      && unzip -o -q "$d/deno.zip" -d "$APP_DIR/bin"      && chmod +x "$APP_DIR/bin/deno"; then
+    echo "$(stamp) installed $("$APP_DIR/bin/deno" --version 2>/dev/null | head -1)"
+  else
+    alert "could not install a JS runtime"       "YouTube needs a JavaScript runtime and deno could not be installed into $APP_DIR/bin. Downloads will keep failing while lookups appear to work. If this is a permissions problem it also explains yt-dlp not updating."
+  fi
+  rm -rf "$d"
+}
+ensure_js_runtime
+
 [ -x "$BIN" ] || { alert "yt-dlp missing" "No executable at $BIN"; exit 1; }
 
 before="$("$BIN" --version 2>/dev/null || echo unknown)"
 cp -f "$BIN" "$BACKUP" 2>/dev/null || true
 
 echo "$(stamp) updating yt-dlp (current: $before)"
-"$BIN" -U >/dev/null 2>&1
+update_log="$(mktemp)"
+"$BIN" -U >"$update_log" 2>&1 || true
 after="$("$BIN" --version 2>/dev/null || echo unknown)"
+
+# What the newest release actually is. Without this, "before equals after" was
+# read as "already current", which is also what a silently failed update looks
+# like: no write permission on the binary, a build that cannot replace itself, a
+# refused network call. The binary sat two months behind for exactly this reason
+# while this script reported success every night, because -U's own output was
+# being discarded.
+latest="$(curl -fsSL --max-time 20 https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest 2>/dev/null   | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)"
+
+if [ -n "$latest" ] && [ "$after" != "$latest" ]; then
+  alert "yt-dlp is not updating"     "Installed $after, newest release is $latest, and the update reported no error. The usual cause is the cron user being unable to replace $BIN. Last lines of the update output:
+$(tail -n 8 "$update_log")"
+  rm -f "$update_log"
+  exit 1
+fi
+rm -f "$update_log"
 
 if [ "$before" = "$after" ]; then
   echo "$(stamp) already current ($after)"
