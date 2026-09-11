@@ -134,9 +134,29 @@ export function isYouTube(rawUrl: string): boolean {
 }
 
 // Network-resilience + operator flags shared by every yt-dlp invocation.
+// How many fragments to pull at once.
+//
+// YouTube serves its higher qualities as HLS, and yt-dlp fetches those fragments
+// one after another, which leaves most of the connection idle. Measured on the
+// server against the same 81 MB 1080p file, media direct from the CDN:
+//
+//   sequential   67.96 s
+//   4 at a time  22.46 s
+//   8 at a time  16.39 s
+//
+// Eight, then. Three jobs run at once at most, so this is at most 24 sockets,
+// and a fragment that fails is retried by yt-dlp as it already was. Set
+// YTDLP_CONCURRENT_FRAGMENTS=1 to go back to sequential if a host objects.
+const CONCURRENT_FRAGMENTS = (() => {
+  const n = Number(process.env.YTDLP_CONCURRENT_FRAGMENTS);
+  return Number.isInteger(n) && n >= 1 && n <= 32 ? n : 8;
+})();
+
 export function networkArgs(): string[] {
   const args: string[] = [
     ...jsRuntimeArgs(),
+    "--concurrent-fragments",
+    String(CONCURRENT_FRAGMENTS),
     "--extractor-retries",
     "3",
     "--retry-sleep",
