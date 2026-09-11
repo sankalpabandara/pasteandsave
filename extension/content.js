@@ -169,6 +169,12 @@
     if (host === "pin.it") return parts.length >= 1;
     // fb.watch/abc
     if (host === "fb.watch") return parts.length >= 1;
+    // facebook.com/share/v/abc and facebook.com/share/r/abc, which is what the
+    // Share button produces now. /share/v/ matched already, but only by
+    // accident through the /v/ in the permalink pattern; /share/r/, which is
+    // what a shared reel gives you, matched nothing at all. Both are named here
+    // rather than left to a coincidence.
+    if (host.endsWith("facebook.com") && parts[0] === "share") return parts.length >= 2;
     return false;
   }
 
