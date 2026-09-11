@@ -83,7 +83,12 @@ selftest() {
 # with an error that mentions nothing about the network, so it is checked here
 # rather than discovered later.
 impersonation_ok() {
-  "$BIN" --list-impersonate-targets 2>/dev/null | grep -qiE 'chrome|firefox|safari|edge'
+  # Not a grep for browser names. --list-impersonate-targets prints every client
+  # it knows about whether or not it can use it, so a build with no curl_cffi
+  # still prints "Chrome ... (unavailable)" and passed this check for months
+  # while impersonation did not work at all. A target only counts when its line
+  # does not say unavailable.
+  "$BIN" --list-impersonate-targets 2>/dev/null     | grep -iE 'chrome|firefox|safari|edge'     | grep -qvi 'unavailable'
 }
 
 # A JS runtime is now required for YouTube: the player clients that still work
@@ -131,9 +136,13 @@ update_log="$(mktemp)"
 # Downloading beside it and renaming over the top does work: rename only swaps
 # the directory entry, so a yt-dlp mid-run keeps the old inode until it exits
 # and the next spawn gets the new one. No downtime, no need to stop the app.
-case "$(uname -s)" in
-  Darwin) asset="yt-dlp_macos" ;;
-  *)      asset="yt-dlp" ;;
+# Must match scripts/setup-bin.sh: the plain "yt-dlp" asset ships without
+# curl_cffi, so updating to it would silently remove browser impersonation.
+case "$(uname -s)/$(uname -m)" in
+  Darwin/*)                  asset="yt-dlp_macos" ;;
+  Linux/x86_64|Linux/amd64)  asset="yt-dlp_linux" ;;
+  Linux/aarch64|Linux/arm64) asset="yt-dlp_linux_aarch64" ;;
+  *)                         asset="yt-dlp" ;;
 esac
 if curl -fL --max-time 300 -o "$BIN.new"      "https://github.com/yt-dlp/yt-dlp/releases/latest/download/$asset" >"$update_log" 2>&1; then
   chmod +x "$BIN.new"

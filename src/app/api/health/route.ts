@@ -106,8 +106,15 @@ function impersonationAvailable(timeoutMs = 8000): Promise<boolean> {
       });
       child.on("close", () => {
         clearTimeout(timer);
-        // An empty table means the binary has no impersonation support.
-        finish(/chrome|firefox|safari|edge/i.test(out));
+        // Not a search for browser names. --list-impersonate-targets prints
+        // every client yt-dlp knows about whether or not it can use it, so a
+        // build without curl_cffi still prints "Chrome ... (unavailable)" and
+        // this reported impersonation as working for months while none of it
+        // did. A target counts only when its own line does not say unavailable.
+        const usable = out
+          .split("\n")
+          .some((line) => /chrome|firefox|safari|edge/i.test(line) && !/unavailable/i.test(line));
+        finish(usable);
       });
     } catch {
       finish(false);

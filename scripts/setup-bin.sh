@@ -29,11 +29,18 @@ os="$(uname -s)"
 arch="$(uname -m)"
 
 echo "Downloading yt-dlp..."
-if [ "$os" = "Darwin" ]; then
-  yturl="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
-else
-  yturl="https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
-fi
+# Which asset matters more than it looks. The plain "yt-dlp" is a 2.9 MB Python
+# zipapp with no curl_cffi, so browser impersonation is unavailable and every
+# site that needs a real TLS handshake fails in a way that mentions nothing about
+# TLS. "yt-dlp_linux" is 38.6 MB because it bundles it. The server was running
+# the small one, reporting impersonation as working, and failing TikTok.
+case "$os/$arch" in
+  Darwin/*)                    yturl="yt-dlp_macos" ;;
+  Linux/x86_64|Linux/amd64)    yturl="yt-dlp_linux" ;;
+  Linux/aarch64|Linux/arm64)   yturl="yt-dlp_linux_aarch64" ;;
+  *)                           yturl="yt-dlp" ;;   # last resort, no impersonation
+esac
+yturl="https://github.com/yt-dlp/yt-dlp/releases/latest/download/$yturl"
 curl -L -o "$BIN/yt-dlp.new" "$yturl"
 install_binary "$BIN/yt-dlp.new" "$BIN/yt-dlp"
 
