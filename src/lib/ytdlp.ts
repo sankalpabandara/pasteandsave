@@ -594,6 +594,22 @@ export function userFacingError(err: unknown): {
       code: "EXTRACTOR_TIMEOUT",
     };
   }
+  // A platform that now requires an account, as opposed to one video being
+  // private. Vimeo answers "The web client only works when logged-in" for every
+  // video, which fell through to the generic "couldn't read that link" and read
+  // like a fault on our side. It is not: nothing here will make it work, and
+  // saying so is more useful than inviting a retry.
+  if (
+    /only works when logged.?in|requires? (?:a )?login|you must be logged in|log ?in to (?:view|watch|continue)/i.test(
+      msg,
+    )
+  ) {
+    return {
+      error: "This site now requires a sign-in, so it can't be downloaded here.",
+      status: 422,
+      code: "LOGIN_REQUIRED",
+    };
+  }
   if (/is private|private video|this (?:video|post|reel) is private/i.test(msg)) {
     return {
       error: "This one is private, so it can't be downloaded.",

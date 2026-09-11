@@ -69,3 +69,32 @@ test("a download with no platform is counted but not attributed", async () => {
   const sum = stats.downloadSites.reduce((n, s) => n + s.count, 0);
   assert.equal(sum, before, "but not attributed to any platform");
 });
+
+test("failed lookups are attributed to a site and a reason", async () => {
+  // The gap this closes: a whole platform could break and appear only as a
+  // slightly worse success rate, because failures carried no site at all.
+  process.chdir(scratch);
+  await logEvent({ type: "lookup", ok: false, host: "tiktok.com", code: "UNKNOWN" });
+  await logEvent({ type: "lookup", ok: false, host: "tiktok.com", code: "UNKNOWN" });
+  await logEvent({ type: "lookup", ok: false, host: "vimeo.com", code: "LOGIN_REQUIRED" });
+  await logEvent({ type: "lookup", ok: true, site: "Youtube" });
+  const stats = await getStats();
+  process.chdir(cwd);
+
+  const tt = stats.lookupFailures.find((f) => f.host === "tiktok.com");
+  const vm = stats.lookupFailures.find((f) => f.host === "vimeo.com");
+  assert.equal(tt.count, 2);
+  assert.equal(tt.topCode, "UNKNOWN");
+  assert.equal(vm.topCode, "LOGIN_REQUIRED", "the reason is kept, not just the count");
+  // Worst first, so the panel leads with whatever is costing the most visitors.
+  assert.equal(stats.lookupFailures[0].host, "tiktok.com");
+});
+
+test("a successful lookup is never counted as a failure", async () => {
+  process.chdir(scratch);
+  const before = (await getStats()).lookupFailures.reduce((n, f) => n + f.count, 0);
+  await logEvent({ type: "lookup", ok: true, site: "TikTok", host: "tiktok.com" });
+  const after = (await getStats()).lookupFailures.reduce((n, f) => n + f.count, 0);
+  process.chdir(cwd);
+  assert.equal(after, before, "ok:true carries a host too and must not be counted");
+});

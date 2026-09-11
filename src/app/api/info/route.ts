@@ -283,9 +283,20 @@ export async function POST(request: NextRequest) {
     if (video.length > 0 || images.length > 0) cacheSet(target, payload);
     return Response.json(payload);
   } catch (err) {
-    void logEvent({ type: "lookup", ok: false });
+    // Which site, and why. Recorded together because either alone is close to
+    // useless: a count of failures says something broke, and a code with no
+    // platform says something broke somewhere. Successes carry the extractor's
+    // own name; there is no extractor here to ask, so the hostname stands in.
+    let failHost = "";
+    try {
+      failHost = new URL(target).hostname.toLowerCase().replace(/^www[.]/, "");
+    } catch {
+      failHost = "";
+    }
+
     // Turned away at the queue rather than by the site itself.
     if (err instanceof BusyError) {
+      void logEvent({ type: "lookup", ok: false, host: failHost, code: "BUSY" });
       return Response.json(
         { error: "We're handling a lot of links right now. Try again in a moment." },
         { status: 503 },
@@ -293,9 +304,16 @@ export async function POST(request: NextRequest) {
     }
     const { error, status, code } = userFacingError(err);
     const fingerprint = failureFingerprint(err);
-    // Only log the unexpected ones; private/removed/photo posts are normal.
+    void logEvent({ type: "lookup", ok: false, host: failHost, code });
+    // Only the unexpected ones get a stack; private and removed videos are
+    // normal. A 4xx still gets one line, because "that link is not from a site
+    // we can download from" was how Facebook share links failed silently: a
+    // whole URL shape breaking looks exactly like ordinary visitor typos until
+    // someone counts them.
     if (status >= 500) {
       console.error(`yt-dlp info error code=${code} marks=${fingerprint}`, err);
+    } else {
+      console.warn(`lookup failed code=${code} host=${failHost} marks=${fingerprint}`);
     }
     // code and marks describe the shape of the failure, never its contents,
     // so a problem can be diagnosed without shell access to the server.

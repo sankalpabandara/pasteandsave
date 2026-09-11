@@ -267,6 +267,43 @@ export default async function AdminDashboard() {
         </section>
 
         {/*
+          What is failing, and where. Successes were always attributed and
+          failures never were, so a whole platform could break and show up only
+          as a slightly worse success rate.
+        */}
+        <section className="glass glass-hairline rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
+            Failing links by site
+          </h2>
+          {stats.lookupFailures.length === 0 ? (
+            <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+              Nothing recorded yet. Failures started carrying a site and a reason
+              from this release, so older ones are not counted here.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {stats.lookupFailures.map((f) => (
+                <li key={f.host} className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-700 dark:text-neutral-300">
+                    {f.host}
+                    <span className="ml-2 rounded bg-neutral-500/15 px-1.5 py-0.5 text-[11px] font-medium text-neutral-600 dark:text-neutral-300">
+                      {f.topCode}
+                    </span>
+                  </span>
+                  <span className="font-medium text-neutral-900 dark:text-white">
+                    {f.count.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+            UNSUPPORTED_SITE on a site you support usually means a URL shape
+            changed, not that visitors are pasting rubbish.
+          </p>
+        </section>
+
+        {/*
           Downloads, not lookups, and the share of them that could cost metered
           proxy data. This is the panel to read before deciding whether a
           platform is worth paying to support.

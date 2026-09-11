@@ -28,6 +28,18 @@ export type AnalyticsEvent = {
   /** External referrer hostname, only set when the visit came from another site. */
   ref?: string;
   /**
+   * The site a lookup was for, when it failed.
+   *
+   * Successes record the extractor's own name; failures had no extractor to ask,
+   * so this is the hostname. Kept in a separate field rather than folded into
+   * site, so the two are never mixed in one count. Without it a failure is just
+   * a tally with no platform attached, which is why TikTok could break for weeks
+   * while the dashboard showed only that "some lookups failed".
+   */
+  host?: string;
+  /** Which kind of failure, so the common ones can be told apart at a glance. */
+  code?: string;
+  /**
    * Whether this download was eligible for the metered proxy, which is the
    * same test the daily budget gate uses. Not a promise that the proxy was
    * dialled: proxy-routing may still have found the site reachable direct.
@@ -111,6 +123,8 @@ export type Stats = {
    * costs nothing, and only the ones who press save do.
    */
   downloadSites: { site: string; count: number; proxied: number }[];
+  /** Failed lookups grouped by site, worst first, with the commonest reason. */
+  lookupFailures: { host: string; count: number; topCode: string }[];
   topPages: { path: string; count: number }[];
   byDay: { day: string; pageviews: number; downloads: number }[];
   recent: AnalyticsEvent[];
@@ -165,6 +179,7 @@ export async function getStats(): Promise<Stats> {
   const modeCounts = { video: 0, audio: 0 };
   const siteCounts = new Map<string, number>();
   const dlSites = new Map<string, { site: string; count: number; proxied: number }>();
+  const failHosts = new Map<string, { host: string; count: number; codes: Map<string, number> }>();
   const pageCounts = new Map<string, number>();
   const dayMap = new Map<string, { pageviews: number; downloads: number }>();
 
@@ -185,6 +200,14 @@ export async function getStats(): Promise<Stats> {
     } else if (ev.type === "lookup") {
       totalLookups++;
       if (ev.ok) lookupOk++;
+      else if (ev.host) {
+        const key = ev.host.toLowerCase();
+        const row = failHosts.get(key) ?? { host: key, count: 0, codes: new Map() };
+        row.count++;
+        const c = ev.code || "UNKNOWN";
+        row.codes.set(c, (row.codes.get(c) ?? 0) + 1);
+        failHosts.set(key, row);
+      }
       if (ev.site) {
         const key = ev.site.toLowerCase();
         siteCounts.set(key, (siteCounts.get(key) ?? 0) + 1);
@@ -212,6 +235,15 @@ export async function getStats(): Promise<Stats> {
 
   const downloadSites = [...dlSites.values()].sort((a, b) => b.count - a.count);
 
+  const lookupFailures = [...failHosts.values()]
+    .map((r) => ({
+      host: r.host,
+      count: r.count,
+      topCode: [...r.codes.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "UNKNOWN",
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
   const topPages = [...pageCounts.entries()]
     .map(([path, count]) => ({ path, count }))
     .sort((a, b) => b.count - a.count)
@@ -232,6 +264,7 @@ export async function getStats(): Promise<Stats> {
     downloadsByMode: modeCounts,
     topSites,
     downloadSites,
+    lookupFailures,
     topPages,
     byDay,
     recent,
