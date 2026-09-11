@@ -14,6 +14,7 @@ import {
   classifyFailure,
   proxyAvailable,
   forceProxyArgs,
+  extractorFingerprint,
   worthProxyRetry,
   plainProxyArgs,
   looksLikeProxyAuthFailure,
@@ -255,7 +256,13 @@ export function startJob(opts: StartJobOptions): string {
   // address they are signed for, so extraction and the media fetch have to
   // agree. Extracting directly and then falling back to the proxy for the
   // media would present links from one address while connecting from another.
-  const jobProxy = shouldTryDirect(safeHost(opts.url)) ? [] : proxyArgs(opts.url);
+  // Same fingerprint the lookup used, or this asks a different question and gets
+  // a different answer: without it the verdict never matches, every download
+  // goes direct, and the links signed for the proxy's address are presented from
+  // ours.
+  const jobProxy = shouldTryDirect(safeHost(opts.url), extractorFingerprint())
+    ? []
+    : proxyArgs(opts.url);
   let triedProxyFallback = false;
   let triedPlainProxy = false;
 

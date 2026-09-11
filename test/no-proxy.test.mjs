@@ -105,3 +105,50 @@ test("a proxy URL with no credentials is left alone", () => {
   const bare = "http://gate.example.test:7000/";
   assert.equal(stickyProxyUrl(bare, VIDEO), bare);
 });
+
+// --- Verdicts are scoped to the extractor that learned them ----------------
+//
+// A refusal recorded while the extractor itself was broken - a dead player
+// client, no JS runtime - said nothing about whether the address was really
+// refused. But it was treated as though it did, so after the real fault was
+// repaired the site went on skipping the direct attempt and reaching for a proxy
+// that was itself dead. Twelve hours of being wrong about a question it had
+// stopped asking.
+
+import { shouldTryDirect, recordDirectResult, resetRouting } from "../src/lib/proxy-routing.ts";
+
+const OLD = "android_vr|nojsi";
+const NEW = "default|jsi";
+
+test("a refusal is remembered while the extractor is unchanged", () => {
+  resetRouting();
+  recordDirectResult("youtube.com", false, OLD);
+  assert.equal(shouldTryDirect("youtube.com", OLD), false, "no point re-asking");
+});
+
+test("changing the extractor retires what the old one learned", () => {
+  resetRouting();
+  recordDirectResult("youtube.com", false, OLD);
+  assert.equal(
+    shouldTryDirect("youtube.com", NEW),
+    true,
+    "a working client deserves its own attempt, not the broken one's verdict",
+  );
+});
+
+test("a success is retired the same way", () => {
+  // Symmetry matters: a client that could reach a site is no evidence that a
+  // different one can.
+  resetRouting();
+  recordDirectResult("youtube.com", true, OLD);
+  assert.equal(shouldTryDirect("youtube.com", NEW), true);
+});
+
+test("the lookup and the download must agree", () => {
+  // They call this separately with the same fingerprint. If they disagreed, the
+  // download would route differently from the lookup and present links signed
+  // for one address from another.
+  resetRouting();
+  recordDirectResult("youtube.com", false, NEW);
+  assert.equal(shouldTryDirect("youtube.com", NEW), false);
+});

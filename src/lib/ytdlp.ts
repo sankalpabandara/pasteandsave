@@ -257,6 +257,17 @@ export function worthProxyRetry(stderr: string): boolean {
   );
 }
 
+/**
+ * Identifies the extractor setup a routing verdict was learned under.
+ *
+ * Cheap on purpose: the player client and whether a JS runtime exists are the
+ * two things that decide whether extraction can work at all, and both are known
+ * without spawning anything.
+ */
+export function extractorFingerprint(): string {
+  return `${ytClients()}|${jsRuntimeAvailable() ? "jsi" : "nojsi"}`;
+}
+
 /** For the health endpoint: which clients this box will actually ask for. */
 export function ytClientsInUse(): { primary: string; fallback: string } {
   return { primary: ytClients(), fallback: ytFallbackClients() };
@@ -710,11 +721,12 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     // datacenter address, it has recently proved it still does, and there is
     // no other address configured. Answering now costs nothing and keeps the
     // lookup slot free for the many sites that do work.
-    if (needsProxy && !haveProxy && !shouldTryDirect(host)) {
+    const fp = extractorFingerprint();
+    if (needsProxy && !haveProxy && !shouldTryDirect(host, fp)) {
       throw new SiteUnavailableHereError(host);
     }
 
-    if (needsProxy && shouldTryDirect(host)) {
+    if (needsProxy && shouldTryDirect(host, fp)) {
       try {
         // A shorter leash than the proxied attempt gets. A refusal normally
         // comes back in seconds, so this only bites when the site is silent
@@ -724,7 +736,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
           [...base, ...siteArgs(url), "--", url],
           Math.min(timeout, 25_000),
         );
-        recordDirectResult(host, true);
+        recordDirectResult(host, true, fp);
         console.log(`[info] ${host} answered without the proxy`);
         putInfo(url, stdout);
         return parseInfoJson(stdout);
@@ -735,7 +747,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
         if (directErr instanceof UnsupportedSiteError) throw directErr;
         const blocked = directErr instanceof Error && isAddressRefused(directErr.message);
         if (blocked) {
-          recordDirectResult(host, false);
+          recordDirectResult(host, false, fp);
           console.log(
             haveProxy
               ? `[info] ${host} refused this address, using the proxy`

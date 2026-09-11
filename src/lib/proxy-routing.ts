@@ -59,7 +59,12 @@ export function hostNeedsProxy(rawUrl: string): boolean {
   return PROXY_HOSTS.some((h) => host === h || host.endsWith("." + h));
 }
 
-type Verdict = { direct: boolean; at: number };
+// The extractor configuration the verdict was learned under. A refusal recorded
+// with a dead player client and no JS runtime says nothing about whether the
+// same address is refused once those are fixed, and treating it as though it did
+// kept the site on a dead proxy after the real fault had been repaired. When the
+// configuration changes, what we learned under the old one is discarded.
+type Verdict = { direct: boolean; at: number; fp: string };
 
 // How long a verdict stands before it is worth testing again. Long enough that
 // a blocked site is not retried on every request, short enough to pick up a
@@ -82,9 +87,11 @@ function key(host: string): string {
  * Unknown means yes: the first request for a site pays one attempt to find
  * out, and every request after that is routed on evidence.
  */
-export function shouldTryDirect(host: string): boolean {
+export function shouldTryDirect(host: string, fp = ""): boolean {
   const v = verdicts.get(key(host));
   if (!v) return true;
+  // Learned under a different extractor; worth one attempt to find out again.
+  if (v.fp !== fp) return true;
   const age = Date.now() - v.at;
   const ttl = v.direct ? REMEMBER_MS : REMEMBER_BLOCKED_MS;
   if (age > ttl) return true;
@@ -92,8 +99,8 @@ export function shouldTryDirect(host: string): boolean {
 }
 
 /** Record what actually happened, so the next request routes on it. */
-export function recordDirectResult(host: string, worked: boolean): void {
-  verdicts.set(key(host), { direct: worked, at: Date.now() });
+export function recordDirectResult(host: string, worked: boolean, fp = ""): void {
+  verdicts.set(key(host), { direct: worked, at: Date.now(), fp });
 }
 
 /** For the health endpoint, so the routing in effect can be seen. */
