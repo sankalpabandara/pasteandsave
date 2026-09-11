@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
-import { YTDLP_PATH, FFMPEG_DIR, proxyStatus, jsRuntimeAvailable, ytClientsInUse } from "@/lib/ytdlp";
+import {
+  YTDLP_PATH,
+  FFMPEG_DIR,
+  proxyStatus,
+  jsRuntimeAvailable,
+  ytClientsInUse,
+  proxyReachable,
+} from "@/lib/ytdlp";
 import { jobLimiter, lookupLimiter } from "@/lib/concurrency";
 import { routingReport } from "@/lib/proxy-routing";
 
@@ -132,6 +139,12 @@ export async function GET() {
     binaryVersion(YTDLP_PATH),
   ]);
 
+  // Configured is not the same as answering. The relay lives on a home machine
+  // that can be asleep or off, and when it is, the sites that need it are
+  // unavailable while everything else is fine. That distinction is invisible
+  // from "proxy: configured: true" alone.
+  const relayUp = proxyStatus().configured ? await proxyReachable() : null;
+
   // A full extractor queue is normal under load; a permanently full one is
   // the shape of a wedged process, so it is reported rather than judged here.
   const lookupsQueued = lookupLimiter.queueLength;
@@ -151,7 +164,7 @@ export async function GET() {
       status: healthy ? "ok" : "degraded",
       checks: { ytdlp: ytdlpOk, ffmpeg: ffmpegOk, tmpWritable, impersonation },
       load: { lookupsQueued, jobsActive },
-      proxy: proxyStatus(),
+      proxy: { ...proxyStatus(), reachable: relayUp },
       // Which sites have proved they need the proxy and which answer without
       // it. Routing is learned rather than configured, so this is the only
       // place the decision in effect can be seen.

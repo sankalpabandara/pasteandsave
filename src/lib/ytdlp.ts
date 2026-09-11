@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
@@ -216,6 +217,54 @@ export function usesProxy(rawUrl: string): boolean {
 export function proxyStatus(): { configured: boolean; hosts: string[] } {
   return { configured: Boolean(YTDLP_PROXY), hosts: [...PROXY_HOSTS] };
 }
+
+/**
+ * Whether the configured proxy is actually answering.
+ *
+ * With the relay on a home machine, "configured" and "reachable" are different
+ * questions: the address never changes but the machine can be asleep, off, or
+ * between tunnels. Without asking, a YouTube link on a sleeping relay spent
+ * about 22 seconds failing, because yt-dlp tried the site, tried the proxy,
+ * waited out both, and only then gave up, holding a lookup slot the whole time.
+ *
+ * A TCP connect with a one second deadline answers it. The result is held
+ * briefly, so a burst of requests costs one probe rather than one each, and
+ * held for less time on success than on failure: a relay that has just come
+ * back should be noticed quickly, while one that is down is worth not retrying
+ * on every request.
+ */
+let proxyProbe: { ok: boolean; at: number } | null = null;
+export async function proxyReachable(): Promise<boolean> {
+  if (!YTDLP_PROXY) return false;
+  const now = Date.now();
+  if (proxyProbe && now - proxyProbe.at < (proxyProbe.ok ? 15_000 : 5_000)) {
+    return proxyProbe.ok;
+  }
+  let host = "";
+  let port = 0;
+  try {
+    const u = new URL(YTDLP_PROXY);
+    host = u.hostname;
+    port = Number(u.port) || (u.protocol === "https:" ? 443 : 80);
+  } catch {
+    return false;
+  }
+  const ok = await new Promise<boolean>((resolve) => {
+    const sock = net.connect({ host, port });
+    const done = (v: boolean) => {
+      sock.destroy();
+      resolve(v);
+    };
+    sock.setTimeout(1000, () => done(false));
+    sock.once("connect", () => done(true));
+    sock.once("error", () => done(false));
+  });
+  proxyProbe = { ok, at: now };
+  return ok;
+}
+
+/** The proxy is configured but nothing is listening: the relay is down. */
+export class ProxyUnreachableError extends Error {}
 
 /** True when a proxy exists to fall back to. */
 export function proxyAvailable(): boolean {
@@ -589,6 +638,20 @@ export function userFacingError(err: unknown): {
   // block. Retrying will not help: there is no address here this site accepts,
   // and telling someone to wait for a state that will not change is worse than
   // telling them plainly to use a different link.
+  // Our relay is down, not the platform. Saying "this site is blocking our
+  // server, it usually clears up soon" was wrong in both halves: nothing is
+  // blocking anything, and whether it clears up depends on a machine coming
+  // back rather than on waiting.
+  if (err instanceof ProxyUnreachableError) {
+    const site = msg.replace(/^www[.]/, "");
+    return {
+      error: site
+        ? `${site} downloads are briefly unavailable. Everything else on the site still works.`
+        : "These downloads are briefly unavailable. Everything else on the site still works.",
+      status: 503,
+      code: "RELAY_DOWN",
+    };
+  }
   if (err instanceof SiteUnavailableHereError) {
     const site = msg.replace(/^www\./, "");
     return {
@@ -760,6 +823,13 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     const fp = extractorFingerprint();
     if (needsProxy && !haveProxy && !shouldTryDirect(host, fp)) {
       throw new SiteUnavailableHereError(host);
+    }
+
+    // Nothing will come of this: the site needs an address we reach through the
+    // proxy, and the proxy is not answering. Better to say so now than after
+    // two timeouts.
+    if (needsProxy && haveProxy && !shouldTryDirect(host, fp) && !(await proxyReachable())) {
+      throw new ProxyUnreachableError(host);
     }
 
     if (needsProxy && shouldTryDirect(host, fp)) {
