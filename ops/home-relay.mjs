@@ -45,6 +45,13 @@ const allowed = (host) => ALLOWED.some((re) => re.test(host));
 let active = 0;
 let served = 0;
 let refused = 0;
+// Bytes crossing the home connection, which is the whole reason to watch this.
+// Metadata is small; media is not. If media ever starts coming through here
+// instead of straight from the CDN to the server, this is where it shows up,
+// and the difference is roughly 159 KB against 40 MB per download.
+let bytesUp = 0;
+let bytesDown = 0;
+const mb = (n) => (n / 1048576).toFixed(2);
 
 function logLine(msg) {
   process.stdout.write(`${new Date().toISOString().slice(11, 19)} ${msg}\n`);
@@ -75,6 +82,12 @@ server.on("connect", (req, clientSocket, head) => {
     served++;
     clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     if (head && head.length) upstream.write(head);
+    upstream.on("data", (c) => {
+      bytesDown += c.length;
+    });
+    clientSocket.on("data", (c) => {
+      bytesUp += c.length;
+    });
     upstream.pipe(clientSocket);
     clientSocket.pipe(upstream);
   });
@@ -113,6 +126,16 @@ server.listen(PORT, HOST, () => {
   logLine(`expose it with: ssh -N -R ${PORT}:127.0.0.1:${PORT} root@YOUR_SERVER`);
 });
 
+function stats() {
+  return `served=${served} refused=${refused} active=${active} down=${mb(bytesDown)}MB up=${mb(bytesUp)}MB`;
+}
+
 setInterval(() => {
-  if (served || refused) logLine(`served=${served} refused=${refused} active=${active}`);
-}, 300_000).unref();
+  if (served || refused) logLine(stats());
+}, 60_000).unref();
+
+// So a number can be read on demand rather than waited for.
+process.on("SIGINT", () => {
+  logLine(`final ${stats()}`);
+  process.exit(0);
+});
