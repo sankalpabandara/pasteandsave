@@ -15,6 +15,9 @@
 
 # next.js
 /.next/
+# Build output the deploy swaps in and the copy it keeps for one cycle.
+/.next.build/
+/.next.previous/
 /out/
 
 # production

@@ -45,6 +45,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Where the build output goes, overridable so a deploy can build into a fresh
+  // directory and swap it in rather than writing over the copy that is serving.
+  // Building in place is what produced "the client reference manifest for route
+  // /terms does not exist" after a Next upgrade: leftovers from the previous
+  // version sat alongside the new output and the server read both.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   // Produces a self-contained server bundle for easy VPS/Docker deployment.
   output: "standalone",
   poweredByHeader: false,

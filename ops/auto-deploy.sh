@@ -35,9 +35,20 @@ remote_sha="$(git rev-parse "origin/$BRANCH")"
 
 echo "$(stamp) deploying ${local_sha:0:8} -> ${remote_sha:0:8}"
 
-# Keep the current build so a failed deploy can be undone.
-rm -rf .next.previous
-[ -d .next ] && cp -r .next .next.previous
+# The build goes into a fresh directory and is swapped in when it succeeds.
+#
+# This used to copy .next aside and then build straight over the original. Two
+# problems with that. The running app reads .next while it is being rewritten,
+# and a build inherited its predecessor's leftovers: after moving from Next 16.2
+# to 16.3 the server answered /terms, /privacy and /extension with "the client
+# reference manifest for route ... does not exist", because output from both
+# versions was sitting in the same directory. A failed build also had to be
+# undone by copying the backup back, which is work that only exists because the
+# live directory was touched at all.
+#
+# Nothing touches .next now until there is a complete build to put there.
+BUILD_DIR=".next.build"
+rm -rf "$BUILD_DIR"
 
 git reset --hard "origin/$BRANCH" --quiet || { echo "$(stamp) checkout failed"; exit 1; }
 
@@ -55,23 +66,26 @@ if ! npm ci --include=dev --silent 2>/dev/null; then
   }
 fi
 
-if ! npx next build >/tmp/ps-build.log 2>&1; then
+if ! NEXT_DIST_DIR="$BUILD_DIR" npx next build >/tmp/ps-build.log 2>&1; then
   echo "$(stamp) BUILD FAILED, keeping the running version"
   tail -n 20 /tmp/ps-build.log
   # Deliberately no git revert here. Reverting also rolls back this script and
   # everything else in ops/, so a deploy broken by a bad build could not
   # deploy its own fix: every cycle pulled the fix, failed, and threw it away.
-  # The checkout stays at the new commit and only the build output is restored,
-  # so the running app is untouched and the next pushed fix can land.
-  if [ -d .next.previous ]; then
-    rm -rf .next
-    cp -r .next.previous .next
-  fi
+  # The checkout stays at the new commit, and the running build was never
+  # touched, so there is nothing to restore.
+  rm -rf "$BUILD_DIR"
   alert "deploy blocked: build failed" \
     "Commit ${remote_sha:0:8} does not build, so the site is still serving the previous build. Push a fix and it will deploy on the next cycle. Last lines of the build log:
 $(tail -n 12 /tmp/ps-build.log)"
   exit 1
 fi
+
+# Swap the finished build in. Renames, not copies, so the directory is never
+# half replaced, and the previous one is kept for a cycle.
+rm -rf .next.previous
+[ -d .next ] && mv .next .next.previous
+mv "$BUILD_DIR" .next
 
 pm2 reload "$APP_NAME" --update-env >/dev/null 2>&1 || pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1
 
