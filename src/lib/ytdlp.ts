@@ -38,6 +38,11 @@ export const DENO_PATH = path.join(BIN_DIR, `deno${EXE}`);
 // yt-dlp warns and carries on rather than failing, which is what it does today.
 let denoChecked = false;
 let denoAvailable = false;
+export function jsRuntimeAvailable(): boolean {
+  jsRuntimeArgs();
+  return denoAvailable;
+}
+
 function jsRuntimeArgs(): string[] {
   if (!denoChecked) {
     denoChecked = true;
@@ -62,32 +67,51 @@ function jsRuntimeArgs(): string[] {
 export const EXTRACTOR_ARGS = ["--ies", "default,-generic"];
 
 // --- YouTube hardening -----------------------------------------------------
-// YouTube blocks its default "web" player client from datacenter IPs (the
-// "Sign in to confirm you're not a bot" wall). Picking clients that are more
-// tolerant of server IPs makes lookups and downloads work far more often. The
-// set is env-overridable so the box operator can retune when YouTube shifts
-// again, without a code change or redeploy.
+// Which player client to ask YouTube for.
 //
-// One client, and that is worth stating plainly because it used to be two.
-// Every client is a full round trip, and for us that trip goes through a
-// metered proxy. Measured against the same three videos:
+// This was android_vr, chosen in July because it was the cheapest single client
+// through the metered proxy: 159 KB per extraction against roughly 1 MB for
+// "tv", with an identical format list. That reasoning was sound and is now
+// obsolete, because android_vr stopped working.
 //
-//   android_vr,tv   1,027,319 bytes
-//   android_vr        159,280 bytes
-//   tv              1,010,426 bytes, and fails on its own
+// Measured on 2026-09-11 from a residential address, so the address was not the
+// variable, downloading bestaudio for the same video:
 //
-// The second client was carrying 85% of the cost of every extraction. It was
-// kept on the belief that it supplied the combined video+audio streams, and
-// that turned out not to be so: the format lists from both sets are identical,
-// same heights, same muxed stream, same audio tracks, same count. It was
-// paying for a duplicate.
+//   yt-dlp 2026.07.04 (what was deployed)
+//     every client failed. android_vr, default and tv_embedded got a 403 on the
+//     media itself; tv, web_safari, mweb and ios could not produce a usable
+//     format at all.
 //
-// If YouTube changes and one client stops being enough, the fallback set below
-// is tried automatically, and YTDLP_YOUTUBE_CLIENTS overrides this without a
-// deploy.
-const YT_CLIENTS = process.env.YTDLP_YOUTUBE_CLIENTS || "android_vr";
-const YT_FALLBACK_CLIENTS =
-  process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS || "default,web_safari,mweb,ios";
+//   yt-dlp 2026.08.19 with a JS runtime present
+//     default       downloaded, 49 formats, up to 2160p
+//     tv_embedded   downloaded, 49 formats, up to 2160p
+//     android_vr    "Requested format is not available"
+//     mweb          "Requested format is not available"
+//
+// So the client is "default" now: whatever yt-dlp itself picks. It is the set
+// the maintainers keep working, which matters more than saving a few hundred
+// kilobytes, because a site that cannot download earns nothing at all. If
+// YouTube starts refusing this server again and the bytes start mattering,
+// YTDLP_YOUTUBE_CLIENTS=tv_embedded is the cheap single-client option and needs
+// no deploy.
+//
+// Two things this now depends on, both of which were missing and caused the
+// outage together: a current yt-dlp, and a JavaScript runtime. "default" solves
+// a JS challenge, so without deno present in BIN_DIR this fails. Run
+// scripts/setup-bin.sh, which installs both.
+function ytClients(): string {
+  if (process.env.YTDLP_YOUTUBE_CLIENTS) return process.env.YTDLP_YOUTUBE_CLIENTS;
+  // No runtime means "default" cannot solve the challenge it will be given, and
+  // announcing a client we cannot serve is worse than keeping the old one. This
+  // deploy therefore changes nothing until scripts/setup-bin.sh has run.
+  return jsRuntimeAvailable() ? "default" : "android_vr";
+}
+function ytFallbackClients(): string {
+  return (
+    process.env.YTDLP_YOUTUBE_FALLBACK_CLIENTS ||
+    (jsRuntimeAvailable() ? "tv_embedded,tv,web_safari,mweb" : "default,tv,web_safari,ios")
+  );
+}
 
 // Optional residential/rotating proxy. Routing blocked sites through a
 // non-datacenter IP is the durable fix once player-client tricks stop being
@@ -233,6 +257,11 @@ export function worthProxyRetry(stderr: string): boolean {
   );
 }
 
+/** For the health endpoint: which clients this box will actually ask for. */
+export function ytClientsInUse(): { primary: string; fallback: string } {
+  return { primary: ytClients(), fallback: ytFallbackClients() };
+}
+
 function youtubeClientArgs(clients: string): string[] {
   return ["--extractor-args", `youtube:player_client=${clients}`];
 }
@@ -241,7 +270,7 @@ function youtubeClientArgs(clients: string): string[] {
 // non-YouTube URLs, which keep working exactly as before.
 export function siteArgs(url: string, fallback = false): string[] {
   if (!isYouTube(url)) return [];
-  return youtubeClientArgs(fallback ? YT_FALLBACK_CLIENTS : YT_CLIENTS);
+  return youtubeClientArgs(fallback ? ytFallbackClients() : ytClients());
 }
 
 // Stderr signatures that mean "the platform is refusing our server", as

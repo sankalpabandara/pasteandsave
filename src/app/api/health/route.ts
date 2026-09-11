@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import { spawn } from "node:child_process";
-import { YTDLP_PATH, FFMPEG_DIR, proxyStatus } from "@/lib/ytdlp";
+import { YTDLP_PATH, FFMPEG_DIR, proxyStatus, jsRuntimeAvailable, ytClientsInUse } from "@/lib/ytdlp";
 import { jobLimiter, lookupLimiter } from "@/lib/concurrency";
 import { routingReport } from "@/lib/proxy-routing";
 
@@ -15,6 +15,38 @@ export const dynamic = "force-dynamic";
 // The version flag differs per tool: yt-dlp wants --version, ffmpeg wants
 // -version and exits non-zero on the double-dash form. Getting this wrong
 // reports a working binary as broken, which is worse than not checking.
+function binaryVersion(bin: string, timeoutMs = 5000): Promise<string | null> {
+  return new Promise((resolve) => {
+    let out = "";
+    let done = false;
+    const finish = (v: string | null) => {
+      if (done) return;
+      done = true;
+      resolve(v);
+    };
+    try {
+      const child = spawn(bin, ["--version"], { windowsHide: true });
+      const timer = setTimeout(() => {
+        child.kill("SIGKILL");
+        finish(null);
+      }, timeoutMs);
+      child.stdout.on("data", (c) => {
+        out += c.toString();
+      });
+      child.on("error", () => {
+        clearTimeout(timer);
+        finish(null);
+      });
+      child.on("close", () => {
+        clearTimeout(timer);
+        finish(out.trim().split(/\s+/)[0] || null);
+      });
+    } catch {
+      finish(null);
+    }
+  });
+}
+
 function binaryWorks(bin: string, versionFlag: string, timeoutMs = 5000): Promise<boolean> {
   return new Promise((resolve) => {
     let done = false;
@@ -86,10 +118,11 @@ function impersonationAvailable(timeoutMs = 8000): Promise<boolean> {
 export async function GET() {
   const ffmpeg = `${FFMPEG_DIR}/ffmpeg${process.platform === "win32" ? ".exe" : ""}`;
 
-  const [ytdlpOk, ffmpegOk, impersonation] = await Promise.all([
+  const [ytdlpOk, ffmpegOk, impersonation, ytdlpVersion] = await Promise.all([
     binaryWorks(YTDLP_PATH, "--version"),
     binaryWorks(ffmpeg, "-version"),
     impersonationAvailable(),
+    binaryVersion(YTDLP_PATH),
   ]);
 
   // A full extractor queue is normal under load; a permanently full one is
@@ -117,6 +150,14 @@ export async function GET() {
       // place the decision in effect can be seen.
       routing: routingReport(),
       stickySessions: (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0",
+      // What the extractor can actually do. A current binary and a JS runtime
+      // are both required for YouTube now, and both were missing without
+      // anything here saying so.
+      youtube: {
+        ytdlpVersion,
+        jsRuntime: jsRuntimeAvailable(),
+        clients: ytClientsInUse(),
+      },
       uptimeSeconds: Math.round(process.uptime()),
     },
     {
