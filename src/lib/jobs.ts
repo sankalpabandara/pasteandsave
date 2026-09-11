@@ -364,7 +364,8 @@ export function startJob(opts: StartJobOptions): string {
           // against the address that fetched them, so retrying from a new one
           // is refused every time: the retry that exists to rescue a blocked
           // download was guaranteed to fail whenever it was needed most.
-          const retryProxy = infoJson && jobProxy.length > 0 ? jobProxy : forceProxyArgs();
+          const retryProxy =
+            infoJson && jobProxy.length > 0 ? jobProxy : forceProxyArgs(opts.url);
           if (infoJson) void recordProxyUsage(opts.mode);
           run(retryProxy, infoJson);
           return;

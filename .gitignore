@@ -49,3 +49,5 @@ next-env.d.ts
 
 # local editor/agent tooling
 /.claude/
+/bin/deno
+/bin/deno.exe

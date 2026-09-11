@@ -110,3 +110,41 @@ export function routingReport(): Record<string, { direct: boolean; ageMinutes: n
 export function resetRouting(): void {
   verdicts.clear();
 }
+
+export const PROXY_STICKY = (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0";
+
+// Derived from the video address rather than drawn at random, so that every
+// call about the same video lands on the same exit address.
+//
+// A random id per call meant the lookup and the download used different exit
+// addresses. The lookup caches the extractor output, the download replays it
+// with --load-info-json, and those links are signed for whichever address
+// fetched them, so replaying session A's links over session B is refused. That
+// surfaced to visitors as "this site is rate-limiting our server", which named
+// the wrong culprit: the platform was refusing a mismatch we created.
+//
+// The same-video-same-session property is what matters; the value only has to
+// be stable, short and alphanumeric.
+export function newSessionId(seed?: string): string {
+  if (!seed) return Math.random().toString(36).slice(2, 10).padEnd(8, "0");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36).padEnd(8, "0").slice(0, 8);
+}
+
+export function stickyProxyUrl(raw: string, seed?: string): string {
+  if (!PROXY_STICKY) return raw;
+  try {
+    const u = new URL(raw);
+    // Nothing to attach the session to without credentials.
+    if (!u.password) return raw;
+    if (/_session-/.test(u.password)) return raw;
+    u.password = `${u.password}_session-${newSessionId(seed)}`;
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}

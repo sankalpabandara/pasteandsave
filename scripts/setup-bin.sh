@@ -20,6 +20,31 @@ fi
 curl -L -o "$BIN/yt-dlp" "$yturl"
 chmod +x "$BIN/yt-dlp"
 
+# Deno solves the JavaScript challenges YouTube presents. yt-dlp has deprecated
+# running YouTube extraction without a runtime, and the fallback player clients
+# need one even though android_vr does not.
+echo "Downloading deno (JS runtime for YouTube challenges)..."
+case "$os/$arch" in
+  Linux/x86_64|Linux/amd64) denotarget="x86_64-unknown-linux-gnu" ;;
+  Linux/aarch64|Linux/arm64) denotarget="aarch64-unknown-linux-gnu" ;;
+  Darwin/arm64)              denotarget="aarch64-apple-darwin" ;;
+  Darwin/x86_64)             denotarget="x86_64-apple-darwin" ;;
+  *) denotarget="" ;;
+esac
+if [ -n "$denotarget" ]; then
+  dtmp="$(mktemp -d)"
+  if curl -fL -o "$dtmp/deno.zip"       "https://github.com/denoland/deno/releases/latest/download/deno-$denotarget.zip"; then
+    unzip -o -q "$dtmp/deno.zip" -d "$BIN"
+    chmod +x "$BIN/deno"
+    "$BIN/deno" --version | head -1
+  else
+    echo "  deno download failed; YouTube fallback clients may not work" >&2
+  fi
+  rm -rf "$dtmp"
+else
+  echo "  no deno build for $os/$arch; skipping" >&2
+fi
+
 echo "Downloading ffmpeg + ffprobe..."
 tmp="$(mktemp -d)"
 if [ "$os" = "Linux" ] && { [ "$arch" = "x86_64" ] || [ "$arch" = "amd64" ]; }; then

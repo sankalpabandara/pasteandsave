@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
@@ -6,6 +7,8 @@ import {
   shouldTryDirect,
   recordDirectResult,
   hostNeedsProxy,
+  stickyProxyUrl,
+  PROXY_STICKY,
   PROXY_HOSTS,
 } from "./proxy-routing";
 
@@ -17,6 +20,40 @@ const BIN_DIR = process.env.BIN_DIR || path.join(process.cwd(), "bin");
 const EXE = process.platform === "win32" ? ".exe" : "";
 export const YTDLP_PATH = path.join(BIN_DIR, `yt-dlp${EXE}`);
 export const FFMPEG_DIR = BIN_DIR;
+
+// YouTube's JavaScript challenges need an external runtime to solve. Deno is
+// the one yt-dlp enables by default, but it only looks on PATH, and our
+// binaries live in BIN_DIR, so the path is passed explicitly.
+//
+// This buys nothing for android_vr, the client used first: its stream links
+// carry no n parameter, so there is no challenge to solve and extraction is
+// byte-for-byte identical with and without a runtime. It is here for the
+// fallback clients, which do need one, and because yt-dlp has deprecated
+// running YouTube without it. The day android_vr stops working is the day the
+// fallbacks matter, and discovering the runtime is missing on that day is
+// worse than carrying it now.
+export const DENO_PATH = path.join(BIN_DIR, `deno${EXE}`);
+
+// Absent on a server that has not re-run setup-bin, so this stays optional:
+// yt-dlp warns and carries on rather than failing, which is what it does today.
+let denoChecked = false;
+let denoAvailable = false;
+function jsRuntimeArgs(): string[] {
+  if (!denoChecked) {
+    denoChecked = true;
+    try {
+      denoAvailable = fs.existsSync(DENO_PATH);
+      if (!denoAvailable) {
+        console.warn(
+          `[ytdlp] no JS runtime at ${DENO_PATH}; YouTube fallback clients may fail. Run scripts/setup-bin.sh`,
+        );
+      }
+    } catch {
+      denoAvailable = false;
+    }
+  }
+  return denoAvailable ? ["--js-runtimes", `deno:${DENO_PATH}`] : [];
+}
 
 // Keeps yt-dlp restricted to its ~1750 named site extractors and disables
 // the "generic" fallback, which would otherwise scrape the HTML of
@@ -75,6 +112,7 @@ export function isYouTube(rawUrl: string): boolean {
 // Network-resilience + operator flags shared by every yt-dlp invocation.
 export function networkArgs(): string[] {
   const args: string[] = [
+    ...jsRuntimeArgs(),
     "--extractor-retries",
     "3",
     "--retry-sleep",
@@ -100,31 +138,11 @@ export function networkArgs(): string[] {
 // id is 6-10 alphanumeric characters). Set YTDLP_PROXY_STICKY=0 for a provider
 // that does not understand it; failures that look like a rejected login also
 // fall back to the plain proxy on their own.
-const PROXY_STICKY = (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0";
-
-function newSessionId(): string {
-  return Math.random().toString(36).slice(2, 10).padEnd(8, "0");
-}
-
-function stickyProxyUrl(raw: string): string {
-  if (!PROXY_STICKY) return raw;
-  try {
-    const u = new URL(raw);
-    // Nothing to attach the session to without credentials.
-    if (!u.password) return raw;
-    if (/_session-/.test(u.password)) return raw;
-    u.password = `${u.password}_session-${newSessionId()}`;
-    return u.toString();
-  } catch {
-    return raw;
-  }
-}
-
 export function proxyArgs(rawUrl: string): string[] {
   if (!YTDLP_PROXY) return [];
   // One definition of which hosts match, shared with the no-proxy path, so the
   // two can never drift apart and disagree about the same URL.
-  return hostNeedsProxy(rawUrl) ? ["--proxy", stickyProxyUrl(YTDLP_PROXY)] : [];
+  return hostNeedsProxy(rawUrl) ? ["--proxy", stickyProxyUrl(YTDLP_PROXY, rawUrl)] : [];
 }
 
 /** The proxy without a session suffix, for the fallback below. */
@@ -161,8 +179,12 @@ export function proxyAvailable(): boolean {
 }
 
 /** Proxy flags regardless of the host list, for the automatic retry below. */
-export function forceProxyArgs(): string[] {
-  return YTDLP_PROXY ? ["--proxy", stickyProxyUrl(YTDLP_PROXY)] : [];
+export function forceProxyArgs(rawUrl?: string): string[] {
+  // Seeded like proxyArgs. This is the retry for a site that is not on the
+  // host list, so the download side will compute no proxy at all for it; the
+  // links this fetches still have to come from an address the download can
+  // present them from, or be refused for the same reason.
+  return YTDLP_PROXY ? ["--proxy", stickyProxyUrl(YTDLP_PROXY, rawUrl)] : [];
 }
 
 /**
@@ -225,6 +247,30 @@ export function siteArgs(url: string, fallback = false): string[] {
 // Stderr signatures that mean "the platform is refusing our server", as
 // opposed to a genuinely private or missing video. Used to give a clearer
 // message and to decide whether a fallback retry is worth attempting.
+/**
+ * Whether the platform refused *this address*, specifically enough to remember.
+ *
+ * Deliberately stricter than isBlockedByPlatform. That one decides whether a
+ * retry through the proxy is worth attempting, where being generous is cheap:
+ * guess wrong and one retry is wasted. This one decides whether to write a
+ * verdict that routes every request for the site through the metered proxy for
+ * the next twelve hours, where guessing wrong is expensive.
+ *
+ * A bare 403 is the difference. It is the normal answer to a signed media link
+ * that has expired, or that was signed for a different address than the one
+ * presenting it, and neither says anything about our address being refused.
+ * Counting those as a block meant an expired link could put the site on the
+ * paid proxy for half a day, and the bill would look like YouTube tightening up.
+ *
+ * The bot wall, a rate-limit, and a failure to get any player response at all
+ * are about the requester. Those still count.
+ */
+export function isAddressRefused(stderr: string): boolean {
+  return /confirm you'?re not a bot|sign in to confirm|not a bot|HTTP Error 429|too many requests|failed to extract any player response|unable to download api page/i.test(
+    stderr,
+  );
+}
+
 export function isBlockedByPlatform(stderr: string): boolean {
   return /confirm you'?re not a bot|sign in to confirm|not a bot|HTTP Error 429|HTTP Error 403|too many requests|failed to extract any player response|unable to download api page/i.test(
     stderr,
@@ -658,8 +704,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
         // or an unsupported link says nothing about routing, so it is left to
         // the normal path below rather than blamed on the connection.
         if (directErr instanceof UnsupportedSiteError) throw directErr;
-        const blocked =
-          directErr instanceof Error && isBlockedByPlatform(directErr.message);
+        const blocked = directErr instanceof Error && isAddressRefused(directErr.message);
         if (blocked) {
           recordDirectResult(host, false);
           console.log(
@@ -739,7 +784,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
       ) {
         try {
           const stdout = await runYtDlp(
-            [...base, ...siteArgs(url), ...forceProxyArgs(), "--", url],
+            [...base, ...siteArgs(url), ...forceProxyArgs(url), "--", url],
             timeout,
           );
           console.warn(

@@ -45,3 +45,63 @@ test("junk input is not treated as a site that needs the proxy", () => {
   assert.equal(hostNeedsProxy("not a url at all"), false);
   assert.equal(hostNeedsProxy(""), false);
 });
+
+// --- Sticky proxy sessions -------------------------------------------------
+//
+// The lookup caches yt-dlp's output and the download replays it with
+// --load-info-json. Those links are signed against whichever exit address
+// fetched them, so both calls have to land on the same one.
+//
+// A random session id per call did not. The lookup went out through one exit
+// address and the download through another, the platform refused links it had
+// signed for somebody else, and the visitor was told "this site is
+// rate-limiting our server" - blaming the platform for a mismatch we created.
+// Nothing failed loudly on our side, which is why it went unnoticed.
+
+import { stickyProxyUrl, newSessionId } from "../src/lib/proxy-routing.ts";
+
+const PROXY = "http://user:pass@gate.example.test:7000";
+const VIDEO = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+const OTHER = "https://www.youtube.com/watch?v=oHg5SJYRHA0";
+
+const sessionOf = (u) => /_session-([a-z0-9]+)/.exec(new URL(u).password)?.[1] ?? null;
+
+test("the same video always gets the same session", () => {
+  // This is the whole fix: the lookup and the download call this separately,
+  // seconds apart, and must agree.
+  const a = sessionOf(stickyProxyUrl(PROXY, VIDEO));
+  const b = sessionOf(stickyProxyUrl(PROXY, VIDEO));
+  assert.ok(a, "a session was attached");
+  assert.equal(a, b, "lookup and download must land on one exit address");
+});
+
+test("different videos get different sessions", () => {
+  // Still spread across the pool: one address per video, not one for all.
+  assert.notEqual(sessionOf(stickyProxyUrl(PROXY, VIDEO)), sessionOf(stickyProxyUrl(PROXY, OTHER)));
+});
+
+test("an unseeded session is still random", () => {
+  // Callers with no URL to hand keep the old behaviour rather than collapsing
+  // onto one shared session.
+  assert.notEqual(newSessionId(), newSessionId());
+});
+
+test("session ids are short and alphanumeric", () => {
+  // Goes into a proxy password field, so it must survive being put in a URL.
+  const id = newSessionId(VIDEO);
+  assert.match(id, /^[a-z0-9]{8}$/);
+});
+
+test("credentials are preserved and not duplicated", () => {
+  const once = stickyProxyUrl(PROXY, VIDEO);
+  assert.equal(new URL(once).username, "user");
+  assert.match(new URL(once).password, /^pass_session-/);
+  // Re-wrapping an already-tagged URL must not stack a second session on it.
+  assert.equal(stickyProxyUrl(once, VIDEO), once);
+});
+
+test("a proxy URL with no credentials is left alone", () => {
+  // Nothing to attach a session to, and mangling it would break the proxy.
+  const bare = "http://gate.example.test:7000/";
+  assert.equal(stickyProxyUrl(bare, VIDEO), bare);
+});
