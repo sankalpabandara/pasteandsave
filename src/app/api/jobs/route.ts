@@ -6,6 +6,7 @@ import { BusyError } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
 import { peekExtractorKey } from "@/lib/info-cache";
 import { proxyBudgetOk } from "@/lib/proxy-budget";
+import { resolveShareLink } from "@/lib/share-links";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
   if (!url || !isSafeUrl(url)) {
     return Response.json({ error: "Invalid or unsupported link." }, { status: 400 });
   }
+  // Same resolution the lookup did, so the cached extractor output is found
+  // under the same key rather than being fetched a second time, and so a share
+  // link pressed straight through to download behaves like any other address.
+  const target = (await resolveShareLink(url)) ?? url;
+
   if (mode !== "video" && mode !== "audio") {
     return Response.json({ error: "Invalid mode." }, { status: 400 });
   }
@@ -57,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   // Only downloads routed through the metered proxy count against the daily
   // budget; everything that works direct is never limited.
-  const proxied = usesProxy(url);
+  const proxied = usesProxy(target);
   if (proxied && !(await proxyBudgetOk())) {
     return Response.json(
       {
@@ -73,18 +79,18 @@ export async function POST(request: NextRequest) {
       mode === "video"
         ? startJob({
             mode: "video",
-            url,
+            url: target,
             formatId: body.formatId!,
             title,
             hasAudio: body.hasAudio === true,
           })
-        : startJob({ mode: "audio", url, title, audioFormat, bitrate });
+        : startJob({ mode: "audio", url: target, title, audioFormat, bitrate });
     // The lookup a moment ago already named the platform, so reuse its answer
     // rather than guessing from the hostname; a miss just leaves it unlabelled.
     void logEvent({
       type: "download",
       mode,
-      site: peekExtractorKey(url) ?? undefined,
+      site: peekExtractorKey(target) ?? undefined,
       proxied,
     });
     return Response.json({ jobId: id });

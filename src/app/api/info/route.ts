@@ -9,6 +9,7 @@ import {
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError, lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
+import { resolveShareLink } from "@/lib/share-links";
 
 export const runtime = "nodejs";
 
@@ -168,11 +169,17 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: "That link isn't valid." }, { status: 400 });
   }
 
-  const cached = cacheGet(url);
+  // Facebook's Share button produces fb.watch and /share/ addresses that no
+  // extractor matches. Resolving to the canonical one here, before the cache is
+  // consulted, means the lookup and the download agree on a single key and the
+  // visitor is not told the link is from a site we cannot download from.
+  const target = (await resolveShareLink(url)) ?? url;
+
+  const cached = cacheGet(target);
   if (cached) return Response.json(cached);
 
   try {
-    const info = await fetchInfo(url);
+    const info = await fetchInfo(target);
     void logEvent({
       type: "lookup",
       ok: true,
@@ -273,7 +280,7 @@ export async function POST(request: NextRequest) {
       images,
     };
     // Only worth remembering if there is something to download.
-    if (video.length > 0 || images.length > 0) cacheSet(url, payload);
+    if (video.length > 0 || images.length > 0) cacheSet(target, payload);
     return Response.json(payload);
   } catch (err) {
     void logEvent({ type: "lookup", ok: false });
