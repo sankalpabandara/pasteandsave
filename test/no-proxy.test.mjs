@@ -152,3 +152,56 @@ test("the lookup and the download must agree", () => {
   recordDirectResult("youtube.com", false, NEW);
   assert.equal(shouldTryDirect("youtube.com", NEW), false);
 });
+
+// --- Verdicts survive a restart --------------------------------------------
+//
+// They were memory only, so every deploy forgot them and the next YouTube lookup
+// paid a doomed 25 second direct attempt out of a 60 second budget. Two visitors
+// got "yt-dlp timed out" instead of a video.
+
+import fsp from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+test("a verdict is written out and read back by a fresh process", async () => {
+  const scratch = await fsp.mkdtemp(path.join(os.tmpdir(), "pas-routing-"));
+  const cwd = process.cwd();
+  try {
+    process.chdir(scratch);
+    // A separate import so the module initialises with this directory as cwd,
+    // which is how the real process finds its data folder.
+    const first = await import(`../src/lib/proxy-routing.ts?store=${Date.now()}`);
+    first.recordDirectResult("youtube.com", false, "default|jsi");
+    // The write is coalesced, so wait past the debounce before reading.
+    await new Promise((r) => setTimeout(r, 2400));
+    const saved = JSON.parse(await fsp.readFile(path.join(scratch, "data", "routing.json"), "utf8"));
+    assert.equal(saved["youtube.com"].direct, false);
+    assert.equal(saved["youtube.com"].fp, "default|jsi");
+
+    const second = await import(`../src/lib/proxy-routing.ts?store=${Date.now()}-b`);
+    assert.equal(
+      second.shouldTryDirect("youtube.com", "default|jsi"),
+      false,
+      "a fresh process should not repeat an attempt it already knows fails",
+    );
+  } finally {
+    process.chdir(cwd);
+    await fsp.rm(scratch, { recursive: true, force: true });
+  }
+});
+
+test("a missing or corrupt store is not an error", async () => {
+  // This is an optimisation and must never be why a download fails.
+  const scratch = await fsp.mkdtemp(path.join(os.tmpdir(), "pas-routing-bad-"));
+  const cwd = process.cwd();
+  try {
+    await fsp.mkdir(path.join(scratch, "data"), { recursive: true });
+    await fsp.writeFile(path.join(scratch, "data", "routing.json"), "{not json", "utf8");
+    process.chdir(scratch);
+    const mod = await import(`../src/lib/proxy-routing.ts?store=bad-${Date.now()}`);
+    assert.equal(mod.shouldTryDirect("youtube.com", "x"), true, "starts empty, as before");
+  } finally {
+    process.chdir(cwd);
+    await fsp.rm(scratch, { recursive: true, force: true });
+  }
+});

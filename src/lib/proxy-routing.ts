@@ -64,6 +64,9 @@ export function hostNeedsProxy(rawUrl: string): boolean {
 // same address is refused once those are fixed, and treating it as though it did
 // kept the site on a dead proxy after the real fault had been repaired. When the
 // configuration changes, what we learned under the old one is discarded.
+import fs from "node:fs";
+import path from "node:path";
+
 type Verdict = { direct: boolean; at: number; fp: string };
 
 // How long a verdict stands before it is worth testing again. Long enough that
@@ -76,6 +79,58 @@ const REMEMBER_MS = 6 * 60 * 60 * 1000;
 const REMEMBER_BLOCKED_MS = 12 * 60 * 60 * 1000;
 
 const verdicts = new Map<string, Verdict>();
+
+// Verdicts outlive the process.
+//
+// They were memory only, so every restart forgot them, and the first YouTube
+// lookup afterwards paid a doomed direct attempt: twenty five seconds of
+// timeout before falling back to the proxy, on a lookup whose whole budget is
+// sixty. Measured right after a deploy, one took 48.8 seconds, and two visitors
+// got "yt-dlp timed out" instead of a video. On a box that deploys on every
+// push, that is not an edge case.
+//
+// Stored as plain JSON next to the other counters. Losing the file costs one
+// slow lookup, so every failure here is ignored on purpose: this is an
+// optimisation, and it must never be the reason a download fails.
+const STORE = path.join(process.cwd(), "data", "routing.json");
+
+function load(): void {
+  try {
+    const raw = fs.readFileSync(STORE, "utf8");
+    const saved = JSON.parse(raw) as Record<string, Verdict>;
+    const now = Date.now();
+    for (const [host, v] of Object.entries(saved)) {
+      if (!v || typeof v.direct !== "boolean" || typeof v.at !== "number") continue;
+      // Anything already past its own expiry is not worth loading, and the
+      // fingerprint check in shouldTryDirect still retires the rest.
+      const ttl = v.direct ? REMEMBER_MS : REMEMBER_BLOCKED_MS;
+      if (now - v.at > ttl) continue;
+      verdicts.set(host, { direct: v.direct, at: v.at, fp: typeof v.fp === "string" ? v.fp : "" });
+    }
+  } catch {
+    // No file yet, or unreadable. Start empty, exactly as before.
+  }
+}
+
+// Writes are coalesced: a burst of lookups should not mean a burst of writes,
+// and losing the last second of verdicts costs nothing.
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function save(): void {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      fs.mkdirSync(path.dirname(STORE), { recursive: true });
+      fs.writeFileSync(STORE, JSON.stringify(Object.fromEntries(verdicts)), "utf8");
+    } catch {
+      // Best effort, as above.
+    }
+  }, 2000);
+  // Do not hold the process open for a cache write.
+  saveTimer.unref?.();
+}
+
+load();
 
 function key(host: string): string {
   return host.toLowerCase().replace(/^www\./, "");
@@ -101,6 +156,7 @@ export function shouldTryDirect(host: string, fp = ""): boolean {
 /** Record what actually happened, so the next request routes on it. */
 export function recordDirectResult(host: string, worked: boolean, fp = ""): void {
   verdicts.set(key(host), { direct: worked, at: Date.now(), fp });
+  save();
 }
 
 /** For the health endpoint, so the routing in effect can be seen. */
@@ -116,6 +172,10 @@ export function routingReport(): Record<string, { direct: boolean; ageMinutes: n
 /** Tests only: forget everything learned. */
 export function resetRouting(): void {
   verdicts.clear();
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
 }
 
 export const PROXY_STICKY = (process.env.YTDLP_PROXY_STICKY ?? "1") !== "0";

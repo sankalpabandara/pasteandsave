@@ -43,9 +43,18 @@ test("concurrent downloads do not lose increments", async () => {
 });
 
 test("bytes add up as well as the count", async () => {
+  // The size of one charge is measured rather than written down. Hard-coding it
+  // meant this broke the moment the estimates were retuned against real relay
+  // counters, which is a change to how much is spent and not to whether the
+  // ledger adds up. The comment on the cap test below already said as much.
+  const start = ledger().bytes;
+  await recordProxyUsage("audio");
+  const one = ledger().bytes - start;
+  assert.ok(one > 0, "a charge should cost something");
+
   const before = ledger().bytes;
   await Promise.all([recordProxyUsage("audio"), recordProxyUsage("audio")]);
-  assert.equal(ledger().bytes, before + 2 * 6 * 1024 * 1024);
+  assert.equal(ledger().bytes, before + 2 * one, "two charges cost exactly twice one");
 });
 
 test("the reported total matches what was written", async () => {
@@ -63,8 +72,12 @@ test("the cap refuses once the day's allowance is gone", async () => {
   // than hard-coding a number that silently stops testing the cap the moment
   // an earlier test changes how much it spends.
   const capBytes = 10000 * 1024 * 1024;
+  // Measure what a video costs instead of assuming, for the same reason.
+  const probe = ledger().bytes;
+  await recordProxyUsage("video");
+  const perVideo = ledger().bytes - probe;
   const remaining = capBytes - ledger().bytes;
-  const needed = Math.ceil(remaining / (50 * 1024 * 1024)) + 1;
+  const needed = Math.ceil(remaining / perVideo) + 1;
   assert.ok(needed > 0, "the cap should not already be reached here");
 
   await Promise.all(Array.from({ length: needed }, () => recordProxyUsage("video")));
