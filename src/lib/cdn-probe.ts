@@ -78,19 +78,40 @@ export function pickProbeUrl(info: InfoJson, formatId: string | null): string | 
  * "use the proxy", because being wrong in that direction costs bandwidth while
  * being wrong the other way costs the visitor their download.
  */
-export async function cdnAcceptsDirect(url: string, timeoutMs = 8000): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: { Range: "bytes=0-0" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    // The body is one byte, but it still has to be released or the socket
-    // stays open until the timeout.
-    await res.arrayBuffer().catch(() => undefined);
-    return res.status === 206 || res.status === 200;
-  } catch {
-    return false;
+export async function cdnAcceptsDirect(url: string, timeoutMs = 15000): Promise<boolean> {
+  // Tried more than once, and given longer than feels necessary, because the
+  // two outcomes are wildly lopsided. Saying yes costs one byte and the media
+  // then comes straight from the CDN. Saying no drags the entire file through a
+  // relay on somebody's home connection, which is slow enough that the job can
+  // hold one of three slots for ten minutes.
+  //
+  // That asymmetry bites hardest exactly when it should not. Under load the
+  // probe is competing with jobs already pulling video through the relay, so it
+  // is slowest at the moment a timeout is most expensive: a slow probe sends
+  // another video down the relay, which makes the next probe slower still.
+  // Visitors saw that feedback loop as "Server is busy", with three jobs
+  // crawling and every new download refused.
+  //
+  // A retry is an extra byte and a second or two. Getting this wrong once costs
+  // eighty megabytes of somebody's data allowance and a slot for ten minutes.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: { Range: "bytes=0-0" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      // The body is one byte, but it still has to be released or the socket
+      // stays open until the timeout.
+      await res.arrayBuffer().catch(() => undefined);
+      if (res.status === 206 || res.status === 200) return true;
+      // A refusal is an answer, not a hiccup: retrying will get the same one.
+      if (res.status === 403 || res.status === 401 || res.status === 404) return false;
+    } catch {
+      // Timeout or transport error, which is the case worth trying again.
+    }
   }
+  return false;
 }
+
