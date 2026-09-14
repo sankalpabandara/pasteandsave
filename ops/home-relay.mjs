@@ -225,11 +225,21 @@ server.on("connect", async (req, clientSocket, head) => {
     served++;
     clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
     if (head && head.length) upstream.write(head);
+    let connDown = 0;
     upstream.on("data", (c) => {
       bytesDown += c.length;
+      connDown += c.length;
     });
     clientSocket.on("data", (c) => {
       bytesUp += c.length;
+    });
+    // Name anything large. A metadata lookup should be a few hundred kilobytes,
+    // so a connection measured in tens of megabytes is media, and knowing which
+    // host it came from is the difference between guessing and knowing.
+    upstream.on("close", () => {
+      if (connDown > 1048576) {
+        logLine(`big ${host}:${port} ${(connDown / 1048576).toFixed(2)}MB`);
+      }
     });
     upstream.pipe(clientSocket);
     clientSocket.pipe(upstream);

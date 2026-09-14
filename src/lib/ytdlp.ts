@@ -342,15 +342,43 @@ export function ytClientsInUse(): { primary: string; fallback: string } {
   return { primary: ytClients(), fallback: ytFallbackClients() };
 }
 
-function youtubeClientArgs(clients: string): string[] {
-  return ["--extractor-args", `youtube:player_client=${clients}`];
+/**
+ * Do not enumerate YouTube's HLS formats.
+ *
+ * Listing them is not free. yt-dlp pulls fragments from googlevideo while it
+ * works out what each HLS variant contains, and on a proxied lookup every one
+ * of those bytes crosses the relay. Measured on the server, same video, same
+ * client, the only difference being this flag:
+ *
+ *   enumerating HLS   44.09 MB per lookup
+ *   skipping HLS       0.20 MB per lookup
+ *
+ * Two hundred times cheaper for a request that is supposed to read a web page.
+ * That single line is what emptied a 500 MB daily allowance in a handful of
+ * lookups and had visitors told the site had hit its limit.
+ *
+ * Nothing is lost. What remains is the DASH and progressive set, which is
+ * complete up to 2160p, and unlike HLS every one of those can be fetched from
+ * the CDN by the server itself, so the media never crosses the relay either.
+ *
+ * The exception is a live stream, which YouTube serves as HLS and nothing else.
+ * Those would return no formats at all, so the fallback path below deliberately
+ * does not skip: a live stream costs a slow retry rather than being impossible.
+ */
+function youtubeClientArgs(clients: string, skipHls: boolean): string[] {
+  const parts = [`player_client=${clients}`];
+  if (skipHls) parts.push("skip=hls");
+  return ["--extractor-args", `youtube:${parts.join(";")}`];
 }
 
 // Builds the YouTube-specific extractor args to bolt onto any call. Empty for
 // non-YouTube URLs, which keep working exactly as before.
 export function siteArgs(url: string, fallback = false): string[] {
   if (!isYouTube(url)) return [];
-  return youtubeClientArgs(fallback ? ytFallbackClients() : ytClients());
+  // The fallback keeps HLS, so a live stream still has something to offer.
+  return fallback
+    ? youtubeClientArgs(ytFallbackClients(), false)
+    : youtubeClientArgs(ytClients(), true);
 }
 
 // Stderr signatures that mean "the platform is refusing our server", as

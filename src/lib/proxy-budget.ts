@@ -9,11 +9,23 @@ import path from "node:path";
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "proxy-usage.json");
 
-// Daily ceiling on proxied bandwidth, in MB. Generous by default; tune with
-// YTDLP_PROXY_DAILY_MB, or set it to 0 to disable the cap entirely.
+// No daily ceiling by default.
+//
+// The cap existed because a lookup cost tens of megabytes of somebody's home
+// connection, so an unlimited site meant an unlimited bill. It does not any
+// more: enumerating HLS was doing that, skipping it took a lookup from 44 MB to
+// 0.2 MB, and media is fetched by the server straight from the CDN rather than
+// pulled through the relay. A day of heavy use is now measured in megabytes.
+//
+// So the ceiling was costing more than it saved. Visitors were told YouTube had
+// hit its limit for the day, which is a bad thing to tell someone about a
+// downloader, and it was triggered by an accounting estimate rather than by
+// anything actually being spent. Set YTDLP_PROXY_DAILY_MB to a number to put a
+// ceiling back; the counting still runs either way, so /admin keeps showing
+// what is being used.
 export const PROXY_DAILY_MB = (() => {
   const n = Number(process.env.YTDLP_PROXY_DAILY_MB);
-  return Number.isFinite(n) && n >= 0 ? n : 2048;
+  return Number.isFinite(n) && n >= 0 ? n : 0;
 })();
 
 // We don't know a download's exact size when it starts, so estimate
