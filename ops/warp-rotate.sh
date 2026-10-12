@@ -80,8 +80,6 @@ else
   flock -n 9 || exit 0
 fi
 
-[ "$force" = 1 ] || [ "$now_mode" = 1 ] || [ -f "$FLAG" ] || exit 0
-
 # Only when the app is really using WARP. With the home relay or a paid proxy
 # configured, the note is about some other address and this has nothing to do.
 proxy="$(grep -E '^YTDLP_PROXY=' "$APP_DIR/.env.local" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d "\"'")"
@@ -97,6 +95,61 @@ case "$proxy" in
 esac
 port="${proxy##*:}"
 port="${port%%/*}"
+
+# Creating a registration can fail on its own, and by then the old one is
+# already gone, which leaves WARP with nothing at all. That happened once
+# while this was being tested. So it is asked for a few times.
+register() {
+  for _ in 1 2 3; do
+    "${W[@]}" registration new >/dev/null 2>&1 && return 0
+    sleep 10
+  done
+  return 1
+}
+
+# Proxy mode on the app's port, connected, and carrying traffic.
+bring_up() {
+  "${W[@]}" mode proxy >/dev/null 2>&1
+  "${W[@]}" proxy port "$port" >/dev/null 2>&1
+  "${W[@]}" connect >/dev/null 2>&1
+  for _ in $(seq 1 30); do
+    "${W[@]}" status 2>/dev/null | grep -q 'Connected' && return 0
+    sleep 2
+  done
+  return 1
+}
+
+warp_up() {
+  "${W[@]}" status 2>/dev/null | grep -q 'Connected' &&
+    ss -Htln "( sport = :$port )" 2>/dev/null | grep -q .
+}
+
+# WARP being down is a different fault from its address being refused, and
+# the site cannot report it as a refusal: it simply finds nothing listening.
+# So cron checks for it every minute, without spending a YouTube lookup.
+REPAIR_STATE="${WARP_REPAIR_STATE:-/var/lib/pasteandsave/warp-last-repair}"
+if [ "$now_mode" = 0 ] && ! warp_up; then
+  since_repair=$(( $(date +%s) - $(cat "$REPAIR_STATE" 2>/dev/null || echo 0) ))
+  # After a repair that did not take, wait five minutes before the next.
+  if [ "$since_repair" -ge 300 ]; then
+    reason="$("${W[@]}" status 2>&1 | tr '\n' ' ' | cut -c1-120)"
+    mkdir -p "$(dirname "$REPAIR_STATE")"
+    if "${W[@]}" status 2>&1 | grep -qi 'registration missing\|missing registration'; then
+      register
+    fi
+    if bring_up && warp_up; then
+      say "WARP was down ($reason), it is back"
+    else
+      date +%s >"$REPAIR_STATE"
+      say "WARP is down ($reason) and did not come back"
+      send_alert "WARP is down" \
+        "Cloudflare WARP on the server is not running ($reason). YouTube downloads fail until it is back. This is retried every five minutes."
+      exit 1
+    fi
+  fi
+fi
+
+[ "$force" = 1 ] || [ "$now_mode" = 1 ] || [ -f "$FLAG" ] || exit 0
 
 now="$(date +%s)"
 last="$(cat "$STATE" 2>/dev/null || echo 0)"
@@ -175,7 +228,9 @@ if [ "$now_mode" = 1 ]; then
     say "WARP was swapped moments ago and its address is refused already ($old), not swapping again yet"
     exit 1
   fi
-  remember_refused "$(block_of "$old")"
+  # Unknown means WARP is not answering at all, which says nothing about any
+  # block; the swap below brings it back either way.
+  [ "$old" != unknown ] && remember_refused "$(block_of "$old")"
 elif [ "$force" = 0 ]; then
   # The note can outlive the problem: one unlucky lookup, or a block that
   # lifted on its own. A swap is not free, so check first.
@@ -200,15 +255,8 @@ done
 
 swap_registration() {
   "${W[@]}" registration delete >/dev/null 2>&1
-  "${W[@]}" registration new >/dev/null 2>&1 || return 1
-  "${W[@]}" mode proxy >/dev/null 2>&1
-  "${W[@]}" proxy port "$port" >/dev/null 2>&1
-  "${W[@]}" connect >/dev/null 2>&1
-  for _ in $(seq 1 30); do
-    "${W[@]}" status 2>/dev/null | grep -q 'Connected' && return 0
-    sleep 2
-  done
-  return 1
+  register || return 1
+  bring_up
 }
 
 mkdir -p "$(dirname "$STATE")"

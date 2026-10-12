@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 import { clearInfo, putInfo } from "./info-cache";
-import { noteProxyRefused, onProxySwapped, rotateProxyNow } from "./proxy-health";
+import { noteProxyRefused, onProxySwapped, rotateProxyNow, rotateScriptPath } from "./proxy-health";
 
 // Cached lookups hold links signed for the proxy's address. Once it has a new
 // one they would all be refused, so they go.
@@ -239,6 +239,11 @@ export function proxyStatus(): { configured: boolean; hosts: string[] } {
  * on every request.
  */
 let proxyProbe: { ok: boolean; at: number } | null = null;
+// A swap brings WARP back up, and a remembered "not listening" from seconds
+// before would turn the retry away.
+onProxySwapped(() => {
+  proxyProbe = null;
+});
 export async function proxyReachable(): Promise<boolean> {
   if (!YTDLP_PROXY) return false;
   const now = Date.now();
@@ -837,12 +842,14 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
     // come back later, get the proxy a fresh address while they wait and ask
     // once more. Done outside the lookup slot, so a swap does not hold one of
     // the four slots other visitors need.
-    if (
-      err instanceof PlatformBlockedError &&
-      refusedThroughProxy(url, err.message) &&
-      (await rotateProxyNow())
-    ) {
-      console.log(`[info] ${safeHostname(url)} refused the proxy's address; it has a new one, asking again`);
+    const refused = err instanceof PlatformBlockedError && refusedThroughProxy(url, err.message);
+    // WARP not answering at all. A fresh registration brings it back too, so
+    // the visitor gets the same treatment rather than "briefly unavailable".
+    const warpDown = err instanceof ProxyUnreachableError && rotateScriptPath() !== null;
+    if ((refused || warpDown) && (await rotateProxyNow())) {
+      console.log(
+        `[info] ${safeHostname(url)}: ${refused ? "proxy address refused" : "proxy was down"}, it has a new one, asking again`,
+      );
       return await fetchInfoOnce(url);
     }
     throw err;
