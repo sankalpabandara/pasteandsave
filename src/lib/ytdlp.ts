@@ -4,6 +4,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 import { putInfo } from "./info-cache";
+import { noteProxyRefused } from "./proxy-health";
 import {
   shouldTryDirect,
   recordDirectResult,
@@ -922,6 +923,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
       return parseInfoJson(stdout);
         } catch (retryErr) {
           if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
+            noteIfProxyRefused(url, retryErr.message);
             throw new PlatformBlockedError(retryErr.message);
           }
           throw retryErr;
@@ -979,12 +981,28 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
         }
       }
       if (err instanceof Error && isBlockedByPlatform(err.message)) {
+        noteIfProxyRefused(url, err.message);
         throw new PlatformBlockedError(err.message);
       }
       throw err;
     }
   } finally {
     release();
+  }
+}
+
+/**
+ * Leaves a note for ops/warp-rotate.sh when the refusal came through the
+ * proxy and was aimed at the address itself.
+ *
+ * Both conditions matter. A refusal of this server's own address is old news
+ * and a new proxy registration would not change it. A bare 403 is usually an
+ * expired or mis-signed media link, and swapping the exit address over one
+ * would only cut off downloads in progress.
+ */
+export function noteIfProxyRefused(url: string, message: string): void {
+  if (proxyArgs(url).length > 0 && isAddressRefused(message)) {
+    noteProxyRefused(safeHostname(url));
   }
 }
 

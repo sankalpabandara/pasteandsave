@@ -18,7 +18,9 @@ import {
   worthProxyRetry,
   plainProxyArgs,
   looksLikeProxyAuthFailure,
+  isAddressRefused,
 } from "./ytdlp";
+import { noteProxyRefused } from "./proxy-health";
 import { BusyError, jobLimiter } from "./concurrency";
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
@@ -385,6 +387,11 @@ export function startJob(opts: StartJobOptions): string {
         console.error(
           `[job ${id}] failed category=${category} exit=${code} url_host=${safeHost(opts.url)} proxied=${proxyFlags.length > 0}`,
         );
+        // A download that has to extract again meets the same bot wall a
+        // lookup does, so it reports a refused proxy address the same way.
+        if (proxyFlags.length > 0 && isAddressRefused(stderrTail)) {
+          noteProxyRefused(safeHost(opts.url));
+        }
         if (job.status !== "error") {
           job.status = "error";
           job.error = message;
