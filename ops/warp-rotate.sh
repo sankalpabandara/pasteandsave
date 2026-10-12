@@ -27,7 +27,14 @@ STATE="${WARP_ROTATE_STATE:-/var/lib/pasteandsave/warp-last-rotation}"
 # WARP at that moment, and asking Cloudflare for registrations in a tight loop
 # is the quickest way to be refused those too.
 MIN_GAP="${WARP_ROTATE_MIN_GAP:-600}"
-MAX_TRIES="${WARP_ROTATE_TRIES:-3}"
+# YouTube refuses whole blocks of WARP addresses, not single ones. Sampled
+# right after a flag: 4 of 6 fresh registrations passed, and the 2 that failed
+# sat in the two blocks already refused (2a09:bac1:27c0 and 2a09:bac5:33e3).
+# So refused blocks are remembered and skipped, and a swap is cheap enough,
+# a few seconds each, to allow several before giving up.
+MAX_TRIES="${WARP_ROTATE_TRIES:-8}"
+FLAGGED="${WARP_FLAGGED_BLOCKS:-/var/lib/pasteandsave/warp-refused-blocks}"
+FLAGGED_TTL="${WARP_FLAGGED_TTL:-21600}"
 # The same public video the yt-dlp self-test uses. It was one of the ones
 # refused while the address was flagged, so it is a fair test.
 TEST_URL="${WARP_TEST_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
@@ -71,22 +78,68 @@ fi
 JSR=()
 [ -x "$APP_DIR/bin/deno" ] && JSR=(--js-runtimes "deno:$APP_DIR/bin/deno")
 
-# One real lookup through WARP, the way the app makes it.
+# One real lookup through WARP, the way the app makes it. Why it failed is left
+# in $why, because "refused" and "WARP was not ready yet" call for different
+# things.
+why=""
 youtube_answers() {
-  timeout 90 "$APP_DIR/bin/yt-dlp" --proxy "$proxy" "${JSR[@]}" --no-warnings \
-    --skip-download --print id -- "$TEST_URL" >/dev/null 2>&1
+  local out
+  out="$(timeout 90 "$APP_DIR/bin/yt-dlp" --proxy "$proxy" "${JSR[@]}" --no-warnings \
+    --skip-download --print id -- "$TEST_URL" 2>&1)" && return 0
+  case "$out" in
+    *"not a bot"*|*"Sign in to confirm"*|*"HTTP Error 429"*) why="refused" ;;
+    *) why="$(printf '%s' "$out" | tail -n1 | cut -c1-100)" ;;
+  esac
+  return 1
 }
 
+# Asked a few times, because right after a reconnect the proxy can take a
+# moment to carry traffic.
 exit_address() {
-  curl -s --max-time 10 -x "$proxy" https://api64.ipify.org 2>/dev/null || echo unknown
+  local a
+  for _ in 1 2 3 4 5; do
+    a="$(curl -s --max-time 8 -x "$proxy" https://api64.ipify.org 2>/dev/null)"
+    [ -n "$a" ] && { echo "$a"; return 0; }
+    sleep 2
+  done
+  echo unknown
+}
+
+# The block an address belongs to: the first three groups of an IPv6 address,
+# or the whole of an IPv4 one.
+block_of() {
+  case "$1" in
+    *:*) printf '%s\n' "$1" | cut -d: -f1-3 ;;
+    *) printf '%s\n' "$1" ;;
+  esac
+}
+
+block_refused() {
+  local b="$1" t
+  t="$(awk -v b="$b" '$1 == b { print $2 }' "$FLAGGED" 2>/dev/null | tail -n1)"
+  [ -n "$t" ] && [ $(( $(date +%s) - t )) -lt "$FLAGGED_TTL" ]
+}
+
+remember_refused() {
+  local b="$1" now
+  now="$(date +%s)"
+  mkdir -p "$(dirname "$FLAGGED")"
+  {
+    awk -v b="$b" -v now="$now" -v ttl="$FLAGGED_TTL" '$1 != b && now - $2 < ttl' "$FLAGGED" 2>/dev/null
+    printf '%s %s\n' "$b" "$now"
+  } >"$FLAGGED.tmp" && mv -f "$FLAGGED.tmp" "$FLAGGED"
 }
 
 # The note can outlive the problem: one unlucky lookup, or a block that lifted
 # on its own. A swap is not free, so check first.
-if [ "$force" = 0 ] && youtube_answers; then
-  echo "$(stamp) YouTube answers through WARP ($(exit_address)), no swap needed"
-  rm -f "$FLAG"
-  exit 0
+old="$(exit_address)"
+if [ "$force" = 0 ]; then
+  if youtube_answers; then
+    echo "$(stamp) YouTube answers through WARP ($old), no swap needed"
+    rm -f "$FLAG"
+    exit 0
+  fi
+  [ "$why" = refused ] && remember_refused "$(block_of "$old")"
 fi
 
 # Downloads already under way hold links signed for the current address, and
@@ -110,20 +163,28 @@ swap_registration() {
 }
 
 mkdir -p "$(dirname "$STATE")"
-old="$(exit_address)"
 for try in $(seq 1 "$MAX_TRIES"); do
   if ! swap_registration; then
     echo "$(stamp) swap $try: WARP did not reconnect"
+    sleep 3
     continue
   fi
   new="$(exit_address)"
+  block="$(block_of "$new")"
+  if [ "$new" != unknown ] && block_refused "$block"; then
+    echo "$(stamp) swap $try: $new is in $block, which YouTube refused recently, skipping"
+    sleep 3
+    continue
+  fi
   if youtube_answers; then
     date +%s >"$STATE"
     rm -f "$FLAG"
     echo "$(stamp) swapped WARP registration ($old -> $new), YouTube answers again"
     exit 0
   fi
-  echo "$(stamp) swap $try: new address $new is refused too"
+  [ "$why" = refused ] && remember_refused "$block"
+  echo "$(stamp) swap $try: $new failed ($why)"
+  sleep 3
 done
 
 # Out of tries. Recording the attempt makes the next one wait the full gap
