@@ -13,8 +13,19 @@ set -uo pipefail
 APP_DIR="${APP_DIR:-/opt/pasteandsave}"
 APP_NAME="${APP_NAME:-pasteandsave}"
 BRANCH="${BRANCH:-main}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 LOCK="/tmp/pasteandsave-deploy.lock"
+
+# The health check has to ask the port the app really listens on, which pm2
+# sets in ecosystem.config.js. This used to be hardcoded to 3000. When the app
+# moved to 4100 every deploy then built, checked an empty port, decided the new
+# version was broken and rolled it back, restarting the live site each time,
+# every two minutes, for as long as a new commit was waiting.
+app_port() {
+  local p
+  p="$(grep -oE 'PORT:[[:space:]]*"?[0-9]+' "$APP_DIR/ecosystem.config.js" 2>/dev/null | grep -oE '[0-9]+$' | head -n1)"
+  echo "${p:-3000}"
+}
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:$(app_port)/api/health}"
 
 stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 
