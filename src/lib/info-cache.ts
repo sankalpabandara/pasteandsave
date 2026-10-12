@@ -59,6 +59,14 @@ export function takeInfo(url: string): string | null {
   return entry.raw;
 }
 
+/**
+ * Forgets everything. Called when the proxy gets a new exit address, because
+ * every link held here is signed for the old one and would be refused.
+ */
+export function clearInfo(): void {
+  cache.clear();
+}
+
 /** For tests and for reporting how much is being reused. */
 export function infoCacheSize(): number {
   evictExpired(Date.now());

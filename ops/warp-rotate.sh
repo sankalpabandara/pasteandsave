@@ -16,7 +16,8 @@
 #
 #   * * * * * /opt/pasteandsave/ops/warp-rotate.sh >> /var/log/pasteandsave-warp.log 2>&1
 #
-# Run it with --force to swap the registration by hand.
+# Run it with --force to swap the registration by hand. The site runs it with
+# --now when a visitor's lookup or download is refused, and waits for it.
 
 set -uo pipefail
 
@@ -41,18 +42,45 @@ TEST_URL="${WARP_TEST_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
 LOCK="/tmp/pasteandsave-warp-rotate.lock"
 W=(warp-cli --accept-tos)
 
+LOG="${WARP_ROTATE_LOG:-/var/log/pasteandsave-warp.log}"
+# --now is how the site calls this, while a visitor whose download was refused
+# waits for the answer. A swap that has only just happened is not repeated
+# that soon: if its address is refused already, another one a minute later is
+# unlikely to fare better.
+NOW_GAP="${WARP_ROTATE_NOW_GAP:-60}"
+
 stamp() { date "+%Y-%m-%d %H:%M:%S"; }
+
+force=0
+now_mode=0
+case "${1:-}" in
+  --force) force=1 ;;
+  --now) now_mode=1 ;;
+esac
+
+# Cron sends this script's output to the log itself. When the site runs it,
+# the output goes back to the site, so it is written to the log here too.
+say() {
+  local line
+  line="$(stamp) $*"
+  echo "$line"
+  [ "$now_mode" = 1 ] && echo "$line" >>"$LOG" 2>/dev/null
+  return 0
+}
 
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib-alert.sh"
 
 exec 9>"$LOCK"
-flock -n 9 || exit 0
+if [ "$now_mode" = 1 ]; then
+  # A swap already running is the answer this caller wants too, so wait for
+  # it rather than skip.
+  flock -w 60 9 || { say "another swap is still running, giving up"; exit 1; }
+else
+  flock -n 9 || exit 0
+fi
 
-force=0
-[ "${1:-}" = "--force" ] && force=1
-
-[ "$force" = 1 ] || [ -f "$FLAG" ] || exit 0
+[ "$force" = 1 ] || [ "$now_mode" = 1 ] || [ -f "$FLAG" ] || exit 0
 
 # Only when the app is really using WARP. With the home relay or a paid proxy
 # configured, the note is about some other address and this has nothing to do.
@@ -61,7 +89,9 @@ case "$proxy" in
   socks5*://127.0.0.1:*|socks5*://localhost:*) ;;
   *)
     rm -f "$FLAG"
-    [ "$force" = 1 ] && echo "$(stamp) YTDLP_PROXY is not a local WARP proxy, nothing to do"
+    [ "$force" = 1 ] && say "YTDLP_PROXY is not a local WARP proxy, nothing to do"
+    # The site asked for a new address and there is none to give.
+    [ "$now_mode" = 1 ] && exit 1
     exit 0
     ;;
 esac
@@ -70,7 +100,7 @@ port="${port%%/*}"
 
 now="$(date +%s)"
 last="$(cat "$STATE" 2>/dev/null || echo 0)"
-if [ "$force" = 0 ] && [ $((now - last)) -lt "$MIN_GAP" ]; then
+if [ "$force" = 0 ] && [ "$now_mode" = 0 ] && [ $((now - last)) -lt "$MIN_GAP" ]; then
   # Leave the note where it is; the next run after the gap picks it up.
   exit 0
 fi
@@ -130,12 +160,27 @@ remember_refused() {
   } >"$FLAGGED.tmp" && mv -f "$FLAGGED.tmp" "$FLAGGED"
 }
 
-# The note can outlive the problem: one unlucky lookup, or a block that lifted
-# on its own. A swap is not free, so check first.
 old="$(exit_address)"
-if [ "$force" = 0 ]; then
+if [ "$now_mode" = 1 ]; then
+  # The site has just been refused twice over, by two different player
+  # clients, so the address is known bad and there is no need to spend a
+  # lookup confirming it. The exception is a swap moments ago, by another
+  # visitor's refusal or by cron: then the question is whether its address
+  # already answers.
+  if [ $((now - last)) -lt "$NOW_GAP" ]; then
+    if youtube_answers; then
+      say "WARP was swapped moments ago and YouTube answers ($old)"
+      exit 0
+    fi
+    say "WARP was swapped moments ago and its address is refused already ($old), not swapping again yet"
+    exit 1
+  fi
+  remember_refused "$(block_of "$old")"
+elif [ "$force" = 0 ]; then
+  # The note can outlive the problem: one unlucky lookup, or a block that
+  # lifted on its own. A swap is not free, so check first.
   if youtube_answers; then
-    echo "$(stamp) YouTube answers through WARP ($old), no swap needed"
+    say "YouTube answers through WARP ($old), no swap needed"
     rm -f "$FLAG"
     exit 0
   fi
@@ -143,8 +188,12 @@ if [ "$force" = 0 ]; then
 fi
 
 # Downloads already under way hold links signed for the current address, and
-# a new address would break them. Give them up to two minutes to finish.
-for _ in $(seq 1 24); do
+# a new address would break them. Cron gives them up to two minutes to finish.
+# A visitor is waiting on --now, so it gives them fifteen seconds; a download
+# cut off here starts again by itself with fresh links.
+wait_rounds=24
+[ "$now_mode" = 1 ] && { wait_rounds=3; MAX_TRIES=5; }
+for _ in $(seq 1 "$wait_rounds"); do
   pgrep -f -- "--proxy $proxy" >/dev/null 2>&1 || break
   sleep 5
 done
@@ -165,25 +214,25 @@ swap_registration() {
 mkdir -p "$(dirname "$STATE")"
 for try in $(seq 1 "$MAX_TRIES"); do
   if ! swap_registration; then
-    echo "$(stamp) swap $try: WARP did not reconnect"
+    say "swap $try: WARP did not reconnect"
     sleep 3
     continue
   fi
   new="$(exit_address)"
   block="$(block_of "$new")"
   if [ "$new" != unknown ] && block_refused "$block"; then
-    echo "$(stamp) swap $try: $new is in $block, which YouTube refused recently, skipping"
+    say "swap $try: $new is in $block, which YouTube refused recently, skipping"
     sleep 3
     continue
   fi
   if youtube_answers; then
     date +%s >"$STATE"
     rm -f "$FLAG"
-    echo "$(stamp) swapped WARP registration ($old -> $new), YouTube answers again"
+    say "swapped WARP registration ($old -> $new), YouTube answers again$([ "$now_mode" = 1 ] && echo ', for a visitor')"
     exit 0
   fi
   [ "$why" = refused ] && remember_refused "$block"
-  echo "$(stamp) swap $try: $new failed ($why)"
+  say "swap $try: $new failed ($why)"
   sleep 3
 done
 

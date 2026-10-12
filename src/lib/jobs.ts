@@ -20,7 +20,7 @@ import {
   looksLikeProxyAuthFailure,
   isAddressRefused,
 } from "./ytdlp";
-import { noteProxyRefused } from "./proxy-health";
+import { noteProxyRefused, proxyGeneration, rotateProxyNow } from "./proxy-health";
 import { BusyError, jobLimiter } from "./concurrency";
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
@@ -267,6 +267,10 @@ export function startJob(opts: StartJobOptions): string {
     : proxyArgs(opts.url);
   let triedProxyFallback = false;
   let triedPlainProxy = false;
+  let triedFreshStart = false;
+  // Which proxy address this download began on. If it changes underneath, the
+  // links it holds were signed for an address that is gone.
+  const startGeneration = proxyGeneration();
 
   // One deadline for the whole job, retry included, so a download can never
   // hold its slot indefinitely.
@@ -378,6 +382,37 @@ export function startJob(opts: StartJobOptions): string {
           if (infoJson) void recordProxyUsage(opts.mode);
           run(retryProxy, infoJson);
           return;
+        }
+
+        // A fresh start through the proxy, once. Three ways a proxied download
+        // ends up here: the proxy's address was refused, the address was
+        // swapped while this was running, or the CDN turned down links that
+        // had gone stale. The first needs a new address, all three need new
+        // links, and none of them is the visitor's problem to retry.
+        if (!triedFreshStart && proxyFlags.length > 0 && job.status !== "error") {
+          const refused = isAddressRefused(stderrTail);
+          const stale =
+            proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
+          if (refused || stale) {
+            triedFreshStart = true;
+            if (refused) console.warn(`[job ${id}] proxy address refused, getting a new one`);
+            const ready = refused ? await rotateProxyNow() : true;
+            // A swap can take a while, long enough for the job's own deadline
+            // to have stopped it in the meantime.
+            const stoppedMeanwhile = (job.status as JobStatus) === "error";
+            if (ready && !stoppedMeanwhile) {
+              console.warn(`[job ${id}] starting again with fresh links host=${safeHost(opts.url)}`);
+              stderrTail = "";
+              job.percent = 0;
+              await clearTmp();
+              // The saved metadata holds the old links, so it goes too, and
+              // this run reads the page again before downloading.
+              await fsp.rm(path.join(tmpDir, INFO_NAME), { force: true });
+              void recordProxyUsage(opts.mode);
+              run(jobProxy);
+              return;
+            }
+          }
         }
 
         // Never forward stderr: yt-dlp puts the full proxy URL (credentials

@@ -3,8 +3,12 @@ import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
-import { putInfo } from "./info-cache";
-import { noteProxyRefused } from "./proxy-health";
+import { clearInfo, putInfo } from "./info-cache";
+import { noteProxyRefused, onProxySwapped, rotateProxyNow } from "./proxy-health";
+
+// Cached lookups hold links signed for the proxy's address. Once it has a new
+// one they would all be refused, so they go.
+onProxySwapped(clearInfo);
 import {
   shouldTryDirect,
   recordDirectResult,
@@ -826,6 +830,26 @@ export function failureFingerprint(err: unknown): string {
 }
 
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {
+  try {
+    return await fetchInfoOnce(url);
+  } catch (err) {
+    // The proxy's own address was refused. Rather than tell the visitor to
+    // come back later, get the proxy a fresh address while they wait and ask
+    // once more. Done outside the lookup slot, so a swap does not hold one of
+    // the four slots other visitors need.
+    if (
+      err instanceof PlatformBlockedError &&
+      refusedThroughProxy(url, err.message) &&
+      (await rotateProxyNow())
+    ) {
+      console.log(`[info] ${safeHostname(url)} refused the proxy's address; it has a new one, asking again`);
+      return await fetchInfoOnce(url);
+    }
+    throw err;
+  }
+}
+
+async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
   // Hold a concurrency slot for the whole lookup so a burst of requests can't
   // spawn unlimited yt-dlp processes.
   const release = await lookupLimiter.acquire(QUEUE_WAIT_MS);
@@ -992,18 +1016,20 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
 }
 
 /**
- * Leaves a note for ops/warp-rotate.sh when the refusal came through the
- * proxy and was aimed at the address itself.
+ * Whether a failure came through the proxy and was aimed at the address itself.
  *
  * Both conditions matter. A refusal of this server's own address is old news
- * and a new proxy registration would not change it. A bare 403 is usually an
+ * and a new proxy address would not change it. A bare 403 is usually an
  * expired or mis-signed media link, and swapping the exit address over one
  * would only cut off downloads in progress.
  */
+export function refusedThroughProxy(url: string, message: string): boolean {
+  return proxyArgs(url).length > 0 && isAddressRefused(message);
+}
+
+/** Leaves a note for ops/warp-rotate.sh, the backstop on cron. */
 export function noteIfProxyRefused(url: string, message: string): void {
-  if (proxyArgs(url).length > 0 && isAddressRefused(message)) {
-    noteProxyRefused(safeHostname(url));
-  }
+  if (refusedThroughProxy(url, message)) noteProxyRefused(safeHostname(url));
 }
 
 // Hostname only: full URLs can carry tokens, and logs are not the place.
