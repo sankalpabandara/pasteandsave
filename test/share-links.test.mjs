@@ -11,7 +11,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isShareLink } from "../src/lib/share-links.ts";
+import { isShareLink, shareRelayBase } from "../src/lib/share-links.ts";
 
 test("the forms the Share button produces are recognised", () => {
   assert.equal(isShareLink("https://fb.watch/abcd1234/"), true);
@@ -46,4 +46,24 @@ test("junk input does not throw", () => {
   // Reached straight from visitor-supplied text.
   assert.equal(isShareLink("not a url"), false);
   assert.equal(isShareLink(""), false);
+});
+
+test("share links are asked of the relay, not of a SOCKS download proxy", () => {
+  // WARP carries YouTube but has no /resolve endpoint. Asking it would only
+  // ever fail, so a SOCKS proxy on its own means there is no relay to ask.
+  assert.equal(shareRelayBase({ YTDLP_PROXY: "socks5h://127.0.0.1:40000" }), null);
+  assert.equal(
+    shareRelayBase({
+      YTDLP_PROXY: "socks5h://127.0.0.1:40000",
+      SHARE_LINK_RELAY: "http://127.0.0.1:8081",
+    }),
+    "http://127.0.0.1:8081",
+  );
+});
+
+test("an HTTP proxy is still treated as the relay when nothing else is named", () => {
+  // The setup that was live before WARP: the home relay is the proxy.
+  assert.equal(shareRelayBase({ YTDLP_PROXY: "http://127.0.0.1:8081" }), "http://127.0.0.1:8081");
+  assert.equal(shareRelayBase({}), null);
+  assert.equal(shareRelayBase({ SHARE_LINK_RELAY: "not a url" }), null);
 });

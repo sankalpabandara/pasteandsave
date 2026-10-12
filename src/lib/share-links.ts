@@ -62,16 +62,30 @@ function sameFamily(rawUrl: string): boolean {
  * through the reverse tunnel. Falls through to resolving locally when there is
  * no relay, so a box without one behaves as it did before.
  */
-async function askRelay(rawUrl: string): Promise<string | null> {
-  const proxy = process.env.YTDLP_PROXY;
-  if (!proxy) return null;
-  let base: string;
+/**
+ * Where to send share-link questions, or null when there is nowhere to ask.
+ *
+ * This is not always the download proxy. The proxy can be a plain SOCKS exit
+ * such as Cloudflare WARP, which carries traffic but has no /resolve endpoint,
+ * while the home relay has one. SHARE_LINK_RELAY names the relay directly.
+ * Without it the proxy is asked when it speaks HTTP, which is how the relay has
+ * always been reached when it doubles as the proxy.
+ */
+export function shareRelayBase(env: NodeJS.ProcessEnv = process.env): string | null {
+  const raw = env.SHARE_LINK_RELAY || env.YTDLP_PROXY;
+  if (!raw) return null;
   try {
-    const u = new URL(proxy);
-    base = `${u.protocol}//${u.host}`;
+    const u = new URL(raw);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return `${u.protocol}//${u.host}`;
   } catch {
     return null;
   }
+}
+
+async function askRelay(rawUrl: string): Promise<string | null> {
+  const base = shareRelayBase();
+  if (!base) return null;
   try {
     const res = await fetch(`${base}/resolve?url=${encodeURIComponent(rawUrl)}`, {
       signal: AbortSignal.timeout(TIMEOUT_MS + 4000),
