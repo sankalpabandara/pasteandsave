@@ -10,19 +10,22 @@ Works in Chrome, Edge, Brave, Opera (Chromium) and Firefox from one codebase.
 ## What it does
 
 - **Download without leaving the page.** A "Download now" button sits on the
-  corner of any real video. Press it and the quality list opens there — video
-  qualities with sizes, plus MP3 — and picking one saves straight to the
-  downloads folder. No new tab. Decorative background loops, tiny clips and
-  hidden players are ignored, only the largest of any stacked players is
-  offered, and the ✕ dismisses a button you don't want.
+  corner of any real video. Press it and the quality list opens there, with
+  video qualities, their sizes and MP3, and picking one saves straight to the
+  downloads folder. No new tab. A plain video file is saved by the browser
+  directly. Decorative background loops, tiny clips and hidden players are
+  ignored, only the largest of any stacked players is offered, and the ✕
+  hides the button on that video for as long as the page is open.
 - **One button on any video page.** Press the extension on a YouTube, TikTok,
-  Instagram, Facebook (etc.) page and it hands the link to PasteAndSave, which
-  resolves the real download — YouTube included, via the site's proxy.
+  Instagram, Facebook or similar page and it hands the video on screen to
+  PasteAndSave, which resolves the real download, YouTube included. On a feed
+  it sends the clip you are looking at, not the feed.
 - **Save every video found**, in one action, when a page has several.
 - **Switch it off per site.** A toggle in the popup stops both the in-page
   button and the traffic watching for that site, subdomains included.
-- Watches the page's own network traffic for video and audio
-- Toolbar badge counts what it found; nothing is injected into pages
+- Watches the page's own network traffic for video and audio, leaving out
+  the small pieces a streaming player fetches
+- Toolbar badge counts what it found
 - One-click direct download for plain MP4, WebM, MP3 and similar files
 - Streams (HLS/DASH, YouTube, Instagram, TikTok and other protected hosts)
   open on PasteAndSave with the link already loaded
@@ -41,6 +44,9 @@ Works in Chrome, Edge, Brave, Opera (Chromium) and Firefox from one codebase.
 traffic: detection, classification, sizes from range responses, per-tab
 isolation, navigation clearing, the item cap, settings, shortcut and menu
 handling. Set `API_STYLE=firefox` to exercise the Firefox `browser` global.
+`node --test test/background-races.test.mjs` loads the worker with storage
+that answers late, the way a real browser does after the worker sleeps, and
+covers settings, restores, stream pieces, who may send what, and downloads.
 `test/popup-harness.html` runs the real popup against fixture data in a
 plain browser tab.
 
@@ -53,25 +59,31 @@ plain browser tab.
 
 ## Install in Firefox
 
+Needs Firefox 140 or newer.
+
 1. In the unzipped folder, delete `manifest.json` and rename
    `manifest-firefox.json` to `manifest.json` (Firefox runs the worker as
    an event page instead of a service worker)
 2. Open `about:debugging#/runtime/this-firefox`
 3. Click "Load Temporary Add-on"
 4. Pick the `manifest.json` file
+5. If the button never appears, open `about:addons`, choose PasteAndSave,
+   then Permissions, and allow access to all websites
 
 Firefox removes temporary add-ons when it closes. For a permanent install
-the extension needs to be signed through addons.mozilla.org.
+the extension needs to be signed through addons.mozilla.org. It declares
+that it sends the address of the page you choose to PasteAndSave, which
+Firefox shows you when it is installed.
 
 ## Settings
 
 Right-click the toolbar icon and choose Options (or open the extension's
 details page and click Extension options):
 
-- **Site address** — where streams and page links open. Defaults to
+- **Site address**: where streams and page links open. Defaults to
   https://pasteandsave.com. Until that domain is live, or if you run your
   own copy, set it to your server, for example `http://localhost:3030`.
-- **Minimum file size** — files smaller than this never show in the list.
+- **Minimum file size**: files smaller than this never show in the list.
 
 ## Store note
 
@@ -88,6 +100,8 @@ the stores for that reason.
 - `storage`: keeps the found-media list alive between browser events
 
 The in-page button runs from a content script on http and https pages. It
-only reads video elements to know where to draw itself, never modifies the
-page's own markup, and keeps its styles inside a shadow root so nothing can
-leak either way.
+reads video elements and the links around them to know where to draw itself
+and which video it belongs to, and adds one element of its own to hold the
+button. Nothing in the page's own markup is changed. The button lives in a
+closed shadow root that resets inherited styles, and it only responds to
+real clicks, so a page cannot press it on your behalf.

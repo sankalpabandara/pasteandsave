@@ -30,10 +30,23 @@ function categoryOf(item) {
   return "video";
 }
 
+let activeTabId = null;
+
 function openSite(url, mp3) {
   const param = mp3 ? "&mp3=1" : "";
   api.tabs.create({ url: `${site}/?url=${encodeURIComponent(url)}${param}` });
   window.close();
+}
+
+// Sends whatever is playing on this tab. On a feed the page address is the
+// feed, which the site cannot use, so the worker asks the page which clip is
+// on screen first, exactly as the in-page button does.
+function sendThisPage() {
+  if (activeTabId === null || !pageIsHttp) return;
+  api.runtime.sendMessage({ type: "sendTabToSite", tabId: activeTabId, url: pageUrl }, () => {
+    void api.runtime.lastError;
+    window.close();
+  });
 }
 
 function download(btn, item) {
@@ -97,7 +110,8 @@ function render() {
     btn.addEventListener("click", () => {
       if (item.kind === "stream") {
         // Raw stream chunks aren't a playable file; the site fetches it whole.
-        openSite(pageIsHttp ? pageUrl : item.url);
+        if (pageIsHttp) sendThisPage();
+        else openSite(item.url);
         return;
       }
       download(btn, item);
@@ -137,7 +151,8 @@ function render() {
     // One tab per stream would bury the user, so the page itself is handed
     // over once and the site resolves whatever is on it.
     if (streams.length > 0) {
-      openSite(pageIsHttp ? pageUrl : streams[0].url);
+      if (pageIsHttp) sendThisPage();
+      else openSite(streams[0].url);
       return;
     }
     grab.textContent = `Saving ${plain.length}...`;
@@ -169,6 +184,7 @@ async function init() {
 
   pageUrl = tab.url ?? "";
   pageIsHttp = /^https?:/i.test(pageUrl);
+  activeTabId = tab.id;
   const saveBtn = document.getElementById("save-page");
   const hostEl = document.getElementById("page-host");
 
@@ -178,9 +194,9 @@ async function init() {
     } catch {
       hostEl.textContent = "";
     }
-    // Every video page — YouTube, TikTok, Facebook, etc. — is handed to the
-    // site, which resolves the actual download (YouTube via its proxy).
-    saveBtn.addEventListener("click", () => openSite(pageUrl));
+    // Every video page, YouTube, TikTok, Facebook and the rest, is handed to
+    // the site, which resolves the actual download (YouTube via its proxy).
+    saveBtn.addEventListener("click", sendThisPage);
   } else {
     saveBtn.disabled = true;
     document.getElementById("save-page-label").textContent = "Open a video page first";

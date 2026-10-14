@@ -8,8 +8,12 @@
 // normal downloads folder.
 //
 // Rules this file sticks to, because it is a guest on pages we do not own:
-//   - Everything lives inside a shadow root, so styling cannot cross either way.
+//   - Everything lives inside a closed shadow root that resets inherited
+//     styles, so the page cannot restyle it or reach into it.
 //   - Nothing is inserted into the page's layout; the UI is fixed-positioned.
+//   - Only real clicks count. Page script can call .click() on anything it
+//     can reach, and a download started that way would save files to the
+//     visitor's disk without them asking.
 //   - Decoration, tiny clips and hidden players are ignored.
 //   - Any failure is swallowed rather than allowed to break the page.
 
@@ -22,23 +26,63 @@
   const MIN_HEIGHT = 150;
   const HOST_ID = "pasteandsave-overlay-root";
 
-  let enabled = true;
+  // Off until the worker says this site is switched on, so a site the user
+  // turned off does not flash a chip while the answer is on its way.
+  let enabled = false;
   let host = null;
   let shadow = null;
   let panel = null;
   let panelFor = null;
   const chips = new Map();
   const pending = new Map();
+  // Videos whose chip the visitor closed. Remembered, because the next sync a
+  // moment later used to draw the chip straight back.
+  const dismissed = new WeakSet();
+  // The video last right-clicked, for the "Save this media" menu entry.
+  let contextVideo = null;
+
+  // An extension that was reloaded or updated leaves this script running in
+  // open tabs with no way to reach the worker. Every call then throws, and
+  // the chip sat on "Fetching…" for ever.
+  function extensionAlive() {
+    try {
+      return Boolean(api.runtime?.id);
+    } catch {
+      return false;
+    }
+  }
+
+  function send(message, callback) {
+    if (!extensionAlive()) {
+      callback?.({ ok: false, error: "PasteAndSave was updated. Reload this page to use it again." });
+      return;
+    }
+    try {
+      api.runtime.sendMessage(message, (res) => {
+        const err = api.runtime.lastError;
+        callback?.(err ? undefined : res, err);
+      });
+    } catch {
+      callback?.({ ok: false, error: "PasteAndSave was updated. Reload this page to use it again." });
+    }
+  }
 
   function makeHost() {
     if (host) return;
     host = document.createElement("div");
     host.id = HOST_ID;
     host.style.cssText =
-      "position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;pointer-events:none;";
-    shadow = host.attachShadow({ mode: "open" });
+      "position:fixed!important;top:0!important;left:0!important;width:0!important;height:0!important;" +
+      "z-index:2147483647!important;pointer-events:none!important;transform:none!important;";
+    shadow = host.attachShadow({ mode: "closed" });
+    // Key and pointer events from the chip and the menu stop here. Left to
+    // bubble, a Space press on a row both picked it and paused YouTube.
+    for (const type of ["keydown", "keyup", "keypress", "pointerdown", "pointerup", "mousedown", "mouseup"]) {
+      shadow.addEventListener(type, (e) => e.stopPropagation());
+    }
     const style = document.createElement("style");
     style.textContent = `
+      :host { all: initial; }
       .chip {
         position: fixed; display: inline-flex; align-items: center; gap: 6px;
         padding: 7px 11px; border-radius: 10px; border: 0;
@@ -131,9 +175,18 @@
       chip.classList.remove("show");
       return;
     }
+    // Kept clear of the top of the window, where sites put sticky headers.
+    // Clamped to 4px, a player scrolled half under YouTube's masthead had its
+    // chip sitting on top of the masthead's own buttons and taking their
+    // clicks. When too little of the video is left showing, it hides instead.
+    const top = Math.max(64, r.top + 10);
+    if (top + 34 > Math.min(r.bottom, innerHeight)) {
+      chip.classList.remove("show");
+      return;
+    }
     chip.classList.add("show");
     const width = chip.offsetWidth || 120;
-    chip.style.top = `${Math.max(4, r.top + 10)}px`;
+    chip.style.top = `${top}px`;
     chip.style.left = `${Math.min(innerWidth - width - 4, r.right - width - 10)}px`;
   }
 
@@ -202,7 +255,46 @@
    * address bar points at the feed rather than any one clip, so the permalink
    * sitting next to the video in the markup is used when there is one.
    */
+  // The same post can be linked with different tracking or time parameters
+  // (Facebook's __cft__, YouTube's &t=). Counted as different links, two of
+  // them made a card look like a feed and the climb gave up on it.
+  function linkKey(u) {
+    const keep = ["v", "story_fbid", "fbid", "id"]
+      .filter((k) => u.searchParams.has(k))
+      .map((k) => `${k}=${u.searchParams.get(k)}`)
+      .join("&");
+    return u.origin + u.pathname.replace(/\/+$/, "") + (keep ? `?${keep}` : "");
+  }
+
+  // A media file the browser can save as it is. The site cannot take one:
+  // with yt-dlp's generic extractor off, a bare .mp4 address is answered with
+  // "that link isn't from a site we can download from".
+  function isPlainFile(url) {
+    return /^https?:/i.test(url) && /\.(mp4|webm|m4v|mov|mp3|m4a)(\?|$)/i.test(url);
+  }
+
+  // The video a page is about: the largest one on screen.
+  function isPrimaryVideo(video) {
+    const picked = pickVideos();
+    return picked.length === 0 || picked[0] === video;
+  }
+
+  /** The target for a video, and whether it goes to the site or straight to disk. */
+  function targetFor(video) {
+    const url = resolveTarget(video);
+    if (!url) return null;
+    return { url, kind: isPlainFile(url) ? "file" : "page" };
+  }
+
   function resolveTarget(video) {
+    // 0. The page itself, when it is one piece of content and this is its
+    //    main video. Asked first because it is certain. A link found while
+    //    climbing is only likely, and on a watch page whose player holds just
+    //    the Next button, or a post quoting another, that one link belonged
+    //    to a different video and the wrong one was downloaded.
+    const here = new URL(location.href);
+    if (looksLikeContentLink(here) && isPrimaryVideo(video)) return here.href;
+
     // 1. A permalink inside this video's own card, which is how a feed
     //    identifies each item.
     //
@@ -217,6 +309,7 @@
     let node = video;
     for (let depth = 0; node && depth < 10; depth++) {
       const found = [];
+      const keys = [];
       const anchors = node.querySelectorAll?.("a[href]") ?? [];
       for (const a of anchors) {
         const href = a.getAttribute("href") || "";
@@ -229,7 +322,10 @@
         }
         if (!/^https?:$/.test(abs.protocol)) continue;
         if (abs.hostname !== location.hostname) continue;
-        if (looksLikeContentLink(abs) && !found.includes(abs.href)) found.push(abs.href);
+        if (looksLikeContentLink(abs) && !keys.includes(linkKey(abs))) {
+          keys.push(linkKey(abs));
+          found.push(abs.href);
+        }
       }
       // Exactly one is this item's own link. More than one means the climb
       // has reached a container holding several items, and anything it
@@ -240,7 +336,6 @@
     }
 
     // 2. The page itself, when it is already a single piece of content.
-    const here = new URL(location.href);
     if (looksLikeContentLink(here)) return here.href;
 
     // 3. A canonical link, which most players set even inside a feed.
@@ -259,20 +354,20 @@
     const built = tiktokPermalink(video);
     if (built) return built;
 
-    // 5. The nearest content link anywhere on the page, measured by how much
-    //    of the document sits between it and this video.
+    // 5. A video playing a plain media file, saved as it is. Ahead of the
+    //    proximity guess below, because it is certain: on a news page an
+    //    unrelated /story/ link nearby used to win over the actual .mp4.
+    const src = video.currentSrc || video.src || "";
+    if (isPlainFile(src)) return src;
+
+    // 6. The nearest content link close to this video, measured by how much
+    //    of the document sits between them.
     //
     //    A last resort for feeds that keep the permalink outside the card the
-    //    video sits in. Proximity is a guess, but a guess at the right video
-    //    beats the certainty of sending an address the site cannot use.
+    //    video sits in. Proximity is a guess, so it only counts when the link
+    //    really is near; anything further is somebody else's content.
     const nearest = nearestContentLink(video);
     if (nearest) return nearest;
-
-    // 6. A page that is itself a media file is worth passing through.
-    const src = video.currentSrc || video.src || "";
-    if (/^https?:/i.test(src) && /\.(mp4|webm|m4v|mov|mp3|m4a)(\?|$)/i.test(src)) {
-      return src;
-    }
 
     // Nothing usable. Returning the page address here is what produced
     // "that link isn't from a site we can download from": a message about the
@@ -311,12 +406,19 @@
 
     // The handle from this clip's own card, so a feed cannot hand back the
     // author of the clip above or below.
-    let card = video;
-    for (let d = 0; card && d < 10; d++) {
-      if (card.getAttribute?.("data-e2e") === "recommend-list-item-container") break;
-      card = card.parentElement;
+    // Without the card marker there is no telling whose handle is whose. The
+    // loop used to end on the tenth ancestor instead of nothing, and took the
+    // first handle in that wider stretch of the feed, which could belong to
+    // the clip above.
+    let card = null;
+    for (let n = video, d = 0; n && d < 10; d++, n = n.parentElement) {
+      if (n.getAttribute?.("data-e2e") === "recommend-list-item-container") {
+        card = n;
+        break;
+      }
     }
-    const scope = card || document;
+    if (!card) return null;
+    const scope = card;
     let handle = null;
     for (const a of scope.querySelectorAll("a[href]")) {
       const href = a.getAttribute("href") || "";
@@ -357,9 +459,10 @@
       if (!looksLikeContentLink(abs)) continue;
 
       // How far apart the two sit, counted in shared ancestry: the deeper
-      // their common ancestor, the more closely they belong together.
+      // their common ancestor, the more closely they belong together. Past
+      // eight steps the link belongs to some other part of the page.
       const distance = separation(video, a);
-      if (distance < bestDistance) {
+      if (distance <= 8 && distance < bestDistance) {
         bestDistance = distance;
         best = abs.href;
       }
@@ -413,8 +516,38 @@
     panel.append(head, body);
     shadow.append(panel);
     positionPanel(chip);
+    // This menu's own reference. A reply that arrives after it was closed and
+    // another opened must not draw into, or move, the new one.
+    const mine = panel;
 
-    const target = resolveTarget(video);
+    const resolved = targetFor(video);
+    const target = resolved?.url ?? null;
+
+    // A plain media file needs no site: the browser saves it as it is.
+    if (resolved?.kind === "file") {
+      title.textContent = "Video file";
+      body.textContent = "";
+      const row = document.createElement("button");
+      row.className = "row";
+      const q = document.createElement("span");
+      q.className = "q";
+      q.textContent = "Save this file";
+      const sz = document.createElement("span");
+      sz.className = "sz";
+      row.append(q, sz);
+      row.addEventListener("click", (e) => {
+        if (!e.isTrusted || row.disabled) return;
+        row.disabled = true;
+        sz.textContent = "starting…";
+        send({ type: "saveFile", url: target }, (res) => {
+          sz.textContent = res?.ok ? "saved" : "the browser refused it";
+          row.disabled = Boolean(res?.ok);
+        });
+      });
+      body.append(row);
+      positionPanel(chip);
+      return;
+    }
 
     // Nothing on this page identifies which clip this is. Sending the page
     // address anyway is what produced "that link isn't from a site we can
@@ -430,9 +563,18 @@
       return;
     }
 
+    let retried = false;
     const ask = () => {
-      api.runtime.sendMessage({ type: "getFormats", url: target }, (res) => {
-        if (!panel) return;
+      send({ type: "getFormats", url: target }, (res) => {
+        if (panel !== mine) return;
+        // No reply at all means the worker was stopped mid-lookup, which
+        // Chrome does to a long one. The site has usually finished and kept
+        // the answer by then, so one quiet retry tends to come straight back.
+        if (res === undefined && !retried) {
+          retried = true;
+          ask();
+          return;
+        }
         body.textContent = "";
         if (!res || !res.ok) {
           title.textContent = "Couldn't read it";
@@ -449,7 +591,8 @@
           q.className = "q";
           q.textContent = "Try again";
           again.append(q);
-          again.addEventListener("click", () => {
+          again.addEventListener("click", (e) => {
+            if (!e.isTrusted) return;
             body.textContent = "";
             title.textContent = "Reading this video…";
             const wait = document.createElement("p");
@@ -477,8 +620,27 @@
     if (videos.length === 0 && audio.length === 0) {
       const none = document.createElement("p");
       none.className = "msg";
-      none.textContent = "No downloadable formats were found here.";
+      // Photo posts and slideshows come back with pictures and no video.
+      // Saying nothing could be downloaded was wrong; the site can save them.
+      const images = Array.isArray(data.images) ? data.images : [];
+      none.textContent = images.length
+        ? "This post is photos. Open it on PasteAndSave to save them."
+        : "No downloadable formats were found here.";
       body.append(none);
+      if (images.length) {
+        const open = document.createElement("button");
+        open.className = "row";
+        const q = document.createElement("span");
+        q.className = "q";
+        q.textContent = "Open on PasteAndSave";
+        open.append(q);
+        open.addEventListener("click", (e) => {
+          if (!e.isTrusted) return;
+          send({ type: "openOnSite", url: target });
+          closePanel();
+        });
+        body.append(open);
+      }
       positionPanel(chip);
       return;
     }
@@ -499,14 +661,22 @@
       const fill = document.createElement("i");
       bar.append(fill);
 
-      row.addEventListener("click", () => {
-        if (row.disabled) return;
+      row.addEventListener("click", (e) => {
+        if (!e.isTrusted || row.disabled) return;
         row.disabled = true;
         sz.textContent = "starting…";
         row.append(bar);
         const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         pending.set(requestId, { sz, fill, row });
-        api.runtime.sendMessage({ type: "startDownload", job, requestId });
+        send({ type: "startDownload", job, requestId }, (res) => {
+          // Refused before it started, for example after the extension was
+          // updated underneath this page.
+          if (res && res.ok === false && pending.has(requestId)) {
+            sz.textContent = res.error || "couldn't start";
+            row.disabled = false;
+            pending.delete(requestId);
+          }
+        });
       });
       body.append(row);
     };
@@ -577,7 +747,9 @@
     chip.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      if (!e.isTrusted) return;
       if (e.target === close) {
+        dismissed.add(video);
         chip.remove();
         chips.delete(video);
         if (panelFor === video) closePanel();
@@ -594,7 +766,7 @@
 
   function sync() {
     if (!enabled) return;
-    const videos = pickVideos();
+    const videos = pickVideos().filter((v) => !dismissed.has(v));
     if (videos.length === 0 && chips.size === 0) return;
     makeHost();
 
@@ -643,7 +815,16 @@
     pending.clear();
   }
 
+  let timer = null;
   function safeSync() {
+    // Orphaned by an extension reload: stop drawing chips that can no longer
+    // do anything, and stop watching the page.
+    if (!extensionAlive()) {
+      teardown();
+      clearInterval(timer);
+      mo.disconnect();
+      return;
+    }
     try {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
@@ -689,22 +870,44 @@
   // run in a backgrounded tab or an embedded view that is not painting, and a
   // safety net that depends on the thing it is insuring against is no net at
   // all. Scroll and resize keep using rAF, where throttling is what you want.
-  setInterval(safeSync, 2000);
+  timer = setInterval(safeSync, 2000);
 
-  try {
-    api.runtime.sendMessage({ type: "isSiteEnabled", host: location.hostname }, (res) => {
-      if (res && res.enabled === false) {
-        enabled = false;
-        teardown();
-      } else {
-        schedule();
+  // Nothing is drawn until this answers. If the worker cannot answer at all,
+  // the site is treated as on, which is the default.
+  send({ type: "isSiteEnabled", host: location.hostname }, (res) => {
+    enabled = !(res && res.enabled === false);
+    if (enabled) schedule();
+    else teardown();
+  });
+
+  // Remembers which video was right-clicked, for "Save this media".
+  addEventListener(
+    "contextmenu",
+    (e) => {
+      const t = e.target;
+      contextVideo =
+        t instanceof HTMLVideoElement ? t : t?.closest?.("video") ?? t?.querySelector?.("video") ?? null;
+    },
+    { capture: true, passive: true },
+  );
+
+  api.runtime.onMessage?.addListener((msg, _sender, sendResponse) => {
+    // The worker asking which clip is on screen, for the popup, the shortcut
+    // and the right-click menu, so they send the clip and not a feed.
+    if (msg?.type === "resolvePageTarget") {
+      try {
+        const video = (msg.clicked && contextVideo?.isConnected && contextVideo) || pickVideos()[0] || null;
+        if (video) {
+          sendResponse(targetFor(video));
+        } else {
+          const here = new URL(location.href);
+          sendResponse(looksLikeContentLink(here) ? { url: here.href, kind: "page" } : null);
+        }
+      } catch {
+        sendResponse(null);
       }
-    });
-  } catch {
-    // Worker asleep; defaults stand and the next sync draws.
-  }
-
-  api.runtime.onMessage?.addListener((msg) => {
+      return;
+    }
     if (msg?.type === "siteEnabledChanged") {
       enabled = msg.enabled !== false;
       if (enabled) schedule();
@@ -727,7 +930,11 @@
       return;
     }
     entry.sz.textContent =
-      msg.status === "converting" ? "converting…" : `${Math.round(msg.percent)}%`;
+      msg.status === "converting"
+        ? "converting…"
+        : msg.status === "saving"
+          ? "saving…"
+          : `${Math.round(msg.percent)}%`;
     entry.fill.style.width = `${Math.max(2, msg.percent)}%`;
   });
 })();

@@ -171,12 +171,18 @@ function tiktokPermalink(video, hostname, docQueryAll) {
     node = node.parentElement;
   }
   if (!id) return null;
-  let card = video;
-  for (let d = 0; card && d < 10; d++) {
-    if (card.getAttribute?.("data-e2e") === "recommend-list-item-container") break;
-    card = card.parentElement;
+  // Mirrors extension/content.js: without the card marker there is no telling
+  // whose handle is whose, so there is no guess.
+  void docQueryAll;
+  let card = null;
+  for (let n = video, d = 0; n && d < 10; d++, n = n.parentElement) {
+    if (n.getAttribute?.("data-e2e") === "recommend-list-item-container") {
+      card = n;
+      break;
+    }
   }
-  const scope = card || { querySelectorAll: docQueryAll };
+  if (!card) return null;
+  const scope = card;
   let handle = null;
   for (const a of scope.querySelectorAll("a[href]")) {
     const href = a.getAttribute("href") || "";
@@ -241,6 +247,18 @@ test("hashtag and music links are not mistaken for a handle", () => {
 test("it does nothing on other sites", () => {
   const { video } = feedCard("123456789012345678", "someone");
   assert.equal(tiktokPermalink(video, "www.youtube.com", () => []), null);
+});
+
+test("without the card marker the neighbour's handle is never taken", () => {
+  // If TikTok renames the marker, the old loop ended on the tenth ancestor and
+  // took the first handle in that wider stretch: the author of the clip above.
+  const video = new El("video");
+  const wrapper = new El("div", { id: "xgwrapper-1-7000000000000000002" }).append(video);
+  new El("div").append(
+    new El("a", { href: "/@first_author" }),
+    new El("section").append(wrapper, new El("a", { href: "/@second_author" })),
+  );
+  assert.equal(tiktokPermalink(video, "www.tiktok.com", () => []), null);
 });
 
 test("no id means no guess", () => {

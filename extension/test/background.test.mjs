@@ -27,7 +27,12 @@ const mockApi = {
     onRemoved: { addListener: (fn) => (listeners.tabRemoved = fn) },
     create: (opts) => createdTabs.push(opts.url),
     query: (_q, cb) => cb([{ id: 1, url: "https://example.com/watch" }]),
-    sendMessage: (tabId, msg) => tabMessages.push({ tabId, msg }),
+    // Answers the way a real tab with no listener does: nothing comes back.
+    sendMessage: (tabId, msg, cb) => {
+      tabMessages.push({ tabId, msg });
+      if (cb) setTimeout(() => cb(undefined), 0);
+      return Promise.resolve(undefined);
+    },
   },
   action: {
     // Rejects for "dead" tabs the way Chrome does for prerendered pages that
@@ -204,6 +209,7 @@ check("shortcut opened site with page url", createdTabs.some((u) => u.startsWith
 
 console.log("scenario: context menu click opens the site");
 listeners.menuClicked({ pageUrl: "https://example.com/some-post" });
+await new Promise((res) => setTimeout(res, 20));
 check("menu opened site", createdTabs.some((u) => u.includes("some-post")));
 
 console.log("scenario: dead prerender tab does not crash the worker");
