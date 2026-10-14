@@ -22,7 +22,7 @@ import {
   failureFingerprint,
 } from "./ytdlp";
 import { noteProxyRefused, proxyGeneration, rotateProxyNow } from "./proxy-health";
-import { BusyError, jobLimiter } from "./concurrency";
+import { BusyError, VisitorBusyError, jobLimiter, jobsPerVisitor } from "./concurrency";
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
 import { takeInfo } from "./info-cache";
@@ -141,7 +141,9 @@ export function finalizeJob(id: string) {
   cleanupJob(id);
 }
 
-type StartJobOptions =
+// owner is who asked, the visitor's address, so one person cannot hold every
+// download slot. Optional so callers with no visitor behind them still work.
+type StartJobOptions = { owner?: string } & (
   | { mode: "video"; url: string; formatId: string; title: string; hasAudio?: boolean }
   | {
       mode: "audio";
@@ -149,15 +151,23 @@ type StartJobOptions =
       title: string;
       audioFormat?: "mp3" | "m4a";
       bitrate?: number | null;
-    };
+    }
+);
 
 export function startJob(opts: StartJobOptions): string {
   sweepStaleJobs();
 
+  // This visitor's share first, so someone already at their limit is told
+  // that, rather than taking a site-wide slot only to give it back.
+  const releaseOwner = opts.owner ? jobsPerVisitor.tryTake(opts.owner) : () => {};
+  if (!releaseOwner) {
+    throw new VisitorBusyError();
+  }
   // A download holds its slot for its whole duration, so reject rather than
   // queue when the server is already at capacity.
   const release = jobLimiter.tryAcquire();
   if (!release) {
+    releaseOwner();
     throw new BusyError();
   }
   let released = false;
@@ -165,10 +175,20 @@ export function startJob(opts: StartJobOptions): string {
     if (released) return;
     released = true;
     release();
+    releaseOwner();
   };
 
   const id = randomUUID();
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
+  // A full disk or a missing tmp folder throws here, after both slots were
+  // taken and before anything exists that would give them back. Without this
+  // each such failure lost a site-wide download slot until the next restart.
+  let tmpDir: string;
+  try {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), TMP_PREFIX));
+  } catch (err) {
+    releaseOnce();
+    throw err;
+  }
   const job: Job = {
     id,
     status: "starting",

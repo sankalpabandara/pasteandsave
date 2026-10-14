@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { startJob } from "@/lib/jobs";
 import { isSafeUrl, isValidFormatId, usesProxy } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
-import { BusyError } from "@/lib/concurrency";
+import { BusyError, VisitorBusyError } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
 import { peekExtractorKey } from "@/lib/info-cache";
 import { proxyBudgetOk } from "@/lib/proxy-budget";
@@ -75,16 +75,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const owner = clientIp(request);
     const id =
       mode === "video"
         ? startJob({
+            owner,
             mode: "video",
             url: target,
             formatId: body.formatId!,
             title,
             hasAudio: body.hasAudio === true,
           })
-        : startJob({ mode: "audio", url: target, title, audioFormat, bitrate });
+        : startJob({ owner, mode: "audio", url: target, title, audioFormat, bitrate });
     // The lookup a moment ago already named the platform, so reuse its answer
     // rather than guessing from the hostname; a miss just leaves it unlabelled.
     void logEvent({
@@ -95,6 +97,9 @@ export async function POST(request: NextRequest) {
     });
     return Response.json({ jobId: id });
   } catch (err) {
+    if (err instanceof VisitorBusyError) {
+      return Response.json({ error: err.message }, { status: 429 });
+    }
     if (err instanceof BusyError) {
       return Response.json({ error: err.message }, { status: 503 });
     }

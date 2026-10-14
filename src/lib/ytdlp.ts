@@ -498,67 +498,9 @@ export function classifyFailure(stderr: string): {
   return { category, message: CATEGORY_MESSAGE[category] };
 }
 
-function ipv4IsPrivate(a: number, b: number): boolean {
-  if (a === 127 || a === 10 || a === 0) return true;
-  if (a === 169 && b === 254) return true; // link-local / cloud metadata
-  if (a === 172 && b >= 16 && b <= 31) return true;
-  if (a === 192 && b === 168) return true;
-  if (a === 100 && b >= 64 && b <= 127) return true; // carrier-grade NAT
-  return false;
-}
-
-function isPrivateHost(hostname: string): boolean {
-  let host = hostname.toLowerCase();
-  // An IPv6 literal is the only host form that legitimately contains a colon.
-  const isIPv6 = host.startsWith("[") || host.includes(":");
-  host = host.replace(/^\[|\]$/g, "");
-
-  if (host === "localhost" || host.endsWith(".localhost")) return true;
-
-  if (isIPv6) {
-    if (host === "::1" || host === "::") return true; // loopback / unspecified
-    if (host.startsWith("fe80:")) return true; // link-local
-    if (host.startsWith("fc") || host.startsWith("fd")) return true; // unique-local fc00::/7
-    // IPv4-mapped IPv6 (::ffff:a.b.c.d or its hex form ::ffff:AABB:CCDD).
-    const mapped = host.match(/::ffff:(.+)$/);
-    if (mapped) {
-      const dotted = mapped[1].match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-      if (dotted) return ipv4IsPrivate(Number(dotted[1]), Number(dotted[2]));
-      const hex = mapped[1].match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-      if (hex) {
-        const n = (parseInt(hex[1], 16) * 0x10000) | parseInt(hex[2], 16);
-        return ipv4IsPrivate((n >>> 24) & 0xff, (n >>> 16) & 0xff);
-      }
-    }
-    return false;
-  }
-
-  // WHATWG URL parsing already normalizes decimal/octal/hex/short IPv4 forms
-  // to dotted-quad, so this single check covers those obfuscations too.
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4) return ipv4IsPrivate(Number(ipv4[1]), Number(ipv4[2]));
-  return false;
-}
-
-// Basic SSRF guard: only http(s) URLs pointing at a public hostname get
-// anywhere near yt-dlp. Which *sites* are supported is then entirely up to
-// yt-dlp's own extractor matching (see EXTRACTOR_ARGS above) rather than a
-// hand-maintained domain list, so any of its ~1750 supported sites works.
-export function isSafeUrl(rawUrl: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    return false;
-  }
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return false;
-  }
-  // Credentials in a URL are never needed for a public post and are a common
-  // way to disguise the real host from a reader (and from naive parsers).
-  if (parsed.username || parsed.password) return false;
-  return !isPrivateHost(parsed.hostname);
-}
+// The SSRF guard lives in ip-guard.ts, where it has its own tests. Re-exported
+// so everything that already asks this module for it keeps working.
+export { isSafeUrl } from "./ip-guard";
 
 export type YtDlpFormat = {
   format_id: string;

@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 
 // Password-gated admin session. The password and signing secret come from
 // environment variables (see .env.example). The session cookie is a signed,
@@ -15,17 +17,62 @@ export function adminConfigured(): boolean {
   return SECRET.length >= 16 && PASSWORD.length > 0;
 }
 
+/**
+ * Compares two secrets in constant time, whatever their lengths.
+ *
+ * timingSafeEqual needs equal lengths, and checking the length first returned
+ * early on a mismatch, which told anyone timing the answer how long the real
+ * value is. Comparing digests makes both sides the same length always.
+ */
+export function safeEqual(input: string, secret: string): boolean {
+  const a = crypto.createHash("sha256").update(input).digest();
+  const b = crypto.createHash("sha256").update(secret).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 export function checkPassword(input: string): boolean {
   if (!PASSWORD) return false;
-  const a = Buffer.from(input);
-  const b = Buffer.from(PASSWORD);
-  // Length check first; timingSafeEqual throws on mismatched lengths.
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  return safeEqual(input, PASSWORD);
 }
 
 function sign(data: string): string {
   return crypto.createHmac("sha256", SECRET).update(data).digest("hex");
+}
+
+// Logging out has to end the session on the server, not only delete the cookie
+// in one browser: a copied cookie otherwise stayed good for the full twelve
+// hours. Every session issued before the last logout is refused. There is one
+// admin, so "log out" meaning "log out everywhere" is the right behaviour, and
+// it is kept on disk so a restart does not bring old sessions back.
+//
+// A session's issue time is its expiry minus the fixed lifetime, so the
+// cookie format did not have to change and sessions open today stay valid.
+function revokedFile(): string {
+  return process.env.ADMIN_REVOKED_FILE || path.join(process.cwd(), "data", "admin-revoked.json");
+}
+
+let revokedBefore: number | null = null;
+
+function sessionsRevokedBefore(): number {
+  if (revokedBefore === null) {
+    try {
+      revokedBefore = Number(JSON.parse(fs.readFileSync(revokedFile(), "utf8")).before) || 0;
+    } catch {
+      revokedBefore = 0;
+    }
+  }
+  return revokedBefore;
+}
+
+/** Ends every session issued up to now. */
+export function revokeSessions(now = Date.now()): void {
+  revokedBefore = now;
+  try {
+    fs.mkdirSync(path.dirname(revokedFile()), { recursive: true });
+    fs.writeFileSync(revokedFile(), JSON.stringify({ before: now }));
+  } catch {
+    // Still revoked in memory until the next restart.
+  }
 }
 
 export function createSession(): string {
@@ -46,5 +93,6 @@ export function verifySession(token: string | undefined): boolean {
   if (a.length !== b.length) return false;
   if (!crypto.timingSafeEqual(a, b)) return false;
   const expiresAt = Number(payload);
-  return Number.isFinite(expiresAt) && Date.now() < expiresAt;
+  if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) return false;
+  return expiresAt - SESSION_TTL_MS >= sessionsRevokedBefore();
 }

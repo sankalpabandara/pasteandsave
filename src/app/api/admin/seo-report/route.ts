@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, verifySession } from "@/lib/auth";
+import { SESSION_COOKIE, safeEqual, verifySession } from "@/lib/auth";
 import { runAutopilotCycle } from "@/lib/seo-autopilot";
 
 export const runtime = "nodejs";
@@ -16,7 +16,9 @@ async function authorized(request: NextRequest): Promise<boolean> {
   const token = process.env.SEO_REPORT_TOKEN;
   if (token) {
     const header = request.headers.get("authorization") ?? "";
-    if (header === `Bearer ${token}`) return true;
+    // Constant time: a plain === answers a little faster the earlier the
+    // first wrong character, which is enough to guess a token one at a time.
+    if (safeEqual(header, `Bearer ${token}`)) return true;
   }
   return false;
 }
