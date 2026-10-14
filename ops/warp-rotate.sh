@@ -124,20 +124,57 @@ warp_up() {
     ss -Htln "( sport = :$port )" 2>/dev/null | grep -q .
 }
 
+# What WARP says about itself and whether anything is listening, for the log.
+warp_state() {
+  printf '%s, %s listening on %s' \
+    "$("${W[@]}" status 2>&1 | tr '\n' ' ' | sed 's/ *$//' | cut -c1-100)" \
+    "$(ss -Htln "( sport = :$port )" 2>/dev/null | wc -l)" "$port"
+}
+
+# Down for real, not caught mid-reconnect. A single look reported WARP down
+# about twenty five times a day while it said "Connected, healthy" a second
+# later, and every false alarm ran a repair. So the outage has to hold for
+# three looks, five seconds apart.
+still_down() {
+  for _ in 1 2; do
+    sleep 5
+    warp_up && return 1
+  done
+  return 0
+}
+
+# Puts back only what is actually wrong. Setting the mode or the port again
+# restarts WARP's proxy and cuts every download going through it, which is
+# what the false alarms were doing to visitors.
+repair_warp() {
+  if "${W[@]}" status 2>&1 | grep -qi 'registration missing\|missing registration'; then
+    register || return 1
+  fi
+  if ! "${W[@]}" settings 2>/dev/null | grep -q "WarpProxy on port $port"; then
+    "${W[@]}" mode proxy >/dev/null 2>&1
+    "${W[@]}" proxy port "$port" >/dev/null 2>&1
+  fi
+  "${W[@]}" status 2>/dev/null | grep -q 'Connected' || "${W[@]}" connect >/dev/null 2>&1
+  for _ in $(seq 1 30); do
+    warp_up && return 0
+    sleep 2
+  done
+  return 1
+}
+
 # WARP being down is a different fault from its address being refused, and
 # the site cannot report it as a refusal: it simply finds nothing listening.
 # So cron checks for it every minute, without spending a YouTube lookup.
 REPAIR_STATE="${WARP_REPAIR_STATE:-/var/lib/pasteandsave/warp-last-repair}"
 if [ "$now_mode" = 0 ] && ! warp_up; then
+  # Taken now, while it is failing; asked again after a repair it would only
+  # describe the fixed state.
+  reason="$(warp_state)"
   since_repair=$(( $(date +%s) - $(cat "$REPAIR_STATE" 2>/dev/null || echo 0) ))
   # After a repair that did not take, wait five minutes before the next.
-  if [ "$since_repair" -ge 300 ]; then
-    reason="$("${W[@]}" status 2>&1 | tr '\n' ' ' | cut -c1-120)"
+  if [ "$since_repair" -ge 300 ] && still_down; then
     mkdir -p "$(dirname "$REPAIR_STATE")"
-    if "${W[@]}" status 2>&1 | grep -qi 'registration missing\|missing registration'; then
-      register
-    fi
-    if bring_up && warp_up; then
+    if repair_warp; then
       say "WARP was down ($reason), it is back"
     else
       date +%s >"$REPAIR_STATE"

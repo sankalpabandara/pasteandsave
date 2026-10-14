@@ -310,7 +310,7 @@ export function looksLikeIpBlock(stderr: string): boolean {
   ) {
     return false;
   }
-  return /HTTP Error 40[139]|HTTP Error 429|rate.?limit|too many requests|sign in to confirm|confirm you'?re not a bot|not a bot|login required|requires? (?:a )?login|log ?in to|you must be logged in|blocked|forbidden|empty media response|unable to extract|failed to extract|requested content is not available|restricted video/i.test(
+  return /HTTP Error 40[139]|HTTP Error 429|rate.?limit|too many requests|confirm you['’]?re not a bot|not a bot|login required|requires? (?:a )?login|log ?in to|you must be logged in|blocked|forbidden|empty media response|unable to extract|failed to extract|requested content is not available|restricted video/i.test(
     s,
   );
 }
@@ -412,14 +412,21 @@ export function siteArgs(url: string, fallback = false): string[] {
  * The bot wall, a rate-limit, and a failure to get any player response at all
  * are about the requester. Those still count.
  */
+//
+// The bot wall is matched by its own words. "Sign in to confirm" on its own
+// also covers "Sign in to confirm your age", which is one video being
+// age-restricted, not our address being refused. Matching it told visitors the
+// site was blocking our server, and through WARP it threw away a perfectly good
+// exit address and marked its whole block as refused. YouTube writes the
+// apostrophe either way, so both are accepted.
 export function isAddressRefused(stderr: string): boolean {
-  return /confirm you'?re not a bot|sign in to confirm|not a bot|HTTP Error 429|too many requests|failed to extract any player response|unable to download api page/i.test(
+  return /confirm you['’]?re not a bot|not a bot|HTTP Error 429|too many requests|failed to extract any player response|unable to download api page/i.test(
     stderr,
   );
 }
 
 export function isBlockedByPlatform(stderr: string): boolean {
-  return /confirm you'?re not a bot|sign in to confirm|not a bot|HTTP Error 429|HTTP Error 403|too many requests|failed to extract any player response|unable to download api page/i.test(
+  return /confirm you['’]?re not a bot|not a bot|HTTP Error 429|HTTP Error 403|too many requests|failed to extract any player response|unable to download api page/i.test(
     stderr,
   );
 }
@@ -704,6 +711,15 @@ export function userFacingError(err: unknown): {
         : "We can't fetch from that site here. Everything else still works.",
       status: 503,
       code: "SITE_UNAVAILABLE_HERE",
+    };
+  }
+  // Ahead of the block check: an age gate is about the video, and retrying
+  // will never get past it, so it must not read as a temporary block.
+  if (/confirm your age|age.?restrict|inappropriate for some users/i.test(msg)) {
+    return {
+      error: "This video is age-restricted and needs a sign-in, so it can't be fetched.",
+      status: 422,
+      code: "AGE_RESTRICTED",
     };
   }
   if (err instanceof PlatformBlockedError || isBlockedByPlatform(msg)) {

@@ -19,6 +19,7 @@ import {
   plainProxyArgs,
   looksLikeProxyAuthFailure,
   isAddressRefused,
+  failureFingerprint,
 } from "./ytdlp";
 import { noteProxyRefused, proxyGeneration, rotateProxyNow } from "./proxy-health";
 import { BusyError, jobLimiter } from "./concurrency";
@@ -267,7 +268,11 @@ export function startJob(opts: StartJobOptions): string {
     : proxyArgs(opts.url);
   let triedProxyFallback = false;
   let triedPlainProxy = false;
-  let triedFreshStart = false;
+  // Fresh starts through the proxy, below. Two at most, so a download that
+  // keeps failing still ends inside its deadline, and the proxy's address is
+  // swapped at most once per download.
+  let freshStarts = 0;
+  let swappedForJob = false;
   // Which proxy address this download began on. If it changes underneath, the
   // links it holds were signed for an address that is gone.
   const startGeneration = proxyGeneration();
@@ -389,14 +394,35 @@ export function startJob(opts: StartJobOptions): string {
         // swapped while this was running, or the CDN turned down links that
         // had gone stale. The first needs a new address, all three need new
         // links, and none of them is the visitor's problem to retry.
-        if (!triedFreshStart && proxyFlags.length > 0 && job.status !== "error") {
+        //
+        // It starts again through the same proxy this attempt used. That is
+        // usually jobProxy, but a site off the proxy list gets here through
+        // the fallback above, where jobProxy is empty; restarting on jobProxy
+        // sent an X download that had just been refused direct straight back
+        // to being refused direct.
+        //
+        // A fresh start that is itself refused can still get a new address.
+        // A YouTube download whose stale links were renewed and then met the
+        // bot wall used to stop there, because one fresh start was all it had.
+        if (freshStarts < 2 && proxyFlags.length > 0 && job.status !== "error") {
           const refused = isAddressRefused(stderrTail);
           const stale =
             proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
           if (refused || stale) {
-            triedFreshStart = true;
-            if (refused) console.warn(`[job ${id}] proxy address refused, getting a new one`);
-            const ready = refused ? await rotateProxyNow() : true;
+            freshStarts++;
+            let ready = true;
+            if (refused) {
+              // Once per download. If the address it is given is refused too,
+              // the swap's own retries are already spent, and another would
+              // only keep the visitor waiting.
+              if (swappedForJob) {
+                ready = false;
+              } else {
+                swappedForJob = true;
+                console.warn(`[job ${id}] proxy address refused, getting a new one`);
+                ready = await rotateProxyNow();
+              }
+            }
             // A swap can take a while, long enough for the job's own deadline
             // to have stopped it in the meantime.
             const stoppedMeanwhile = (job.status as JobStatus) === "error";
@@ -409,7 +435,7 @@ export function startJob(opts: StartJobOptions): string {
               // this run reads the page again before downloading.
               await fsp.rm(path.join(tmpDir, INFO_NAME), { force: true });
               void recordProxyUsage(opts.mode);
-              run(jobProxy);
+              run(proxyFlags);
               return;
             }
           }
@@ -419,8 +445,11 @@ export function startJob(opts: StartJobOptions): string {
         // and all) in connection errors and temp paths in write errors, and
         // this string is sent straight to the browser over SSE.
         const { category, message } = classifyFailure(stderrTail);
+        // The marks are the same safe fingerprint lookups log: which error
+        // shapes appeared, never the text. Without them five YouTube failures
+        // in two days read only "INTERNAL_ERROR", with nothing to go on.
         console.error(
-          `[job ${id}] failed category=${category} exit=${code} url_host=${safeHost(opts.url)} proxied=${proxyFlags.length > 0}`,
+          `[job ${id}] failed category=${category} exit=${code} url_host=${safeHost(opts.url)} proxied=${proxyFlags.length > 0} marks=${failureFingerprint(stderrTail)}`,
         );
         // A download that has to extract again meets the same bot wall a
         // lookup does, so it reports a refused proxy address the same way.
