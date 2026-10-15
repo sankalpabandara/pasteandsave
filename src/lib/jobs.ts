@@ -3,7 +3,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import {
   EXTRACTOR_ARGS,
   FFMPEG_DIR,
@@ -63,6 +63,36 @@ const INFO_NAME = "info.json";
 
 // Job folders are named with this prefix so orphans can be recognised later.
 const TMP_PREFIX = "pasteandsave-";
+
+// yt-dlp here is a self-unpacking build: the process started is a small
+// loader, the real work runs in a child of it, and that runs ffmpeg in turn.
+// Killing the loader alone left the rest running with no parent: on
+// 15 October a download stopped at its ten-minute deadline was still fetching
+// four minutes later. So each yt-dlp starts as the head of its own process
+// group, and the whole group is stopped together.
+const OWN_GROUP = process.platform !== "win32";
+
+function stopTree(child: ChildProcess | null, signal: NodeJS.Signals = "SIGKILL"): void {
+  if (!child || child.exitCode !== null) return;
+  try {
+    if (OWN_GROUP && child.pid) process.kill(-child.pid, signal);
+    else child.kill(signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // already gone
+    }
+  }
+}
+
+// A download through a pool exit that is crawling moves to another exit
+// rather than eating the job's deadline. On 15 October one exit passed every
+// YouTube test and still delivered 0.1 MB/s, and a 1080p download on it ran
+// out of time. After 20 seconds, an expected finish more than six minutes away
+// means the exit is the problem.
+const SLOW_CHECK_AFTER_MS = 20_000;
+const SLOW_ETA_SECONDS = 6 * 60;
 
 // Removes job folders left behind by a previous run of the process.
 //
@@ -332,8 +362,13 @@ export function startJob(opts: StartJobOptions): string {
   const killTimer = setTimeout(() => {
     job.status = "error";
     job.error = "That took too long and was stopped. Please try again.";
-    current?.kill("SIGKILL");
+    stopTree(current);
   }, JOB_TIMEOUT_MS);
+
+  // When the current run's file transfer began, and whether it was stopped
+  // for crawling. Reset at the start of every run.
+  let downloadStartedAt = 0;
+  let slowExit = false;
 
   const finish = () => {
     clearTimeout(killTimer);
@@ -361,6 +396,19 @@ export function startJob(opts: StartJobOptions): string {
     if (dl) {
       job.status = "downloading";
       job.percent = Math.min(99, parseFloat(dl[1]));
+      if (currentExit && !slowExit) {
+        if (!downloadStartedAt) downloadStartedAt = Date.now();
+        // "ETA 49:59" or "ETA 1:02:03"
+        const eta = /ETA\s+(?:(\d+):)?(\d+):(\d+)/.exec(line);
+        if (eta && Date.now() - downloadStartedAt > SLOW_CHECK_AFTER_MS) {
+          const seconds = Number(eta[1] ?? 0) * 3600 + Number(eta[2]) * 60 + Number(eta[3]);
+          if (seconds > SLOW_ETA_SECONDS) {
+            slowExit = true;
+            console.warn(`[job ${id}] pool exit is crawling (ETA ${seconds}s), moving to another`);
+            stopTree(current);
+          }
+        }
+      }
       return;
     }
     if (line.includes("[ExtractAudio]") || line.includes("[Merger]") || line.includes("[VideoConvertor]")) {
@@ -370,7 +418,12 @@ export function startJob(opts: StartJobOptions): string {
   };
 
   const run = (proxyFlags: string[], infoJson: string | null = null) => {
-    const child = spawn(YTDLP_PATH, buildArgs(proxyFlags, infoJson), { windowsHide: true });
+    downloadStartedAt = 0;
+    slowExit = false;
+    const child = spawn(YTDLP_PATH, buildArgs(proxyFlags, infoJson), {
+      windowsHide: true,
+      detached: OWN_GROUP,
+    });
     current = child;
 
     child.stdout.on("data", (chunk: Buffer) => {
@@ -392,6 +445,8 @@ export function startJob(opts: StartJobOptions): string {
     });
 
     child.on("close", async (code) => {
+      // Read now: the next run resets it.
+      const wasSlow = slowExit;
       if (code !== 0) {
         // A rejected proxy login means the sticky session suffix was not
         // understood by the provider, not that the site refused us.
@@ -459,7 +514,8 @@ export function startJob(opts: StartJobOptions): string {
         // replaces the bad one in the background.
         const maxFreshStarts = currentExit ? 3 : 2;
         if (freshStarts < maxFreshStarts && proxyFlags.length > 0 && job.status !== "error") {
-          const refused = isAddressRefused(stderrTail) || mediaRefused(stderrTail);
+          // A crawling exit is treated like a refused one: leave it for another.
+          const refused = isAddressRefused(stderrTail) || mediaRefused(stderrTail) || wasSlow;
           const stale =
             proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
           if (refused || stale) {
@@ -597,12 +653,12 @@ export function startJob(opts: StartJobOptions): string {
           "--",
           opts.url,
         ],
-        { windowsHide: true },
+        { windowsHide: true, detached: OWN_GROUP },
       );
       current = child;
 
       const timer = setTimeout(() => {
-        child.kill("SIGKILL");
+        stopTree(child);
         console.warn(`[job ${id}] metadata read timed out, falling back`);
         done(null);
       }, EXTRACT_TIMEOUT_MS);

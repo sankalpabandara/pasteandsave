@@ -73,6 +73,18 @@ youtube_ok() {
   return 2
 }
 
+# At least 2 MB/s through this exit. One exit passed every YouTube test while
+# delivering 0.1 MB/s, and a 1080p download on it ran out of time; the test
+# file is too small to notice. Measured against Cloudflare's own speed test.
+MIN_SPEED="${WARP_POOL_MIN_SPEED:-2000000}"
+fast_enough() {
+  local speed
+  speed="$(curl -s -o /dev/null -w '%{speed_download}' --max-time 15 -x "$1" \
+    'https://speed.cloudflare.com/__down?bytes=5000000' 2>/dev/null || true)"
+  speed="${speed%%.*}"
+  [ -n "$speed" ] && [ "$speed" -ge "$MIN_SPEED" ]
+}
+
 exit_address() {
   local a
   for _ in 1 2 3 4 5; do
@@ -171,24 +183,29 @@ check() {
   addr="$(exit_address "$proxy")"
   youtube_ok "$proxy"
   result=$?
+  # 3: YouTube answers, but too slowly to be worth sending anyone through.
+  [ "$result" -eq 0 ] && ! fast_enough "$proxy" && result=3
   if [ "$result" -eq 0 ]; then
     [ "$status" = healthy ] || say "$name ($addr) is healthy"
     write_state "$name" healthy "$addr"
     return 0
   fi
 
-  if [ "$result" -eq 1 ]; then
-    remember_refused "$(block_of "$addr")"
-    say "$name ($addr) refused by YouTube"
-  else
-    say "$name ($addr) not answering"
-  fi
+  case "$result" in
+    1)
+      remember_refused "$(block_of "$addr")"
+      say "$name ($addr) refused by YouTube"
+      ;;
+    3) say "$name ($addr) answers but is too slow" ;;
+    *) say "$name ($addr) not answering" ;;
+  esac
   # Out of use straight away, before any repair.
   write_state "$name" down "$addr"
 
   if [ "$kind" = host ]; then
-    # The server's own WARP belongs to warp-rotate.sh; leave it a note.
-    printf '%s pool\n' "$(date -u +%FT%TZ)" >"$APP_DIR/data/proxy-refused"
+    # The server's own WARP belongs to warp-rotate.sh; leave it a note when
+    # YouTube refused it. A slow one simply sits out until it is fast again.
+    [ "$result" -eq 1 ] && printf '%s pool\n' "$(date -u +%FT%TZ)" >"$APP_DIR/data/proxy-refused"
     return 1
   fi
 
@@ -197,7 +214,7 @@ check() {
     sleep 10
   fi
   for try in $(seq 1 "$MAX_SWAPS"); do
-    if [ "$result" -eq 1 ] || [ "$try" -gt 1 ]; then
+    if [ "$result" -eq 1 ] || [ "$result" -eq 3 ] || [ "$try" -gt 1 ]; then
       new_registration "$name"
     fi
     addr="$(exit_address "$proxy")"
@@ -208,11 +225,13 @@ check() {
     fi
     youtube_ok "$proxy"
     result=$?
+    [ "$result" -eq 0 ] && ! fast_enough "$proxy" && result=3
     if [ "$result" -eq 0 ]; then
       write_state "$name" healthy "$addr"
       say "$name has a new address $addr, YouTube answers"
       return 0
     fi
+    [ "$result" -eq 3 ] && say "$name new address $addr is too slow, trying again"
     [ "$result" -eq 1 ] && remember_refused "$(block_of "$addr")"
     sleep 3
   done
