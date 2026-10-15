@@ -81,19 +81,29 @@ const TMP_PREFIX = "pasteandsave-";
 // the same time as the first, which is the exact thing that lock prevents.
 // mkdtemp only ever makes directories, so requiring one separates our folders
 // from anything else that happens to be named alike.
-function sweepOrphanedTmpDirs() {
-  const root = os.tmpdir();
+// yt-dlp's own leftovers are swept too. The Linux build is a self-unpacking
+// archive: every run unpacks about 82 MB into /tmp/_MEIxxxxxx and removes it
+// on a normal exit, but a process killed outright cannot, and every timeout,
+// restart and health check that killed one left its folder behind. By
+// 12 October there were 598 of them holding 27 GB. Two hours is far longer
+// than any yt-dlp run here lasts, so anything older is abandoned.
+const MEI_PREFIX = "_MEI";
+const MEI_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+export function sweepOrphanedTmpDirs(root = os.tmpdir(), now = Date.now()): number {
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(root, { withFileTypes: true });
   } catch {
-    return;
+    return 0;
   }
-  const cutoff = Date.now() - JOB_TTL_MS;
   let removed = 0;
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    if (!entry.name.startsWith(TMP_PREFIX)) continue;
+    const ours = entry.name.startsWith(TMP_PREFIX);
+    const ytdlp = entry.name.startsWith(MEI_PREFIX);
+    if (!ours && !ytdlp) continue;
+    const cutoff = now - (ours ? JOB_TTL_MS : MEI_MAX_AGE_MS);
     const dir = path.join(root, entry.name);
     try {
       if (fs.statSync(dir).mtimeMs > cutoff) continue;
@@ -104,12 +114,15 @@ function sweepOrphanedTmpDirs() {
     }
   }
   if (removed > 0) {
-    console.log(`[jobs] cleared ${removed} temp folder(s) left by a previous run`);
+    console.log(`[jobs] cleared ${removed} abandoned temp folder(s)`);
   }
+  return removed;
 }
 
-// Runs once when the module loads, which is once per server start.
+// Once when the server starts, then every hour, because yt-dlp leaves a
+// folder behind whenever one is killed, not only across restarts.
 sweepOrphanedTmpDirs();
+setInterval(() => sweepOrphanedTmpDirs(), 60 * 60 * 1000).unref?.();
 
 function sweepStaleJobs() {
   const now = Date.now();

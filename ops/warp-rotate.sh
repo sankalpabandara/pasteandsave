@@ -107,21 +107,38 @@ register() {
   return 1
 }
 
+# Output is captured first and tested afterwards, never piped into grep -q.
+# grep -q stops reading at the first match, the command writing to it then
+# dies of a broken pipe, and under pipefail the whole test reads as false.
+# That race, not WARP, was behind most of the "WARP was down" alarms.
+warp_says() {
+  local out
+  out="$("${W[@]}" "$@" 2>&1)"
+  printf '%s' "$out"
+}
+
+warp_connected() {
+  [[ "$(warp_says status)" == *Connected* ]]
+}
+
+port_listening() {
+  [ -n "$(ss -Htln "( sport = :$port )" 2>/dev/null)" ]
+}
+
 # Proxy mode on the app's port, connected, and carrying traffic.
 bring_up() {
   "${W[@]}" mode proxy >/dev/null 2>&1
   "${W[@]}" proxy port "$port" >/dev/null 2>&1
   "${W[@]}" connect >/dev/null 2>&1
   for _ in $(seq 1 30); do
-    "${W[@]}" status 2>/dev/null | grep -q 'Connected' && return 0
+    warp_connected && return 0
     sleep 2
   done
   return 1
 }
 
 warp_up() {
-  "${W[@]}" status 2>/dev/null | grep -q 'Connected' &&
-    ss -Htln "( sport = :$port )" 2>/dev/null | grep -q .
+  warp_connected && port_listening
 }
 
 # What WARP says about itself and whether anything is listening, for the log.
@@ -147,14 +164,16 @@ still_down() {
 # restarts WARP's proxy and cuts every download going through it, which is
 # what the false alarms were doing to visitors.
 repair_warp() {
-  if "${W[@]}" status 2>&1 | grep -qi 'registration missing\|missing registration'; then
-    register || return 1
-  fi
-  if ! "${W[@]}" settings 2>/dev/null | grep -q "WarpProxy on port $port"; then
+  local status
+  status="$(warp_says status)"
+  case "${status,,}" in
+    *"registration missing"* | *"missing registration"*) register || return 1 ;;
+  esac
+  if [[ "$(warp_says settings)" != *"WarpProxy on port $port"* ]]; then
     "${W[@]}" mode proxy >/dev/null 2>&1
     "${W[@]}" proxy port "$port" >/dev/null 2>&1
   fi
-  "${W[@]}" status 2>/dev/null | grep -q 'Connected' || "${W[@]}" connect >/dev/null 2>&1
+  warp_connected || "${W[@]}" connect >/dev/null 2>&1
   for _ in $(seq 1 30); do
     warp_up && return 0
     sleep 2
@@ -207,7 +226,8 @@ youtube_answers() {
   out="$(timeout 90 "$APP_DIR/bin/yt-dlp" --proxy "$proxy" "${JSR[@]}" --no-warnings \
     --skip-download --print id -- "$TEST_URL" 2>&1)" && return 0
   case "$out" in
-    *"not a bot"*|*"Sign in to confirm"*|*"HTTP Error 429"*) why="refused" ;;
+    # The bot wording only: "Sign in to confirm your age" is about one video.
+    *"not a bot"*|*"HTTP Error 429"*) why="refused" ;;
     *) why="$(printf '%s' "$out" | tail -n1 | cut -c1-100)" ;;
   esac
   return 1

@@ -53,7 +53,7 @@ send_alert() {
         http_code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' \
           -H "Title: PasteAndSave: $subject" \
           -H "Priority: high" \
-          -d "$body" "$ALERT_WEBHOOK_URL" 2>/dev/null || echo 000)"
+          -d "$body" "$ALERT_WEBHOOK_URL" 2>/dev/null || true)"
         ;;
       *)
         # "content" suits Discord, "text" suits Slack; sending both keeps this
@@ -64,9 +64,12 @@ send_alert() {
           "$(json_escape "[$subject] $body")")"
         http_code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' \
           -X POST -H 'Content-Type: application/json' \
-          -d "$payload" "$ALERT_WEBHOOK_URL" 2>/dev/null || echo 000)"
+          -d "$payload" "$ALERT_WEBHOOK_URL" 2>/dev/null || true)"
         ;;
     esac
+    # curl prints 000 itself when it cannot connect, so "|| echo 000" used to
+    # make that "000000". An empty answer is the only case left to fill in.
+    [ -n "$http_code" ] || http_code=000
     # Anything 2xx means the service accepted it; a placeholder URL or a typo
     # lands here as a connection failure or a 4xx, and must be reported.
     case "$http_code" in

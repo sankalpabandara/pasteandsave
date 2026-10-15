@@ -88,7 +88,14 @@ impersonation_ok() {
   # still prints "Chrome ... (unavailable)" and passed this check for months
   # while impersonation did not work at all. A target only counts when its line
   # does not say unavailable.
-  "$BIN" --list-impersonate-targets 2>/dev/null     | grep -iE 'chrome|firefox|safari|edge'     | grep -qvi 'unavailable'
+  #
+  # The list is captured before it is searched. Piped straight into grep -q,
+  # the first match closed the pipe, yt-dlp died writing the rest, and with
+  # pipefail a working build could read as one without impersonation and be
+  # rolled back.
+  local targets
+  targets="$("$BIN" --list-impersonate-targets 2>/dev/null || true)"
+  grep -iE 'chrome|firefox|safari|edge' <<<"$targets" | grep -vi 'unavailable' >/dev/null
 }
 
 # A JS runtime is now required for YouTube: the player clients that still work

@@ -11,7 +11,6 @@
 set -uo pipefail
 
 APP_NAME="${APP_NAME:-pasteandsave}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 STATE_DIR="${STATE_DIR:-/var/lib/pasteandsave}"
 FAIL_FILE="$STATE_DIR/health-fails"
 RESTART_FILE="$STATE_DIR/restarts-today"
@@ -29,6 +28,17 @@ stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib-alert.sh"
 alert() { send_alert "$1" "$2"; }
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib-app.sh"
+
+# The port comes from ecosystem.config.js. This used to default to 3000 after
+# the app had moved to 4100, so every check failed, and once the daily counter
+# reset at midnight the watchdog restarted the healthy site six times in a
+# row. Not knowing the port is a reason to stop, never to restart anything.
+if ! HEALTH_URL="$(app_health_url)"; then
+  echo "$(stamp) cannot read the app's port from ecosystem.config.js, not checking"
+  exit 0
+fi
 
 # Reset the daily restart counter when the date changes.
 today="$(date +%F)"
@@ -37,9 +47,12 @@ if [ ! -f "$RESTART_FILE" ] || [ "$(head -n1 "$RESTART_FILE" 2>/dev/null)" != "$
 fi
 restarts="$(sed -n 2p "$RESTART_FILE" 2>/dev/null || echo 0)"
 
-# No -f here: it makes curl exit non-zero on a 5xx while still printing the
-# status, which would concatenate into a nonsense code like "503000".
-code="$(curl -sS -o /tmp/ps-health.json -w '%{http_code}' --max-time 20 "$HEALTH_URL" 2>/dev/null || echo 000)"
+# A fresh file for this check's body. The old fixed path was never written
+# when the connection failed, so every log line repeated a body from weeks
+# before and pointed whoever read it at the wrong fault.
+body_file="$(mktemp)"
+trap 'rm -f "$body_file"' EXIT
+code="$(http_status "$HEALTH_URL" "$body_file")"
 
 if [ "$code" = "200" ]; then
   [ -f "$FAIL_FILE" ] && rm -f "$FAIL_FILE"
@@ -48,7 +61,7 @@ fi
 
 fails=$(( $(cat "$FAIL_FILE" 2>/dev/null || echo 0) + 1 ))
 echo "$fails" > "$FAIL_FILE"
-echo "$(stamp) unhealthy (http=$code) consecutive=$fails $(cat /tmp/ps-health.json 2>/dev/null | head -c 200)"
+echo "$(stamp) unhealthy (http=$code) consecutive=$fails $(head -c 200 "$body_file" 2>/dev/null)"
 
 [ "$fails" -lt "$FAIL_THRESHOLD" ] && exit 0
 
@@ -64,7 +77,7 @@ printf '%s\n%s\n' "$today" "$((restarts + 1))" > "$RESTART_FILE"
 rm -f "$FAIL_FILE"
 
 sleep 25
-after="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$HEALTH_URL" 2>/dev/null || echo 000)"
+after="$(http_status "$HEALTH_URL")"
 if [ "$after" = "200" ]; then
   echo "$(stamp) recovered after restart"
 else

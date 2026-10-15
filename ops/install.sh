@@ -71,7 +71,9 @@ echo "  WARP rotation    every minute (new exit address when YouTube refuses the
 echo "  alerts           -> ${ALERT_EMAIL:-(email off)}${ALERT_WEBHOOK_URL:+ + webhook}"
 echo
 echo "Logs: /var/log/pasteandsave-*.log"
-echo "Check now: curl -s localhost:3000/api/health"
+# shellcheck source=/dev/null
+. "$OPS/lib-app.sh"
+echo "Check now: curl -s $(app_health_url 2>/dev/null || echo 'http://127.0.0.1:PORT/api/health (set the port in ecosystem.config.js)')"
 echo
 echo "--- verifying alert delivery ---"
 ALERT_EMAIL="$ALERT_EMAIL" ALERT_WEBHOOK_URL="$ALERT_WEBHOOK_URL" "$OPS/test-alert.sh" || true

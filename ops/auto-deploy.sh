@@ -15,23 +15,24 @@ APP_NAME="${APP_NAME:-pasteandsave}"
 BRANCH="${BRANCH:-main}"
 LOCK="/tmp/pasteandsave-deploy.lock"
 
-# The health check has to ask the port the app really listens on, which pm2
-# sets in ecosystem.config.js. This used to be hardcoded to 3000. When the app
-# moved to 4100 every deploy then built, checked an empty port, decided the new
-# version was broken and rolled it back, restarting the live site each time,
-# every two minutes, for as long as a new commit was waiting.
-app_port() {
-  local p
-  p="$(grep -oE 'PORT:[[:space:]]*"?[0-9]+' "$APP_DIR/ecosystem.config.js" 2>/dev/null | grep -oE '[0-9]+$' | head -n1)"
-  echo "${p:-3000}"
-}
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:$(app_port)/api/health}"
-
 stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib-alert.sh"
 alert() { send_alert "$1" "$2"; }
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib-app.sh"
+
+# The health check has to ask the port the app really listens on. It used to
+# be hardcoded to 3000, and after the app moved to 4100 every deploy built,
+# checked an empty port, called the new version broken and rolled it back. A
+# guess is worse than stopping, so an unknown port stops the deploy.
+if ! HEALTH_URL="$(app_health_url)"; then
+  echo "$(stamp) cannot read the app's port from $APP_DIR/ecosystem.config.js, not deploying"
+  alert "deploy blocked: app port unknown" \
+    "auto-deploy could not read the port from $APP_DIR/ecosystem.config.js, so it cannot check a new build. Set HEALTH_URL in the crontab or restore the file."
+  exit 1
+fi
 
 # Never let two deploys overlap.
 exec 9>"$LOCK"
@@ -103,7 +104,7 @@ pm2 reload "$APP_NAME" --update-env >/dev/null 2>&1 || pm2 restart "$APP_NAME" -
 # Give the new process a moment, then confirm it actually serves traffic.
 for i in $(seq 1 10); do
   sleep 3
-  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "$HEALTH_URL" 2>/dev/null || echo 000)"
+  code="$(http_status "$HEALTH_URL")"
   if [ "$code" = "200" ]; then
     echo "$(stamp) deployed ${remote_sha:0:8} and healthy"
     rm -rf .next.previous
