@@ -217,17 +217,30 @@ fi
 JSR=()
 [ -x "$APP_DIR/bin/deno" ] && JSR=(--js-runtimes "deno:$APP_DIR/bin/deno")
 
-# One real lookup through WARP, the way the app makes it. Why it failed is left
+# One real download through WARP, the way the app makes it, of the smallest
+# stream of a 19 second video, a couple of hundred kilobytes. A lookup alone
+# is not enough: on 15 October YouTube answered every lookup through this
+# address and refused every video file with HTTP 403, so the old lookup-only
+# test passed while no visitor could download anything. Why it failed is left
 # in $why, because "refused" and "WARP was not ready yet" call for different
 # things.
+#
+# --ignore-config and the app's own client choice, so this tests what the
+# app does and not whatever a config file on the server says.
 why=""
 youtube_answers() {
-  local out
-  out="$(timeout 90 "$APP_DIR/bin/yt-dlp" --proxy "$proxy" "${JSR[@]}" --no-warnings \
-    --skip-download --print id -- "$TEST_URL" 2>&1)" && return 0
+  local out rc dir
+  dir="$(mktemp -d)"
+  out="$(timeout 120 "$APP_DIR/bin/yt-dlp" --ignore-config --proxy "$proxy" "${JSR[@]}" \
+    --no-warnings --no-progress --extractor-args "youtube:player_client=default;skip=hls" \
+    -f "worstaudio/worst" -o "$dir/t.%(ext)s" -- "$TEST_URL" 2>&1)"
+  rc=$?
+  find "$dir" -delete 2>/dev/null
+  [ "$rc" -eq 0 ] && return 0
   case "$out" in
     # The bot wording only: "Sign in to confirm your age" is about one video.
-    *"not a bot"*|*"HTTP Error 429"*) why="refused" ;;
+    # A 403 on the file itself is the address refused for downloads.
+    *"not a bot"*|*"HTTP Error 429"*|*"HTTP Error 403"*) why="refused" ;;
     *) why="$(printf '%s' "$out" | tail -n1 | cut -c1-100)" ;;
   esac
   return 1

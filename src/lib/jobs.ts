@@ -20,6 +20,7 @@ import {
   looksLikeProxyAuthFailure,
   isAddressRefused,
   failureFingerprint,
+  isYouTube,
 } from "./ytdlp";
 import { noteProxyRefused, proxyGeneration, rotateProxyNow } from "./proxy-health";
 import { BusyError, VisitorBusyError, jobLimiter, jobsPerVisitor } from "./concurrency";
@@ -306,6 +307,13 @@ export function startJob(opts: StartJobOptions): string {
   // swapped at most once per download.
   let freshStarts = 0;
   let swappedForJob = false;
+  // YouTube can refuse an address for video files while still answering its
+  // lookups: on 15 October every download got HTTP 403 while the quality
+  // lists kept coming back. A first 403 is usually stale links, which a fresh
+  // start fixes. One that survives a fresh start with new links is the
+  // address, and only a new one helps.
+  const mediaRefused = (stderr: string) =>
+    freshStarts >= 1 && isYouTube(opts.url) && /HTTP Error 403/i.test(stderr);
   // Which proxy address this download began on. If it changes underneath, the
   // links it holds were signed for an address that is gone.
   const startGeneration = proxyGeneration();
@@ -438,7 +446,7 @@ export function startJob(opts: StartJobOptions): string {
         // A YouTube download whose stale links were renewed and then met the
         // bot wall used to stop there, because one fresh start was all it had.
         if (freshStarts < 2 && proxyFlags.length > 0 && job.status !== "error") {
-          const refused = isAddressRefused(stderrTail);
+          const refused = isAddressRefused(stderrTail) || mediaRefused(stderrTail);
           const stale =
             proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
           if (refused || stale) {
@@ -486,7 +494,7 @@ export function startJob(opts: StartJobOptions): string {
         );
         // A download that has to extract again meets the same bot wall a
         // lookup does, so it reports a refused proxy address the same way.
-        if (proxyFlags.length > 0 && isAddressRefused(stderrTail)) {
+        if (proxyFlags.length > 0 && (isAddressRefused(stderrTail) || mediaRefused(stderrTail))) {
           noteProxyRefused(safeHost(opts.url));
         }
         if (job.status !== "error") {

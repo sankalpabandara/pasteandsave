@@ -62,7 +62,10 @@ JSR_ARG=()
 _download_attempt() {
   local out
   out="$(mktemp -d)"
-  if "$BIN" -f worstaudio --no-warnings --no-playlist       --socket-timeout 20 --extractor-retries 1       "${JSR_ARG[@]}" "${CLIENT_ARG[@]}" "$@"       -o "$out/t.%(ext)s" -- "$SELFTEST_URL" >/dev/null 2>&1      && [ -n "$(find "$out" -type f -size +8k 2>/dev/null | head -1)" ]; then
+  # --ignore-config: /etc/yt-dlp.conf was found naming YouTube clients that no
+  # longer work, and without this the test quietly used those instead of the
+  # ones the app uses.
+  if "$BIN" --ignore-config -f worstaudio --no-warnings --no-playlist       --socket-timeout 20 --extractor-retries 1       "${JSR_ARG[@]}" "${CLIENT_ARG[@]}" "$@"       -o "$out/t.%(ext)s" -- "$SELFTEST_URL" >/dev/null 2>&1      && [ -n "$(find "$out" -type f -size +8k 2>/dev/null | head -1)" ]; then
     rm -rf "$out"
     return 0
   fi

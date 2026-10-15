@@ -160,6 +160,11 @@ const CONCURRENT_FRAGMENTS = (() => {
 
 export function networkArgs(): string[] {
   const args: string[] = [
+    // Everything yt-dlp does here is decided by this code, not by whatever
+    // config file is lying on the server. /etc/yt-dlp.conf was found setting
+    // YouTube clients that no longer work, and anything that leaned on it,
+    // such as the nightly self-test, was quietly testing those instead.
+    "--ignore-config",
     ...jsRuntimeArgs(),
     "--concurrent-fragments",
     String(CONCURRENT_FRAGMENTS),
