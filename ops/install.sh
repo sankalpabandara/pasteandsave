@@ -60,6 +60,7 @@ current="$(crontab -l 2>/dev/null \
   echo "*/2 * * * * $OPS/health-watchdog.sh >> /var/log/pasteandsave-watchdog.log 2>&1"
   echo "17 4 * * * $OPS/update-ytdlp.sh >> /var/log/pasteandsave-ytdlp.log 2>&1"
   echo "* * * * * $OPS/warp-rotate.sh >> /var/log/pasteandsave-warp.log 2>&1"
+  echo "* * * * * $OPS/warp-pool.sh >> /var/log/pasteandsave-warp-pool.log 2>&1"
 } | crontab -
 
 echo
@@ -68,6 +69,7 @@ echo "  auto-deploy      every 2 min  (builds first, reloads, rolls back if unhe
 echo "  health watchdog  every 2 min  (restarts a wedged app, max 6/day)"
 echo "  yt-dlp update    daily 04:17  (self-tests, rolls back a bad update)"
 echo "  WARP rotation    every minute (new exit address when YouTube refuses the old one)"
+echo "  WARP pool        every minute (tests and repairs the extra WARP exits in Docker)"
 echo "  alerts           -> ${ALERT_EMAIL:-(email off)}${ALERT_WEBHOOK_URL:+ + webhook}"
 echo
 echo "Logs: /var/log/pasteandsave-*.log"

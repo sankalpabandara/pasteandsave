@@ -11,7 +11,10 @@
 // long enough for a link to go stale. A miss is not a failure, it just means
 // the download extracts for itself as it always did.
 
-type Entry = { raw: string; at: number };
+// exit is the WARP pool exit the lookup went through, when it used one. The
+// download follows it there: links are signed for the address that fetched
+// them.
+type Entry = { raw: string; at: number; exit?: string };
 
 // Comfortably longer than picking a format takes, comfortably shorter than the
 // few hours a signed CDN link stays valid.
@@ -35,7 +38,7 @@ function evictExpired(now: number): void {
 }
 
 /** Store the raw extractor JSON for a URL that was just looked up. */
-export function putInfo(url: string, raw: string): void {
+export function putInfo(url: string, raw: string, exit?: string): void {
   if (!raw || raw.length > MAX_BYTES) return;
   const now = Date.now();
   evictExpired(now);
@@ -45,7 +48,14 @@ export function putInfo(url: string, raw: string): void {
     if (oldest === undefined) break;
     cache.delete(oldest);
   }
-  cache.set(url, { raw, at: now });
+  cache.set(url, { raw, at: now, exit });
+}
+
+/** The pool exit a fresh lookup of this URL went through, if any. */
+export function infoExit(url: string): string | undefined {
+  const entry = cache.get(url);
+  if (!entry || Date.now() - entry.at > TTL_MS) return undefined;
+  return entry.exit;
 }
 
 /** The JSON a lookup already fetched for this URL, if it is still fresh. */

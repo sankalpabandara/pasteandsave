@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 import { clearInfo, putInfo } from "./info-cache";
 import { noteProxyRefused, onProxySwapped, rotateProxyNow, rotateScriptPath } from "./proxy-health";
+import { markExitBad, pickExit, poolActive } from "./proxy-pool";
 
 // Cached lookups hold links signed for the proxy's address. Once it has a new
 // one they would all be refused, so they go.
@@ -193,16 +194,21 @@ export function networkArgs(): string[] {
 // id is 6-10 alphanumeric characters). Set YTDLP_PROXY_STICKY=0 for a provider
 // that does not understand it; failures that look like a rejected login also
 // fall back to the plain proxy on their own.
-export function proxyArgs(rawUrl: string): string[] {
-  if (!YTDLP_PROXY) return [];
+//
+// `exit` picks one exit from the WARP pool (see proxy-pool.ts). Without one,
+// the single configured proxy is used, exactly as before the pool existed.
+export function proxyArgs(rawUrl: string, exit?: string): string[] {
+  const proxy = exit || YTDLP_PROXY;
+  if (!proxy) return [];
   // One definition of which hosts match, shared with the no-proxy path, so the
   // two can never drift apart and disagree about the same URL.
-  return hostNeedsProxy(rawUrl) ? ["--proxy", stickyProxyUrl(YTDLP_PROXY, rawUrl)] : [];
+  return hostNeedsProxy(rawUrl) ? ["--proxy", stickyProxyUrl(proxy, rawUrl)] : [];
 }
 
 /** The proxy without a session suffix, for the fallback below. */
-export function plainProxyArgs(): string[] {
-  return YTDLP_PROXY ? ["--proxy", YTDLP_PROXY] : [];
+export function plainProxyArgs(exit?: string): string[] {
+  const proxy = exit || YTDLP_PROXY;
+  return proxy ? ["--proxy", proxy] : [];
 }
 
 /** A rejected proxy login, as opposed to the platform refusing us. */
@@ -243,22 +249,25 @@ export function proxyStatus(): { configured: boolean; hosts: string[] } {
  * back should be noticed quickly, while one that is down is worth not retrying
  * on every request.
  */
-let proxyProbe: { ok: boolean; at: number } | null = null;
+// One remembered answer per proxy, since the pool has several.
+const proxyProbes = new Map<string, { ok: boolean; at: number }>();
 // A swap brings WARP back up, and a remembered "not listening" from seconds
 // before would turn the retry away.
 onProxySwapped(() => {
-  proxyProbe = null;
+  proxyProbes.clear();
 });
-export async function proxyReachable(): Promise<boolean> {
-  if (!YTDLP_PROXY) return false;
+export async function proxyReachable(exit?: string): Promise<boolean> {
+  const proxy = exit || YTDLP_PROXY;
+  if (!proxy) return false;
   const now = Date.now();
+  const proxyProbe = proxyProbes.get(proxy);
   if (proxyProbe && now - proxyProbe.at < (proxyProbe.ok ? 15_000 : 5_000)) {
     return proxyProbe.ok;
   }
   let host = "";
   let port = 0;
   try {
-    const u = new URL(YTDLP_PROXY);
+    const u = new URL(proxy);
     host = u.hostname;
     port = Number(u.port) || (u.protocol === "https:" ? 443 : 80);
   } catch {
@@ -274,7 +283,7 @@ export async function proxyReachable(): Promise<boolean> {
     sock.once("connect", () => done(true));
     sock.once("error", () => done(false));
   });
-  proxyProbe = { ok, at: now };
+  proxyProbes.set(proxy, { ok, at: now });
   return ok;
 }
 
@@ -287,12 +296,13 @@ export function proxyAvailable(): boolean {
 }
 
 /** Proxy flags regardless of the host list, for the automatic retry below. */
-export function forceProxyArgs(rawUrl?: string): string[] {
+export function forceProxyArgs(rawUrl?: string, exit?: string): string[] {
   // Seeded like proxyArgs. This is the retry for a site that is not on the
   // host list, so the download side will compute no proxy at all for it; the
   // links this fetches still have to come from an address the download can
   // present them from, or be refused for the same reason.
-  return YTDLP_PROXY ? ["--proxy", stickyProxyUrl(YTDLP_PROXY, rawUrl)] : [];
+  const proxy = exit || YTDLP_PROXY;
+  return proxy ? ["--proxy", stickyProxyUrl(proxy, rawUrl)] : [];
 }
 
 /**
@@ -797,7 +807,41 @@ export function failureFingerprint(err: unknown): string {
   return marks.length ? marks.join("+") : "none";
 }
 
+/**
+ * Whether a lookup through one pool exit failed because of that exit: refused,
+ * not answering, or stalled. Those are worth another exit. A removed or
+ * private video is not, and fails the same everywhere.
+ */
+function exitFailed(url: string, err: unknown): boolean {
+  if (err instanceof ProxyUnreachableError) return true;
+  if (err instanceof PlatformBlockedError && refusedThroughProxy(url, err.message)) return true;
+  return err instanceof Error && /timed out|timeout/i.test(err.message);
+}
+
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {
+  // Through the WARP pool when it has healthy exits. A refused or stalled exit
+  // is dropped and the next one tried straight away, so the visitor is never
+  // the one who finds out an address went bad, and never waits for a swap:
+  // the manager replaces bad exits in the background.
+  if (hostNeedsProxy(url) && poolActive()) {
+    const tried: string[] = [];
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const exit = pickExit(tried);
+      if (!exit) break;
+      tried.push(exit);
+      try {
+        return await fetchInfoOnce(url, exit);
+      } catch (err) {
+        lastErr = err;
+        if (!exitFailed(url, err)) throw err;
+        markExitBad(exit);
+        console.log(`[info] ${safeHostname(url)}: a pool exit failed (${failureFingerprint(err)}), trying another`);
+      }
+    }
+    if (lastErr) throw lastErr;
+  }
+
   try {
     return await fetchInfoOnce(url);
   } catch (err) {
@@ -819,7 +863,7 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
   }
 }
 
-async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
+async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
   // Hold a concurrency slot for the whole lookup so a burst of requests can't
   // spawn unlimited yt-dlp processes.
   const release = await lookupLimiter.acquire(QUEUE_WAIT_MS);
@@ -833,8 +877,10 @@ async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
     ];
     const yt = isYouTube(url);
     // YouTube gets a longer budget: multiple player clients plus retries take
-    // more wall time than a single clean fetch.
-    const timeout = yt ? 60_000 : 30_000;
+    // more wall time than a single clean fetch. Through a pool exit it gets
+    // less, because a stalled exit is better left for the next one: three
+    // tries still fit inside the browser's two minutes.
+    const timeout = yt ? (exit ? 35_000 : 60_000) : 30_000;
 
     // Try without the proxy first, when this site has not recently proved it
     // needs one. The host list was written when datacenter addresses were
@@ -857,7 +903,7 @@ async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
     // Nothing will come of this: the site needs an address we reach through the
     // proxy, and the proxy is not answering. Better to say so now than after
     // two timeouts.
-    if (needsProxy && haveProxy && !shouldTryDirect(host, fp) && !(await proxyReachable())) {
+    if (needsProxy && haveProxy && !shouldTryDirect(host, fp) && !(await proxyReachable(exit))) {
       throw new ProxyUnreachableError(host);
     }
 
@@ -899,21 +945,27 @@ async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
 
     try {
       const stdout = await runYtDlp(
-        [...base, ...siteArgs(url), ...proxyArgs(url), "--", url],
+        [...base, ...siteArgs(url), ...proxyArgs(url, exit), "--", url],
         timeout,
       );
-      putInfo(url, stdout);
+      putInfo(url, stdout, exit);
       return parseInfoJson(stdout);
     } catch (err) {
+      // Through a pool exit, a refusal goes straight back to fetchInfo, which
+      // tries another exit: other player clients on a refused address only
+      // spend the visitor's time.
+      if (exit && err instanceof Error && isAddressRefused(err.message)) {
+        throw new PlatformBlockedError(err.message);
+      }
       // For YouTube, one bot-block deserves a second try with a different
       // client mix before we give up.
       if (yt && err instanceof Error && !(err instanceof UnsupportedSiteError) && isBlockedByPlatform(err.message)) {
         try {
           const stdout = await runYtDlp(
-            [...base, ...siteArgs(url, true), ...proxyArgs(url), "--", url],
+            [...base, ...siteArgs(url, true), ...proxyArgs(url, exit), "--", url],
             timeout,
           );
-          putInfo(url, stdout);
+          putInfo(url, stdout, exit);
       return parseInfoJson(stdout);
         } catch (retryErr) {
           if (retryErr instanceof Error && isBlockedByPlatform(retryErr.message)) {
@@ -929,18 +981,18 @@ async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
       if (
         PROXY_STICKY &&
         err instanceof Error &&
-        proxyArgs(url).length > 0 &&
+        proxyArgs(url, exit).length > 0 &&
         looksLikeProxyAuthFailure(err.message)
       ) {
         try {
           const stdout = await runYtDlp(
-            [...base, ...siteArgs(url), ...plainProxyArgs(), "--", url],
+            [...base, ...siteArgs(url), ...plainProxyArgs(exit), "--", url],
             timeout,
           );
           console.warn(
             "[info] proxy rejected the sticky session; falling back to a plain proxy connection. Set YTDLP_PROXY_STICKY=0 if this persists.",
           );
-          putInfo(url, stdout);
+          putInfo(url, stdout, exit);
       return parseInfoJson(stdout);
         } catch {
           // Keep the original error, which describes the real problem.
@@ -955,19 +1007,19 @@ async function fetchInfoOnce(url: string): Promise<YtDlpInfo> {
       if (
         err instanceof Error &&
         !(err instanceof UnsupportedSiteError) &&
-        proxyArgs(url).length === 0 &&
+        proxyArgs(url, exit).length === 0 &&
         proxyAvailable() &&
         worthProxyRetry(err.message)
       ) {
         try {
           const stdout = await runYtDlp(
-            [...base, ...siteArgs(url), ...forceProxyArgs(url), "--", url],
+            [...base, ...siteArgs(url), ...forceProxyArgs(url, exit), "--", url],
             timeout,
           );
           console.warn(
             `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
           );
-          putInfo(url, stdout);
+          putInfo(url, stdout, exit);
       return parseInfoJson(stdout);
         } catch {
           // Fall through to the original error, which describes the real

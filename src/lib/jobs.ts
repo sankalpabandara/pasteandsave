@@ -26,7 +26,8 @@ import { noteProxyRefused, proxyGeneration, rotateProxyNow } from "./proxy-healt
 import { BusyError, VisitorBusyError, jobLimiter, jobsPerVisitor } from "./concurrency";
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
-import { takeInfo } from "./info-cache";
+import { infoExit, takeInfo } from "./info-cache";
+import { markExitBad, pickExit } from "./proxy-pool";
 import { shouldTryDirect } from "./proxy-routing";
 
 export type JobStatus =
@@ -297,9 +298,14 @@ export function startJob(opts: StartJobOptions): string {
   // a different answer: without it the verdict never matches, every download
   // goes direct, and the links signed for the proxy's address are presented from
   // ours.
-  const jobProxy = shouldTryDirect(safeHost(opts.url), extractorFingerprint())
-    ? []
-    : proxyArgs(opts.url);
+  //
+  // With the WARP pool, the exit the lookup used, so the download presents
+  // links from the address that fetched them; otherwise the next healthy one.
+  // Undefined when there is no pool, which means the single configured proxy.
+  const direct = shouldTryDirect(safeHost(opts.url), extractorFingerprint());
+  let currentExit: string | undefined = direct ? undefined : (infoExit(opts.url) ?? pickExit());
+  const triedExits: string[] = currentExit ? [currentExit] : [];
+  let jobProxy = direct ? [] : proxyArgs(opts.url, currentExit);
   let triedProxyFallback = false;
   let triedPlainProxy = false;
   // Fresh starts through the proxy, below. Two at most, so a download that
@@ -312,8 +318,11 @@ export function startJob(opts: StartJobOptions): string {
   // lists kept coming back. A first 403 is usually stale links, which a fresh
   // start fixes. One that survives a fresh start with new links is the
   // address, and only a new one helps.
-  const mediaRefused = (stderr: string) =>
-    freshStarts >= 1 && isYouTube(opts.url) && /HTTP Error 403/i.test(stderr);
+  //
+  // YouTube downloads now always fetch fresh links in the same run (see the
+  // start of the job below), so for YouTube there is no stale-link case left:
+  // a 403 on the file is the address, the first time.
+  const mediaRefused = (stderr: string) => isYouTube(opts.url) && /HTTP Error 403/i.test(stderr);
   // Which proxy address this download began on. If it changes underneath, the
   // links it holds were signed for an address that is gone.
   const startGeneration = proxyGeneration();
@@ -445,17 +454,31 @@ export function startJob(opts: StartJobOptions): string {
         // A fresh start that is itself refused can still get a new address.
         // A YouTube download whose stale links were renewed and then met the
         // bot wall used to stop there, because one fresh start was all it had.
-        if (freshStarts < 2 && proxyFlags.length > 0 && job.status !== "error") {
+        // With the WARP pool, a refused exit is simply left for another healthy
+        // one, up to three in all, with no swap to wait for: the manager
+        // replaces the bad one in the background.
+        const maxFreshStarts = currentExit ? 3 : 2;
+        if (freshStarts < maxFreshStarts && proxyFlags.length > 0 && job.status !== "error") {
           const refused = isAddressRefused(stderrTail) || mediaRefused(stderrTail);
           const stale =
             proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
           if (refused || stale) {
             freshStarts++;
             let ready = true;
-            if (refused) {
-              // Once per download. If the address it is given is refused too,
-              // the swap's own retries are already spent, and another would
-              // only keep the visitor waiting.
+            let nextFlags = proxyFlags;
+            const nextExit = refused && currentExit ? pickExit(triedExits) : undefined;
+            if (refused && currentExit) markExitBad(currentExit);
+            if (nextExit) {
+              console.warn(`[job ${id}] pool exit refused, moving to another`);
+              currentExit = nextExit;
+              triedExits.push(nextExit);
+              jobProxy = proxyArgs(opts.url, nextExit);
+              nextFlags = jobProxy;
+            } else if (refused) {
+              // No other healthy exit, or no pool at all: swap the single
+              // proxy's address. Once per download. If the address it is given
+              // is refused too, the swap's own retries are already spent, and
+              // another would only keep the visitor waiting.
               if (swappedForJob) {
                 ready = false;
               } else {
@@ -476,7 +499,7 @@ export function startJob(opts: StartJobOptions): string {
               // this run reads the page again before downloading.
               await fsp.rm(path.join(tmpDir, INFO_NAME), { force: true });
               void recordProxyUsage(opts.mode);
-              run(proxyFlags);
+              run(nextFlags);
               return;
             }
           }
@@ -607,6 +630,19 @@ export function startJob(opts: StartJobOptions): string {
   if (jobProxy.length === 0) {
     // Nothing here goes through the proxy, so there is nothing to save.
     run([]);
+    return id;
+  }
+
+  // YouTube fetches fresh links and the file in one run through its exit.
+  // The two-step path below exists to save metered proxy traffic by fetching
+  // media directly when the CDN allows it, which never happens for YouTube
+  // and costs nothing through WARP. And the links the lookup saved were being
+  // refused on first use: on 15 October every YouTube download failed once
+  // with a 403 and only worked after starting again, adding seconds to each.
+  if (isYouTube(opts.url)) {
+    void recordProxyUsage(opts.mode);
+    console.log(`[job ${id}] host=${safeHost(opts.url)} media=proxied fresh`);
+    run(jobProxy);
     return id;
   }
 
