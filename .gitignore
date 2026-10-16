@@ -37,6 +37,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# Google service account key, read from the app folder by default
+ga-key.json
+
 # vercel
 .vercel
 

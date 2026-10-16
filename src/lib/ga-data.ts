@@ -24,8 +24,12 @@ type ReportRow = {
   metricValues?: { value: string }[];
 };
 
+// pasteandsave.com's own GA4 property, used when GA4_PROPERTY_ID is not set,
+// so connecting the dashboard needs only the key file.
+const DEFAULT_PROPERTY_ID = "547077098";
+
 export async function getGaSummary(): Promise<GaResult> {
-  const propertyId = process.env.GA4_PROPERTY_ID?.trim();
+  const propertyId = process.env.GA4_PROPERTY_ID?.trim() || DEFAULT_PROPERTY_ID;
   if (!googleConfigured() || !propertyId) return { status: "unconfigured" };
 
   try {

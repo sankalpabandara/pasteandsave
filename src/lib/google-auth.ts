@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
 // Authenticates to Google APIs with a service account, with no external
 // libraries. It builds an RS256 JWT with node:crypto, exchanges it for an
@@ -25,11 +26,23 @@ export function serviceAccountError(): string {
   return lastLoadError;
 }
 
+// With no setting, the key is looked for as ga-key.json in the app's own
+// folder. Wiring it up used to mean editing .env.local on the server as well
+// as uploading the file, and the edit is where it kept going wrong; now the
+// file alone is enough.
+export function defaultKeyPath(): string {
+  return process.env.GA_KEY_FILE || path.join(process.cwd(), "ga-key.json");
+}
+
 function loadServiceAccount(): ServiceAccount | null {
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
+  let raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
   if (!raw) {
-    lastLoadError = "GOOGLE_SERVICE_ACCOUNT_JSON is not set.";
-    return null;
+    const fallback = defaultKeyPath();
+    if (!fs.existsSync(fallback)) {
+      lastLoadError = `No key yet. Save the service account's JSON key as ${fallback} on the server.`;
+      return null;
+    }
+    raw = fallback;
   }
 
   let json: string;
@@ -58,8 +71,13 @@ function loadServiceAccount(): ServiceAccount | null {
     lastLoadError =
       "That file parsed but has no client_email or private_key. It may be an OAuth client secret rather than a service account key.";
   } catch {
+    // A real key is about 2 KB. Anything much shorter is a copy that broke on
+    // the way, which is what happened on the server: 108 bytes of fragment
+    // sat there reported as "not set".
     lastLoadError =
-      "The value is not valid JSON, a readable file path, or base64-encoded JSON.";
+      json.length < 1000
+        ? `The key file is incomplete (${json.length} bytes; a real key is about 2,300). Download a fresh JSON key and replace it.`
+        : "The value is not valid JSON, a readable file path, or base64-encoded JSON.";
   }
   return null;
 }

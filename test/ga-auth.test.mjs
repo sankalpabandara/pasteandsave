@@ -38,6 +38,30 @@ test("a missing file explains itself rather than saying 'not configured'", async
   assert.match(r.why, /could not read/i);
 });
 
+test("with no setting, ga-key.json in the app folder is used", async () => {
+  process.env.GA_KEY_FILE = keyPath;
+  const r = await load("");
+  assert.equal(r.ok, true, r.why);
+  delete process.env.GA_KEY_FILE;
+});
+
+test("with no setting and no file, it says where to put the key", async () => {
+  process.env.GA_KEY_FILE = path.join(dir, "absent.json");
+  const r = await load("");
+  assert.equal(r.ok, false);
+  assert.match(r.why, /absent\.json/);
+  delete process.env.GA_KEY_FILE;
+});
+
+test("a key that broke on the way up is called incomplete, not 'not set'", async () => {
+  // What was on the server: 108 bytes of fragment.
+  const broken = path.join(dir, "broken.json");
+  fs.writeFileSync(broken, '{"type": "service_account", "project_id": "x", "private_key_id": "abc", "private_key": "-----BEGIN');
+  const r = await load(broken);
+  assert.equal(r.ok, false);
+  assert.match(r.why, /incomplete/i);
+});
+
 test("an OAuth client secret is named as the wrong file", async () => {
   const wrong = path.join(dir, "wrong.json");
   fs.writeFileSync(wrong, JSON.stringify({ installed: { client_id: "x" } }));

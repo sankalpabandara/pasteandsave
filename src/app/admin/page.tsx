@@ -470,30 +470,17 @@ export default async function AdminDashboard() {
                 Viewer.
               </li>
               <li>
-                In GA4 → Admin → Property details, copy the numeric{" "}
-                <span className="font-mono">Property ID</span> (not the G- code).
-              </li>
-              <li>
-                Put the key on the server and point the app at it. The key is a
-                credential, so it belongs in a file on disk rather than pasted
-                into a web form:
-                <pre className="mt-2 overflow-x-auto rounded-lg bg-neutral-100 p-3 text-[11px] leading-relaxed text-neutral-700 dark:bg-black/40 dark:text-neutral-300">
-{`# upload the key, then lock it down
-sudo mv ~/ga-key.json /opt/pasteandsave/ga-key.json
-sudo chmod 600 /opt/pasteandsave/ga-key.json
-
-# add these two lines to /opt/pasteandsave/.env.local
-GOOGLE_SERVICE_ACCOUNT_JSON=/opt/pasteandsave/ga-key.json
-GA4_PROPERTY_ID=547077098
-
-pm2 restart pasteandsave --update-env`}
-                </pre>
+                Save the key on the server as{" "}
+                <span className="font-mono">/opt/pasteandsave/ga-key.json</span>.
+                Nothing else needs setting: the site finds the file there and
+                uses property 547077098. The key is a credential, so keep it in
+                that file rather than pasting it into a web form.
               </li>
             </ol>
             <p className="mt-2 text-xs text-neutral-400">
-              Numbers appear here on the next load once those are set. Visitor
-              tracking on the site itself is separate and already runs from{" "}
-              <span className="font-mono">NEXT_PUBLIC_GA_ID</span>.
+              Numbers appear here on the next load once the file is in place.
+              Visitor tracking on the site itself is separate and already runs
+              from <span className="font-mono">NEXT_PUBLIC_GA_ID</span>.
             </p>
           </div>
         )}
