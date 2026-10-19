@@ -21,7 +21,11 @@
 set -uo pipefail
 
 APP_DIR="${APP_DIR:-/opt/pasteandsave}"
-POOL_SIZE="${WARP_POOL_SIZE:-4}"
+# Eight containers, nine exits with the host's. Measured on 2026-10-19 each
+# container holds about 140 MB and 1 to 2% of a core while idle, on a box with
+# 4 cores and 6 GB free, and every exit is one more address a site that turns
+# one away can be asked from instead. Ports 40001 to 40008.
+POOL_SIZE="${WARP_POOL_SIZE:-8}"
 BASE_PORT="${WARP_POOL_BASE_PORT:-40001}"
 IMAGE="pasteandsave-warp"
 STATE_DIR="${WARP_POOL_STATE:-/var/lib/pasteandsave/warp-pool}"
@@ -124,6 +128,26 @@ remember_refused() {
 read_state() { cat "$STATE_DIR/$1" 2>/dev/null || echo "down 0 unknown"; }
 write_state() { printf '%s %s %s\n' "$2" "$(date +%s)" "$3" >"$STATE_DIR/$1"; }
 
+# True when another healthy exit is already in this IPv6 /48. Every exit
+# shares one IPv4 address and differs only in IPv6, and sites that judge by
+# block (YouTube flags whole /48s) see two exits in one block as one visitor.
+# On 2026-10-19 two of the five were in the same /48.
+block_taken() {
+  local self="$1" block="$2" f status checked addr
+  if [ -z "$block" ] || [ "$block" = unknown ]; then return 1; fi
+  for f in "$STATE_DIR"/*; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = "$self" ] && continue
+    read -r status checked addr <"$f"
+    if [ "$status" = healthy ] && [ "$(block_of "$addr")" = "$block" ]; then return 0; fi
+  done
+  return 1
+}
+# New registrations spent looking for an unused block before settling for a
+# shared one. Few, because every registration is a request to Cloudflare, and
+# a shared block still adds capacity.
+SPREAD_TRIES="${WARP_POOL_SPREAD_TRIES:-2}"
+
 # --- the image and the containers ------------------------------------------
 
 image_changed=0
@@ -185,10 +209,20 @@ check() {
   result=$?
   # 3: YouTube answers, but too slowly to be worth sending anyone through.
   [ "$result" -eq 0 ] && ! fast_enough "$proxy" && result=3
+  local spread=0
   if [ "$result" -eq 0 ]; then
-    [ "$status" = healthy ] || say "$name ($addr) is healthy"
-    write_state "$name" healthy "$addr"
-    return 0
+    # Not yet carrying anyone (new, or coming back from down) and in a block
+    # another exit already covers: worth a registration or two elsewhere.
+    # A healthy exit in use is never re-registered for this, which would cut
+    # downloads running through it.
+    if [ "$kind" != host ] && [ "$status" != healthy ] && [ "$SPREAD_TRIES" -gt 0 ] &&
+      block_taken "$name" "$(block_of "$addr")"; then
+      result=4
+    else
+      [ "$status" = healthy ] || say "$name ($addr) is healthy"
+      write_state "$name" healthy "$addr"
+      return 0
+    fi
   fi
 
   case "$result" in
@@ -197,6 +231,10 @@ check() {
       say "$name ($addr) refused by YouTube"
       ;;
     3) say "$name ($addr) answers but is too slow" ;;
+    4)
+      spread=1
+      say "$name ($addr) shares a block with another exit, looking for its own"
+      ;;
     *) say "$name ($addr) not answering" ;;
   esac
   # Out of use straight away, before any repair.
@@ -214,7 +252,7 @@ check() {
     sleep 10
   fi
   for try in $(seq 1 "$MAX_SWAPS"); do
-    if [ "$result" -eq 1 ] || [ "$result" -eq 3 ] || [ "$try" -gt 1 ]; then
+    if [ "$result" -eq 1 ] || [ "$result" -eq 3 ] || [ "$result" -eq 4 ] || [ "$try" -gt 1 ]; then
       new_registration "$name"
     fi
     addr="$(exit_address "$proxy")"
@@ -222,6 +260,18 @@ check() {
       say "$name new address $addr is in a refused block, trying again"
       result=1
       continue
+    fi
+    if [ "$kind" != host ] && [ "$spread" -le "$SPREAD_TRIES" ] && [ "$spread" -gt 0 ] &&
+      [ "$try" -lt "$MAX_SWAPS" ] && block_taken "$name" "$(block_of "$addr")"; then
+      if [ "$spread" -lt "$SPREAD_TRIES" ]; then
+        spread=$((spread + 1))
+        say "$name new address $addr shares a block too, trying again"
+        result=4
+        continue
+      fi
+      # Out of tries for a block of its own; a shared one still adds capacity.
+      say "$name keeps $addr in a shared block"
+      spread=$((SPREAD_TRIES + 1))
     fi
     youtube_ok "$proxy"
     result=$?

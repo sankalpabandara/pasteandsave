@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { lookupLimiter, QUEUE_WAIT_MS } from "./concurrency";
 import { clearInfo, putInfo } from "./info-cache";
 import { noteProxyRefused, onProxySwapped, rotateProxyNow, rotateScriptPath } from "./proxy-health";
-import { markExitBad, pickExit, poolActive } from "./proxy-pool";
+import { markExitBad, markExitBadFor, pickExit, poolActive } from "./proxy-pool";
 
 // Cached lookups hold links signed for the proxy's address. Once it has a new
 // one they would all be refused, so they go.
@@ -446,11 +446,17 @@ export function isAddressRefused(stderr: string): boolean {
  * next exit. Anything else would fail the same way through every exit.
  */
 export function exitBroke(stderr: string): boolean {
-  return (
-    isAddressRefused(stderr) ||
-    /timed out|timeout|proxy|socks|tunnel|connection (?:refused|reset|aborted)|unable to connect|network is unreachable/i.test(
-      stderr,
-    )
+  return isAddressRefused(stderr) || exitUnreachable(stderr);
+}
+
+/**
+ * The exit itself could not be reached or went quiet, as opposed to a site
+ * turning it away. That is the exit's fault for every site, so it is taken
+ * out of use for all of them; a site's refusal only counts for that site.
+ */
+export function exitUnreachable(stderr: string): boolean {
+  return /timed out|timeout|proxy|socks|tunnel|connection (?:refused|reset|aborted)|unable to connect|network is unreachable/i.test(
+    stderr,
   );
 }
 
@@ -976,6 +982,11 @@ export async function vimeoStreamsAreDrm(info: YtDlpInfo): Promise<boolean> {
  * not answering, or stalled. Those are worth another exit. A removed or
  * private video is not, and fails the same everywhere.
  */
+// A lookup through the pool gives up starting new attempts after this long.
+// Each attempt may take 35 seconds, so the last one still ends inside the
+// browser's two minute wait.
+const POOL_START_BY_MS = 70_000;
+
 function exitFailed(url: string, err: unknown): boolean {
   if (err instanceof ProxyUnreachableError) return true;
   if (err instanceof PlatformBlockedError && refusedThroughProxy(url, err.message)) return true;
@@ -989,9 +1000,14 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
   // the manager replaces bad exits in the background.
   if (hostNeedsProxy(url) && poolActive()) {
     const tried: string[] = [];
+    const host = safeHostname(url);
+    const started = Date.now();
     let lastErr: unknown = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const exit = pickExit(tried);
+    // Four exits with a larger pool, but a new attempt is only started while
+    // one more at the full per-exit budget still fits inside the browser's
+    // two minutes.
+    for (let attempt = 0; attempt < 4 && Date.now() - started < POOL_START_BY_MS; attempt++) {
+      const exit = pickExit(tried, undefined, host);
       if (!exit) break;
       tried.push(exit);
       try {
@@ -999,8 +1015,14 @@ export async function fetchInfo(url: string): Promise<YtDlpInfo> {
       } catch (err) {
         lastErr = err;
         if (!exitFailed(url, err)) throw err;
-        markExitBad(exit);
-        console.log(`[info] ${safeHostname(url)}: a pool exit failed (${failureFingerprint(err)}), trying another`);
+        // An exit that is unreachable, slow, or refused by YouTube (the site
+        // the manager tests with) is out for everyone and retested. Refused
+        // by another listed site, it is only out for that site.
+        const unreachable =
+          err instanceof ProxyUnreachableError || (err instanceof Error && /timed out|timeout/i.test(err.message));
+        if (unreachable || isYouTube(url)) markExitBad(exit);
+        else markExitBadFor(host, exit);
+        console.log(`[info] ${host}: a pool exit failed (${failureFingerprint(err)}), trying another`);
       }
     }
     if (lastErr) throw lastErr;
@@ -1177,9 +1199,10 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
       // after a YouTube flag. Some sites answer differently per address and
       // per request as well: two current Pornhub videos, same minute, one gave
       // formats direct and none through two exits, the other none direct and
-      // formats through one exit. So up to three exits are tried, a broken one
-      // is marked for the manager, and only a final answer (removed, private,
-      // unsupported) stops early. The exit that worked is kept with the
+      // formats through one exit. So up to four exits are tried, chosen to
+      // avoid ones this site turned away lately and IPv6 blocks already tried,
+      // an unreachable one is marked for the manager, and only a final answer
+      // (removed, private, unsupported) stops early. The exit that worked is kept with the
       // lookup, so the download reads from it too.
       if (
         err instanceof Error &&
@@ -1188,36 +1211,33 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
         proxyAvailable() &&
         worthProxyRetry(err.message)
       ) {
-        const exits: (string | undefined)[] = [];
-        if (poolActive()) {
-          for (let i = 0; i < 3; i++) {
-            const next = pickExit(exits.filter((e): e is string => Boolean(e)));
-            if (!next) break;
-            exits.push(next);
-          }
-        }
-        if (exits.length === 0) exits.push(exit);
-        for (const via of exits) {
+        // Picked one at a time rather than all up front, so each pick knows
+        // what the attempts before it learned.
+        const pooled = poolActive();
+        const tried: string[] = [];
+        for (let attempt = 0; attempt < (pooled ? 4 : 1); attempt++) {
+          const via = pooled ? pickExit(tried, undefined, host) : exit;
+          if (pooled && !via) break;
+          if (via) tried.push(via);
           try {
             const stdout = await runYtDlp(
               [...base, ...siteArgs(url), ...forceProxyArgs(url, via), "--", url],
               timeout,
             );
-            console.warn(
-              `[info] ${safeHostname(url)} failed direct and succeeded through ${via ? "a pool exit" : "the proxy"}`,
-            );
+            console.warn(`[info] ${host} failed direct and succeeded through ${via ? "a pool exit" : "the proxy"}`);
             putInfo(url, stdout, via);
             return parseInfoJson(stdout);
           } catch (retryErr) {
             const why = retryErr instanceof Error ? retryErr.message : String(retryErr);
-            if (via && exitBroke(why)) {
-              markExitBad(via);
-              continue;
-            }
+            if (!via) break;
+            // Unreachable is the exit's fault for every site; turned away is
+            // this site's view of it alone.
+            if (exitUnreachable(why)) markExitBad(via);
+            else markExitBadFor(host, via);
             // The next exit may well get a different answer, unless this one
             // was final. Either way the original error is what gets reported,
             // as it describes the real problem better than a failed retry.
-            if (via && worthProxyRetry(why)) continue;
+            if (exitBroke(why) || worthProxyRetry(why)) continue;
             break;
           }
         }

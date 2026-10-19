@@ -36,7 +36,28 @@ const READ_EVERY_MS = 5000;
 
 let cache: { at: number; members: PoolMember[] } | null = null;
 const localBad = new Map<string, number>();
+// "host|proxy" -> when that site last turned that exit away. A site judging
+// an exit is about that site: Instagram refusing an exit says nothing about
+// whether YouTube or Facebook will, and taking it out of use for everyone
+// threw away capacity the other sites needed.
+const siteBad = new Map<string, number>();
 let turn = 0;
+
+function siteKey(host: string, proxy: string): string {
+  return `${host.toLowerCase().replace(/^www\./, "")}|${proxy}`;
+}
+
+/**
+ * The IPv6 /48 an exit's address sits in. Measured on 2026-10-19, every exit
+ * shares one IPv4 address (104.28.196.54) and differs only in IPv6, and two
+ * of the five were in the same /48. Sites that judge by block, YouTube for
+ * one, see those two as the same visitor, so a retry should go to a
+ * different block when there is one.
+ */
+export function blockOf(address: string | undefined): string {
+  if (!address || !address.includes(":")) return address ?? "";
+  return address.split(":").slice(0, 3).join(":");
+}
 
 export function poolFile(): string {
   return process.env.WARP_POOL_FILE || path.join(process.cwd(), "data", "warp-pool.json");
@@ -78,14 +99,43 @@ export function healthyExits(now = Date.now()): string[] {
 /**
  * The next healthy exit not in `exclude`, or undefined when there is none,
  * in which case the caller uses the single configured proxy as before.
- * Taken in turn, so load and attention from YouTube are spread across them.
+ *
+ * Taken in turn, so load and attention are spread across the pool, never
+ * concentrated on one favourite: sending everything for a busy site through
+ * the exit that last worked is how an exit gets flagged. Within that, given
+ * the site the request is for, exits that site turned away lately go last,
+ * and so do exits in an IPv6 block this request has already tried. Both are
+ * an order, not a ban: when nothing else is left they are still offered.
  */
-export function pickExit(exclude: Iterable<string> = [], now = Date.now()): string | undefined {
+export function pickExit(
+  exclude: Iterable<string> = [],
+  now = Date.now(),
+  host?: string,
+): string | undefined {
   const skip = new Set(exclude);
-  const choices = healthyExits(now).filter((p) => !skip.has(p));
+  const healthy = new Set(healthyExits(now));
+  const members = readPool(now);
+  const choices = members.filter((m) => healthy.has(m.proxy) && !skip.has(m.proxy));
   if (choices.length === 0) return undefined;
-  turn = (turn + 1) % choices.length;
-  return choices[turn];
+  const triedBlocks = new Set(
+    members.filter((m) => skip.has(m.proxy)).map((m) => blockOf(m.exit)).filter(Boolean),
+  );
+  const cost = (m: PoolMember) =>
+    (host && now - (siteBad.get(siteKey(host, m.proxy)) ?? -Infinity) < BAD_FOR_MS ? 2 : 0) +
+    (triedBlocks.has(blockOf(m.exit)) ? 1 : 0);
+  const least = Math.min(...choices.map(cost));
+  const best = choices.filter((m) => cost(m) === least);
+  turn = (turn + 1) % best.length;
+  return best[turn].proxy;
+}
+
+/**
+ * This site turned this exit away. It is tried last for this site for a
+ * while, and stays in use for every other site. The manager is not told:
+ * it tests exits against YouTube, which this says nothing about.
+ */
+export function markExitBadFor(host: string, proxy: string, now = Date.now()): void {
+  siteBad.set(siteKey(host, proxy), now);
 }
 
 /** True while the pool has at least one healthy exit to offer. */
@@ -114,5 +164,6 @@ export function markExitBad(proxy: string, now = Date.now()): void {
 export function resetPoolMemory(): void {
   cache = null;
   localBad.clear();
+  siteBad.clear();
   turn = 0;
 }

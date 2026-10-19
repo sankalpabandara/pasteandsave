@@ -38,18 +38,24 @@ function lift(name) {
 
 const isAddressRefused = lift("isAddressRefused");
 const isBlockedByPlatform = lift("isBlockedByPlatform");
-const exitBroke = (() => {
-  const start = src.indexOf("export function exitBroke(");
+/** A function's body from the source, run with the named functions in scope. */
+function liftWith(name, deps) {
+  const start = src.indexOf(`export function ${name}(`);
+  assert.notEqual(start, -1, `${name} not found in ytdlp.ts`);
   const open = src.indexOf("{", start);
   let depth = 0;
   for (let j = open; j < src.length; j++) {
     if (src[j] === "{") depth++;
     else if (src[j] === "}" && --depth === 0) {
-      return new Function("isAddressRefused", `return function exitBroke(stderr) ${src.slice(open, j + 1)};`)(isAddressRefused);
+      return new Function(...Object.keys(deps), `return function ${name}(stderr) ${src.slice(open, j + 1)};`)(
+        ...Object.values(deps),
+      );
     }
   }
-  throw new Error("could not read exitBroke");
-})();
+  throw new Error(`could not read ${name}`);
+}
+const exitUnreachable = liftWith("exitUnreachable", {});
+const exitBroke = liftWith("exitBroke", { isAddressRefused, exitUnreachable });
 
 // Copied from the production log, apostrophe and all.
 const BOT_CURLY = "ERROR: [youtube] 9x5NAqblesc: Sign in to confirm you’re not a bot. Use --cookies";
@@ -162,6 +168,10 @@ test("a broken exit is told apart from a video that fails everywhere", () => {
   // Not worth it: every exit would say the same.
   assert.equal(exitBroke("ERROR: [facebook] 1889836315019111: Cannot parse data; please report this issue on"), false);
   assert.equal(exitBroke("ERROR: [facebook] 1: This video is private"), false);
+  // Unreachable is the exit's fault for every site; a bot wall is one site's
+  // view of it, and only counts against it for that site.
+  assert.equal(exitUnreachable("ERROR: ('Unable to connect to proxy', ConnectionRefusedError(111))"), true);
+  assert.equal(exitUnreachable("ERROR: [youtube] x: Sign in to confirm you're not a bot"), false);
 });
 
 test("a Facebook video only signed in viewers can see says so", () => {

@@ -20,6 +20,7 @@ import {
   looksLikeProxyAuthFailure,
   isAddressRefused,
   exitBroke,
+  exitUnreachable,
   failureFingerprint,
   isYouTube,
 } from "./ytdlp";
@@ -28,7 +29,7 @@ import { BusyError, VisitorBusyError, jobLimiter, jobsPerVisitor } from "./concu
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
 import { infoExit, takeInfo } from "./info-cache";
-import { markExitBad, pickExit, poolActive } from "./proxy-pool";
+import { markExitBad, markExitBadFor, pickExit, poolActive } from "./proxy-pool";
 import { hostNeedsProxy, shouldTryDirect } from "./proxy-routing";
 
 /**
@@ -360,7 +361,8 @@ export function startJob(opts: StartJobOptions): string {
   // links from the address that fetched them; otherwise the next healthy one.
   // Undefined when there is no pool, which means the single configured proxy.
   const direct = shouldTryDirect(safeHost(opts.url), extractorFingerprint());
-  let currentExit: string | undefined = direct ? undefined : (infoExit(opts.url) ?? pickExit());
+  const host = safeHost(opts.url);
+  let currentExit: string | undefined = direct ? undefined : (infoExit(opts.url) ?? pickExit([], undefined, host));
   const triedExits: string[] = currentExit ? [currentExit] : [];
   // Proxy flags for one exit. A site off the proxy list gets none from
   // proxyArgs, so once it has proved it needs an exit it is given one outright.
@@ -532,7 +534,8 @@ export function startJob(opts: StartJobOptions): string {
           // which is the one the pool manager takes away to replace whenever
           // YouTube flags it. The exit is recorded so a failure on it can move
           // on to the next one below.
-          const fallbackExit = jobProxy.length === 0 && poolActive() ? pickExit(triedExits) : undefined;
+          const fallbackExit =
+            jobProxy.length === 0 && poolActive() ? pickExit(triedExits, undefined, host) : undefined;
           if (fallbackExit) {
             currentExit = fallbackExit;
             triedExits.push(fallbackExit);
@@ -563,7 +566,8 @@ export function startJob(opts: StartJobOptions): string {
         // With the WARP pool, a refused exit is simply left for another healthy
         // one, up to three in all, with no swap to wait for: the manager
         // replaces the bad one in the background.
-        const maxFreshStarts = currentExit ? 3 : 2;
+        // Four with the larger pool; the job's own deadline still bounds them.
+        const maxFreshStarts = currentExit ? 4 : 2;
         if (freshStarts < maxFreshStarts && proxyFlags.length > 0 && job.status !== "error") {
           // A crawling exit is treated like a refused one: leave it for another.
           const addressRefused = isAddressRefused(stderrTail) || mediaRefused(stderrTail) || wasSlow;
@@ -584,8 +588,14 @@ export function startJob(opts: StartJobOptions): string {
             freshStarts++;
             let ready = true;
             let nextFlags = proxyFlags;
-            const nextExit = refused && currentExit ? pickExit(triedExits) : undefined;
-            if (refused && currentExit) markExitBad(currentExit);
+            const nextExit = refused && currentExit ? pickExit(triedExits, undefined, host) : undefined;
+            // Out for everyone when the exit itself failed or crawled, or
+            // YouTube (what the manager tests with) refused it; otherwise out
+            // only for this site, and still there for the rest.
+            if (refused && currentExit) {
+              if (wasSlow || exitUnreachable(stderrTail) || isYouTube(opts.url)) markExitBad(currentExit);
+              else markExitBadFor(host, currentExit);
+            }
             if (nextExit) {
               console.warn(`[job ${id}] pool exit refused, moving to another`);
               currentExit = nextExit;
