@@ -440,6 +440,20 @@ export function isAddressRefused(stderr: string): boolean {
   );
 }
 
+/**
+ * Whether a run through a pool exit failed because of the exit rather than the
+ * video: the exit refused, stalled or could not be reached. Those are worth the
+ * next exit. Anything else would fail the same way through every exit.
+ */
+export function exitBroke(stderr: string): boolean {
+  return (
+    isAddressRefused(stderr) ||
+    /timed out|timeout|proxy|socks|tunnel|connection (?:refused|reset|aborted)|unable to connect|network is unreachable/i.test(
+      stderr,
+    )
+  );
+}
+
 export function isBlockedByPlatform(stderr: string): boolean {
   return /confirm you['’]?re not a bot|not a bot|HTTP Error 429|HTTP Error 403|too many requests|failed to extract any player response|unable to download api page/i.test(
     stderr,
@@ -697,6 +711,20 @@ export function userFacingError(err: unknown): {
         "This site asks visitors from our server's country to prove their age first, so it won't give us the video. Other sites still work.",
       status: 451,
       code: "AGE_CHECK_REGION",
+    };
+  }
+  // Facebook leaves the video out of the page for anyone not signed in when
+  // the post is limited to friends, groups or adults, and yt-dlp then says
+  // "Cannot parse data". It is reached only after the pool has been tried, and
+  // measured on 2026-10-19 the links that still failed here had no video in
+  // their page from a home connection either. yt-dlp's maintainers answer the
+  // same reports with "you need cookies", which this site does not use.
+  if (/\[facebook[^\]]*\][^\n]*Cannot parse data/i.test(msg)) {
+    return {
+      error:
+        "This Facebook video can only be watched when signed in, or it was taken down, so it can't be downloaded here.",
+      status: 422,
+      code: "LOGIN_ONLY",
     };
   }
   // Copy protection, found at lookup (DrmProtectedError) or reported by the
@@ -1123,9 +1151,19 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
 
       // Last resort for any site: if this request did not already go through
       // the proxy and the failure looks like the platform refusing our
-      // address, try once more from the residential IP. This is what lets a
+      // address, try once more from another address. This is what lets a
       // site that newly starts blocking datacenters keep working without
       // anyone editing the host list first.
+      //
+      // With the WARP pool that means the pool, not only the host's own exit.
+      // Facebook holds some reels back from this server's address and hands
+      // them to WARP: measured 2026-10-19, reel 1147657863865665 had no video
+      // in its page direct and worked through all five exits, twice. Leaning on
+      // the host exit alone failed whenever the pool manager was replacing it
+      // after a YouTube flag. A broken exit is left for the next one. A video
+      // that fails the same way through a working exit is not tried further,
+      // since every exit would say the same. The exit that worked is kept with
+      // the lookup, so the download reads from it too.
       if (
         err instanceof Error &&
         !(err instanceof UnsupportedSiteError) &&
@@ -1133,19 +1171,36 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
         proxyAvailable() &&
         worthProxyRetry(err.message)
       ) {
-        try {
-          const stdout = await runYtDlp(
-            [...base, ...siteArgs(url), ...forceProxyArgs(url, exit), "--", url],
-            timeout,
-          );
-          console.warn(
-            `[info] ${safeHostname(url)} failed direct and succeeded through the proxy; consider adding it to YTDLP_PROXY_HOSTS`,
-          );
-          putInfo(url, stdout, exit);
-      return parseInfoJson(stdout);
-        } catch {
-          // Fall through to the original error, which describes the real
-          // problem better than a failed retry does.
+        const exits: (string | undefined)[] = [];
+        if (poolActive()) {
+          for (let i = 0; i < 2; i++) {
+            const next = pickExit(exits.filter((e): e is string => Boolean(e)));
+            if (!next) break;
+            exits.push(next);
+          }
+        }
+        if (exits.length === 0) exits.push(exit);
+        for (const via of exits) {
+          try {
+            const stdout = await runYtDlp(
+              [...base, ...siteArgs(url), ...forceProxyArgs(url, via), "--", url],
+              timeout,
+            );
+            console.warn(
+              `[info] ${safeHostname(url)} failed direct and succeeded through ${via ? "a pool exit" : "the proxy"}`,
+            );
+            putInfo(url, stdout, via);
+            return parseInfoJson(stdout);
+          } catch (retryErr) {
+            const why = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            if (via && exitBroke(why)) {
+              markExitBad(via);
+              continue;
+            }
+            // Fall through to the original error, which describes the real
+            // problem better than a failed retry does.
+            break;
+          }
         }
       }
       if (err instanceof Error && isBlockedByPlatform(err.message)) {

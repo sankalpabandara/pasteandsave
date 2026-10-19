@@ -38,6 +38,18 @@ function lift(name) {
 
 const isAddressRefused = lift("isAddressRefused");
 const isBlockedByPlatform = lift("isBlockedByPlatform");
+const exitBroke = (() => {
+  const start = src.indexOf("export function exitBroke(");
+  const open = src.indexOf("{", start);
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}" && --depth === 0) {
+      return new Function("isAddressRefused", `return function exitBroke(stderr) ${src.slice(open, j + 1)};`)(isAddressRefused);
+    }
+  }
+  throw new Error("could not read exitBroke");
+})();
 
 // Copied from the production log, apostrophe and all.
 const BOT_CURLY = "ERROR: [youtube] 9x5NAqblesc: Sign in to confirm you’re not a bot. Use --cookies";
@@ -140,6 +152,27 @@ test("a Vimeo embed limited to its owner's sites is not called a block of our se
   assert.match(named.error, /page where you watched it/);
   // A 403 anywhere else is still a block.
   assert.equal(userFacingError(new Error("ERROR: unable to download video data: HTTP Error 403: Forbidden")).code, "UPSTREAM_BLOCKED");
+});
+
+test("a broken exit is told apart from a video that fails everywhere", () => {
+  // Worth the next exit: these are about the exit.
+  assert.equal(exitBroke("ERROR: Unable to download webpage: ('Unable to connect to proxy', ConnectionRefusedError(111))"), true);
+  assert.equal(exitBroke("yt-dlp timed out"), true);
+  assert.equal(exitBroke("ERROR: [youtube] x: Sign in to confirm you're not a bot"), true);
+  // Not worth it: every exit would say the same.
+  assert.equal(exitBroke("ERROR: [facebook] 1889836315019111: Cannot parse data; please report this issue on"), false);
+  assert.equal(exitBroke("ERROR: [facebook] 1: This video is private"), false);
+});
+
+test("a Facebook video only signed in viewers can see says so", () => {
+  const r = userFacingError(
+    new Error("ERROR: [facebook] 1889836315019111: Cannot parse data; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= ,"),
+  );
+  assert.equal(r.code, "LOGIN_ONLY");
+  assert.equal(r.status, 422);
+  assert.doesNotMatch(r.error, /[-‐-―]/);
+  // Other sites' parse errors are not claimed for Facebook.
+  assert.notEqual(userFacingError(new Error("ERROR: [SomeSite] 1: Cannot parse data")).code, "LOGIN_ONLY");
 });
 
 test("copy protection is final, whether found at lookup or by the extractor", () => {

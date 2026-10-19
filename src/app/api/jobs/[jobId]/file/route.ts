@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import { Readable } from "node:stream";
 import { claimJobFile, finalizeJob, getJob } from "@/lib/jobs";
+import { fileStream } from "@/lib/file-stream";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,7 @@ export async function GET(
   nodeStream.on("close", () => finalizeJob(jobId));
   nodeStream.on("error", () => finalizeJob(jobId));
 
-  const webStream = Readable.toWeb(nodeStream) as ReadableStream;
+  const webStream = fileStream(nodeStream);
 
   const filename = job.filename!;
   // ASCII fallback for old clients, plus RFC 5987 encoded name so titles with

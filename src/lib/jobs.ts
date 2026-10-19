@@ -19,6 +19,7 @@ import {
   plainProxyArgs,
   looksLikeProxyAuthFailure,
   isAddressRefused,
+  exitBroke,
   failureFingerprint,
   isYouTube,
 } from "./ytdlp";
@@ -27,8 +28,30 @@ import { BusyError, VisitorBusyError, jobLimiter, jobsPerVisitor } from "./concu
 import { pickProbeUrl, cdnAcceptsDirect } from "./cdn-probe";
 import { recordProxyUsage } from "./proxy-budget";
 import { infoExit, takeInfo } from "./info-cache";
-import { markExitBad, pickExit } from "./proxy-pool";
-import { shouldTryDirect } from "./proxy-routing";
+import { markExitBad, pickExit, poolActive } from "./proxy-pool";
+import { hostNeedsProxy, shouldTryDirect } from "./proxy-routing";
+
+/**
+ * Sites whose downloads replay the lookup's own links instead of reading the
+ * page a second time.
+ *
+ * Facebook gives different answers to different addresses: most reels come
+ * back with around 11 formats, but reel 1147657863865665 had no video at all
+ * for this server and only 2 formats through WARP. A download that read the page
+ * again could get no video where the lookup got one, or a format list without
+ * the quality the visitor picked, which is what the logged FORMAT_UNAVAILABLE
+ * failures were. Its CDN links are not tied to the address that fetched them
+ * (an HD file read through WARP downloaded direct in 3 seconds), so replaying
+ * them is safe. Kept to Facebook: other sites, TikTok for one, need what the
+ * extraction set up along with the links.
+ */
+function reusesLookup(rawUrl: string): boolean {
+  try {
+    return /(?:^|\.)(?:facebook\.com|fb\.watch|fb\.com)$/i.test(new URL(rawUrl).hostname);
+  } catch {
+    return false;
+  }
+}
 
 export type JobStatus =
   | "starting"
@@ -258,11 +281,15 @@ export function startJob(opts: StartJobOptions): string {
   // m4a audio so an MP4 pick stays a clean, widely-playable MP4; fall back to
   // any audio, then to the bare stream if the site has no separate audio.
   // Formats that already carry audio are downloaded as-is (no double track).
+  // Facebook can hand a second reading of the page a different format list (see
+  // reusesLookup). Should a download ever have to read it again, the best of
+  // what is there beats failing over a format id that address was not given.
+  const lastResort = reusesLookup(opts.url) ? "/bv*+ba/b" : "";
   const videoFormat =
     opts.mode === "video" && opts.hasAudio === false
-      ? `${opts.formatId}+bestaudio[ext=m4a]/${opts.formatId}+bestaudio/${opts.formatId}`
+      ? `${opts.formatId}+bestaudio[ext=m4a]/${opts.formatId}+bestaudio/${opts.formatId}${lastResort}`
       : opts.mode === "video"
-        ? opts.formatId
+        ? `${opts.formatId}${lastResort}`
         : "";
   const mergeArgs =
     opts.mode === "video" && opts.hasAudio === false
@@ -335,7 +362,20 @@ export function startJob(opts: StartJobOptions): string {
   const direct = shouldTryDirect(safeHost(opts.url), extractorFingerprint());
   let currentExit: string | undefined = direct ? undefined : (infoExit(opts.url) ?? pickExit());
   const triedExits: string[] = currentExit ? [currentExit] : [];
+  // Proxy flags for one exit. A site off the proxy list gets none from
+  // proxyArgs, so once it has proved it needs an exit it is given one outright.
+  const onList = hostNeedsProxy(opts.url);
+  const exitArgs = (exit?: string) => (onList ? proxyArgs(opts.url, exit) : forceProxyArgs(opts.url, exit));
   let jobProxy = direct ? [] : proxyArgs(opts.url, currentExit);
+  // A site off the list whose lookup only worked through a pool exit, such as
+  // a Facebook reel held back from this address: the download reads from the
+  // same exit rather than finding out the hard way.
+  const lookupExit = onList ? undefined : infoExit(opts.url);
+  if (lookupExit) {
+    currentExit = lookupExit;
+    triedExits.push(lookupExit);
+    jobProxy = exitArgs(lookupExit);
+  }
   let triedProxyFallback = false;
   let triedPlainProxy = false;
   // Fresh starts through the proxy, below. Two at most, so a download that
@@ -487,8 +527,19 @@ export function startJob(opts: StartJobOptions): string {
           // against the address that fetched them, so retrying from a new one
           // is refused every time: the retry that exists to rescue a blocked
           // download was guaranteed to fail whenever it was needed most.
+          //
+          // With the WARP pool, an exit from it rather than the host's own,
+          // which is the one the pool manager takes away to replace whenever
+          // YouTube flags it. The exit is recorded so a failure on it can move
+          // on to the next one below.
+          const fallbackExit = jobProxy.length === 0 && poolActive() ? pickExit(triedExits) : undefined;
+          if (fallbackExit) {
+            currentExit = fallbackExit;
+            triedExits.push(fallbackExit);
+          }
           const retryProxy =
-            infoJson && jobProxy.length > 0 ? jobProxy : forceProxyArgs(opts.url);
+            infoJson && jobProxy.length > 0 ? jobProxy : forceProxyArgs(opts.url, fallbackExit);
+          jobProxy = retryProxy;
           if (infoJson) void recordProxyUsage(opts.mode);
           run(retryProxy, infoJson);
           return;
@@ -515,7 +566,12 @@ export function startJob(opts: StartJobOptions): string {
         const maxFreshStarts = currentExit ? 3 : 2;
         if (freshStarts < maxFreshStarts && proxyFlags.length > 0 && job.status !== "error") {
           // A crawling exit is treated like a refused one: leave it for another.
-          const refused = isAddressRefused(stderrTail) || mediaRefused(stderrTail) || wasSlow;
+          const addressRefused = isAddressRefused(stderrTail) || mediaRefused(stderrTail) || wasSlow;
+          // So is an exit that could not be reached or went quiet: the next
+          // exit is as good, and the visitor should not be the one to retry.
+          // Unlike a refusal, this never swaps the host's own address below,
+          // which YouTube is using too.
+          const refused = addressRefused || (currentExit !== undefined && exitBroke(stderrTail));
           const stale =
             proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
           if (refused || stale) {
@@ -528,9 +584,9 @@ export function startJob(opts: StartJobOptions): string {
               console.warn(`[job ${id}] pool exit refused, moving to another`);
               currentExit = nextExit;
               triedExits.push(nextExit);
-              jobProxy = proxyArgs(opts.url, nextExit);
+              jobProxy = exitArgs(nextExit);
               nextFlags = jobProxy;
-            } else if (refused) {
+            } else if (addressRefused) {
               // No other healthy exit, or no pool at all: swap the single
               // proxy's address. Once per download. If the address it is given
               // is refused too, the swap's own retries are already spent, and
@@ -677,13 +733,13 @@ export function startJob(opts: StartJobOptions): string {
         } catch {
           return done(null);
         }
-        // This is the part the proxy actually carried.
-        void recordProxyUsage("metadata");
+        // This is the part the proxy actually carried, when there was one.
+        if (jobProxy.length > 0) void recordProxyUsage("metadata");
         done(target);
       });
     });
 
-  if (jobProxy.length === 0) {
+  if (jobProxy.length === 0 && !reusesLookup(opts.url)) {
     // Nothing here goes through the proxy, so there is nothing to save.
     run([]);
     return id;
@@ -726,7 +782,7 @@ export function startJob(opts: StartJobOptions): string {
     if (!infoJson) {
       stderrTail = "";
       // Everything goes over the proxy on this path, page and media both.
-      void recordProxyUsage(opts.mode);
+      if (jobProxy.length > 0) void recordProxyUsage(opts.mode);
       return run(jobProxy);
     }
 
@@ -743,11 +799,14 @@ export function startJob(opts: StartJobOptions): string {
       // Unreadable metadata means the safe answer, which is the proxy.
     }
 
-    if (!direct) void recordProxyUsage(opts.mode);
+    // A Facebook download whose lookup went direct has no proxy to fall back
+    // to here, and goes direct whatever the probe said.
+    const viaProxy = !direct && jobProxy.length > 0;
+    if (viaProxy) void recordProxyUsage(opts.mode);
     console.log(
-      `[job ${id}] host=${safeHost(opts.url)} media=${direct ? "direct" : "proxied"}`,
+      `[job ${id}] host=${safeHost(opts.url)} media=${viaProxy ? "proxied" : "direct"}${cached ? " reused" : ""}`,
     );
-    run(direct ? [] : jobProxy, infoJson);
+    run(viaProxy ? jobProxy : [], infoJson);
   })();
 
   return id;
