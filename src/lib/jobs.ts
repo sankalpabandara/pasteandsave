@@ -570,8 +570,14 @@ export function startJob(opts: StartJobOptions): string {
           // So is an exit that could not be reached or went quiet: the next
           // exit is as good, and the visitor should not be the one to retry.
           // Unlike a refusal, this never swaps the host's own address below,
-          // which YouTube is using too.
-          const refused = addressRefused || (currentExit !== undefined && exitBroke(stderrTail));
+          // which YouTube is using too. The same goes for a page that came
+          // back without the video: some sites answer that per address and per
+          // request (Pornhub did, measured 2026-10-19), and the next exit may
+          // be given it.
+          const answeredNo =
+            currentExit !== undefined &&
+            /no video formats|cannot parse data|unable to extract|redirection detected/i.test(stderrTail);
+          const refused = addressRefused || (currentExit !== undefined && exitBroke(stderrTail)) || answeredNo;
           const stale =
             proxyGeneration() !== startGeneration || /HTTP Error 403/i.test(stderrTail);
           if (refused || stale) {

@@ -692,15 +692,17 @@ export function userFacingError(err: unknown): {
       code: "SITE_UNAVAILABLE_HERE",
     };
   }
-  // The server is in France, and these sites hold their videos back from
-  // French visitors until they prove their age (Pornhub's owner left France
-  // altogether in 2025). Measured from the server on 2026-10-19: Pornhub
-  // redirects every video to its age page, XVideos and xHamster leave the
-  // player out (xHamster's page says userCountry France,
-  // isAgeVerificationRequired true). Through WARP nothing changes, its exits
-  // are in Strasbourg. These were reported as a sign in being needed or as
-  // "no video at that link", which sent visitors looking for a fault in their
-  // link. If the server ever moves country, this is the check to revisit.
+  // The server is in France, and these sites hold videos back from French
+  // visitors until they prove their age. Measured from the server on
+  // 2026-10-19: XVideos and xHamster's newest videos had no player direct or
+  // through any WARP exit (xHamster's page says userCountry France,
+  // isAgeVerificationRequired true; the exits are in Strasbourg). Pornhub is
+  // patchier: of two current videos, each worked from one address and not the
+  // others, which the pool fallback now uses. (A first reading that Pornhub
+  // refused every video came from a test video that had been deleted.) This
+  // is reached only once every address has said no. It was reported as a sign
+  // in being needed or as "no video at that link", which sent visitors looking
+  // for a fault in their link. If the server moves country, revisit this.
   if (
     /\[(?:PornHub|YouPorn|RedTube|Tube8|XVideos|XNXX|XHamster)[^\]]*\][^\n]*(?:no video formats|redirection detected|requires? login|only works when logged)/i.test(
       msg,
@@ -1172,10 +1174,13 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
       // them to WARP: measured 2026-10-19, reel 1147657863865665 had no video
       // in its page direct and worked through all five exits, twice. Leaning on
       // the host exit alone failed whenever the pool manager was replacing it
-      // after a YouTube flag. A broken exit is left for the next one. A video
-      // that fails the same way through a working exit is not tried further,
-      // since every exit would say the same. The exit that worked is kept with
-      // the lookup, so the download reads from it too.
+      // after a YouTube flag. Some sites answer differently per address and
+      // per request as well: two current Pornhub videos, same minute, one gave
+      // formats direct and none through two exits, the other none direct and
+      // formats through one exit. So up to three exits are tried, a broken one
+      // is marked for the manager, and only a final answer (removed, private,
+      // unsupported) stops early. The exit that worked is kept with the
+      // lookup, so the download reads from it too.
       if (
         err instanceof Error &&
         !(err instanceof UnsupportedSiteError) &&
@@ -1185,7 +1190,7 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
       ) {
         const exits: (string | undefined)[] = [];
         if (poolActive()) {
-          for (let i = 0; i < 2; i++) {
+          for (let i = 0; i < 3; i++) {
             const next = pickExit(exits.filter((e): e is string => Boolean(e)));
             if (!next) break;
             exits.push(next);
@@ -1209,8 +1214,10 @@ async function fetchInfoOnce(url: string, exit?: string): Promise<YtDlpInfo> {
               markExitBad(via);
               continue;
             }
-            // Fall through to the original error, which describes the real
-            // problem better than a failed retry does.
+            // The next exit may well get a different answer, unless this one
+            // was final. Either way the original error is what gets reported,
+            // as it describes the real problem better than a failed retry.
+            if (via && worthProxyRetry(why)) continue;
             break;
           }
         }
