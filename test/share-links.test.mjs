@@ -12,6 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canonicalFacebook,
   canonicalPin,
   isShareLink,
   resolveShareLink,
@@ -138,6 +139,55 @@ test("a pin.it link that redirects off Pinterest is not followed", async () => {
   const { fn, calls } = fakeFetch({ "https://pin.it/evil1": "https://evil.test/pin/1/" });
   assert.equal(await withFetch(fn, () => resolveShareLink("https://pin.it/evil1")), null);
   assert.deepEqual(calls, ["https://pin.it/evil1"]);
+});
+
+// --- Facebook tracking ---------------------------------------------------------
+// The same /share/r/ link redirected three times in a row to the same reel with
+// a different ?rdid= each time, so lookup and download never shared a key.
+
+test("Facebook share tracking is dropped, the video's own parameters kept", () => {
+  assert.equal(
+    canonicalFacebook("https://www.facebook.com/reel/1147657863865665/?rdid=MhrR9YNTPbwUOpxi&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2Fr%2F19MzpRkaUp"),
+    "https://www.facebook.com/reel/1147657863865665/",
+  );
+  assert.equal(
+    canonicalFacebook("https://www.facebook.com/watch/?v=645850188585422&ref=sharing&share_url=https%3A%2F%2Ffb.watch%2FEKnvyxlOWk"),
+    "https://www.facebook.com/watch/?v=645850188585422",
+  );
+  assert.equal(
+    canonicalFacebook("https://m.facebook.com/story.php?story_fbid=1035862816472149&id=116132035111903&mibextid=abc"),
+    "https://m.facebook.com/story.php?story_fbid=1035862816472149&id=116132035111903",
+  );
+  // Other sites are not touched.
+  assert.equal(canonicalFacebook("https://www.youtube.com/watch?v=abc&t=10"), "https://www.youtube.com/watch?v=abc&t=10");
+});
+
+test("two resolutions of one share link give one address, without fetching the reel page", async () => {
+  let n = 0;
+  const fake = async (url) => {
+    n++;
+    if (String(url) === "https://www.facebook.com/share/r/19MzpRkaUp") {
+      const rdid = Math.random().toString(36).slice(2, 18);
+      return new Response(null, {
+        status: 302,
+        headers: { location: `https://www.facebook.com/reel/1147657863865665/?rdid=${rdid}&share_url=x` },
+      });
+    }
+    return new Response("<html>a whole reel page</html>", { status: 200 });
+  };
+  const a = await withFetch(fake, () => resolveShareLink("https://www.facebook.com/share/r/19MzpRkaUp"));
+  const b = await withFetch(fake, () => resolveShareLink("https://www.facebook.com/share/r/19MzpRkaUp"));
+  assert.equal(a, "https://www.facebook.com/reel/1147657863865665/");
+  assert.equal(a, b);
+  assert.equal(n, 2, "one request per resolution, the redirect only");
+});
+
+test("a Facebook address pasted with tracking is cleaned, a clean one left alone", async () => {
+  assert.equal(
+    await resolveShareLink("https://www.facebook.com/reel/2535988590166522?mibextid=rS40aB7S9Ucbxw6v"),
+    "https://www.facebook.com/reel/2535988590166522",
+  );
+  assert.equal(await resolveShareLink("https://www.facebook.com/reel/2535988590166522"), null);
 });
 
 // --- Vimeo -------------------------------------------------------------------

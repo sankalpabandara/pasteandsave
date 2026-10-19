@@ -59,6 +59,29 @@ function sameFamily(rawUrl: string, family: Family): boolean {
   }
 }
 
+// The parts of a Facebook address that say which video it is. Everything else
+// is about the share: measured 2026-10-19, the same /share/r/ link redirected
+// three times in a row to reel/1147657863865665/?rdid=<random>&share_url=...,
+// a different rdid each time. Kept, that made every resolution a new address,
+// so the download never found the lookup it followed, and a re-paste never
+// found the cached quality list.
+const FACEBOOK_KEEP = new Set(["v", "story_fbid", "id", "fbid", "set"]);
+
+/** A Facebook address with only the parameters that identify the video. */
+export function canonicalFacebook(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    if (familyOf(u.hostname) !== "facebook") return rawUrl;
+    for (const key of [...u.searchParams.keys()]) {
+      if (!FACEBOOK_KEEP.has(key)) u.searchParams.delete(key);
+    }
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 /**
  * The pin a Pinterest address is for, in the one form the extractor matches.
  *
@@ -172,7 +195,11 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
   const player = vimeoPlayerUrl(rawUrl);
   if (player) return player;
 
-  if (!isShareLink(rawUrl)) return null;
+  if (!isShareLink(rawUrl)) {
+    // A Facebook address pasted as it is can still carry share tracking.
+    const clean = canonicalFacebook(rawUrl);
+    return clean !== rawUrl ? clean : null;
+  }
   let family: Family;
   try {
     const f = familyOf(new URL(rawUrl).hostname);
@@ -186,7 +213,7 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
   // answer honestly. Pinterest answers this server as it is, so is not sent.
   if (family === "facebook") {
     const viaRelay = await askRelay(rawUrl);
-    if (viaRelay) return viaRelay;
+    if (viaRelay) return canonicalFacebook(viaRelay);
   }
 
   let current = rawUrl;
@@ -241,6 +268,9 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
         const pin = canonicalPin(current);
         if (pin) return pin;
       }
+      // The same for Facebook: the first address that is not a share link is
+      // the video's. Fetching it too cost a whole reel page per share link.
+      if (family === "facebook" && !isShareLink(current)) return canonicalFacebook(current);
       continue;
     }
     break;
@@ -251,5 +281,5 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
   // Only a pin is worth handing on. A dead short link ends on the home page,
   // and the extractor would call that unsupported, which is no better.
   if (family === "pinterest") return canonicalPin(current);
-  return sameFamily(current, family) ? current : null;
+  return sameFamily(current, family) ? canonicalFacebook(current) : null;
 }

@@ -295,11 +295,18 @@ export async function POST(request: NextRequest) {
     // Sites that report no usable dimensions still hand back real,
     // downloadable streams, so they are listed under whatever name they gave
     // instead of vanishing from the picker.
+    //
+    // yt-dlp lists formats worst first, so these are walked best first, the
+    // way the ladder above reads. And a format named only "hd" or "sd" keeps
+    // that name: Facebook hands a WARP exit exactly two such formats with no
+    // height, both fell back to the label "MP4", and the duplicate check
+    // threw the HD one away.
     const seenExtra = new Set<string>();
-    for (const f of untiered) {
+    for (const f of [...untiered].reverse()) {
       if (video.length >= VIDEO_TIERS.length + 6) break;
+      const named = /^(?:hd|sd)$/i.test(f.format_id) ? f.format_id.toUpperCase() : "";
       const label =
-        f.format_note?.trim() || f.resolution?.trim() || f.ext.toUpperCase();
+        f.format_note?.trim() || f.resolution?.trim() || named || f.ext.toUpperCase();
       if (seenExtra.has(label)) continue;
       seenExtra.add(label);
       const withAudio = hasAudio(f);
