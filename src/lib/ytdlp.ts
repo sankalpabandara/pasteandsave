@@ -710,12 +710,14 @@ export function userFacingError(err: unknown): {
   }
   // Vimeo links are read through the embed player (see share-links.ts), and
   // an owner can limit their embed to their own websites. Everyone else gets a
-  // 401 or 403, which the block check below would call a temporary block of
-  // our server and invite a retry that can never work.
-  if (/\[vimeo[^\]]*\][^\n]*HTTP Error 40[13]/i.test(msg)) {
+  // 401, a 403 or "embed-only video", which the block check below would call a
+  // temporary block of our server and invite a retry that can never work.
+  // Pasting the page the video plays on does work: page-embeds.ts finds the
+  // player there and sends the page along, which is what the limit asks for.
+  if (/\[vimeo[^\]]*\][^\n]*(?:HTTP Error 40[13]|embed.only video)/i.test(msg)) {
     return {
       error:
-        "The owner of this Vimeo video only lets it play on their own website, so it can't be downloaded here.",
+        "The owner of this Vimeo video only lets it play on their own website. Paste the address of the page where you watched it instead.",
       status: 422,
       code: "EMBED_ONLY",
     };

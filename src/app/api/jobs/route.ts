@@ -7,6 +7,7 @@ import { logEvent } from "@/lib/analytics";
 import { peekExtractorKey } from "@/lib/info-cache";
 import { proxyBudgetOk } from "@/lib/proxy-budget";
 import { resolveShareLink } from "@/lib/share-links";
+import { rememberedEmbed } from "@/lib/page-embeds";
 
 export const runtime = "nodejs";
 
@@ -43,7 +44,9 @@ export async function POST(request: NextRequest) {
   // Same resolution the lookup did, so the cached extractor output is found
   // under the same key rather than being fetched a second time, and so a share
   // link pressed straight through to download behaves like any other address.
-  const target = (await resolveShareLink(url)) ?? url;
+  const resolved = (await resolveShareLink(url)) ?? url;
+  // A page with a player in it was turned into the player's address at lookup.
+  const target = rememberedEmbed(resolved) ?? resolved;
 
   if (mode !== "video" && mode !== "audio") {
     return Response.json({ error: "Invalid mode." }, { status: 400 });

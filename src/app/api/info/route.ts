@@ -7,8 +7,11 @@ import {
   userFacingError,
   failureFingerprint,
   failureReason,
+  UnsupportedSiteError,
   type YtDlpFormat,
+  type YtDlpInfo,
 } from "@/lib/ytdlp";
+import { embedFromPage, rememberedEmbed } from "@/lib/page-embeds";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError, lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
@@ -207,7 +210,21 @@ export async function POST(request: NextRequest) {
   if (cached) return Response.json(cached);
 
   try {
-    const info = await fetchInfo(target);
+    let source = rememberedEmbed(target) ?? target;
+    let info: YtDlpInfo;
+    try {
+      info = await fetchInfo(source);
+    } catch (e) {
+      // Not a video address but a page with a player in it, such as the site
+      // a Vimeo owner limited their video to. The player is found in the page
+      // and read with the page as its referer, which is what that limit asks
+      // for. Only after the extractor has nothing, so other links never pay.
+      if (!(e instanceof UnsupportedSiteError) || source !== target) throw e;
+      const embed = await embedFromPage(target);
+      if (!embed) throw e;
+      source = embed;
+      info = await fetchInfo(source);
+    }
     // Before the success is counted: a list of qualities that all fail at
     // the download is worse than saying so now.
     if (await vimeoStreamsAreDrm(info)) throw new DrmProtectedError();

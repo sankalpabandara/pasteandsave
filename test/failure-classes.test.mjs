@@ -132,6 +132,12 @@ test("a Vimeo embed limited to its owner's sites is not called a block of our se
     new PlatformBlockedError('ERROR: [vimeo] 54469442: Got HTTP Error 403 when using impersonate target "chrome-146:macos-26".'),
   );
   assert.equal(r403.code, "EMBED_ONLY");
+  // What yt-dlp says when it knows the video is embed only.
+  const named = userFacingError(
+    new Error("ERROR: [vimeo] 756714419: Cannot download embed-only video without embedding URL. Please call yt-dlp with the URL of the page"),
+  );
+  assert.equal(named.code, "EMBED_ONLY");
+  assert.match(named.error, /page where you watched it/);
   // A 403 anywhere else is still a block.
   assert.equal(userFacingError(new Error("ERROR: unable to download video data: HTTP Error 403: Forbidden")).code, "UPSTREAM_BLOCKED");
 });
