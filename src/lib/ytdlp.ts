@@ -727,6 +727,18 @@ export function userFacingError(err: unknown): {
       code: "LOGIN_ONLY",
     };
   }
+  // A Facebook post (a pfbid address, which /share/p/ links lead to) with no
+  // video in its page sends yt-dlp on to video.php?v=<post id>, which answers
+  // 404. Measured 2026-10-19 from a home connection too: the posts that failed
+  // this way were a photo post and posts that show nothing when signed out.
+  if (/\[facebook[^\]]*\]\s*pfbid[^\n]*HTTP Error 404/i.test(msg)) {
+    return {
+      error:
+        "There's no video in this Facebook post that we can reach. It may be a photo or text post, or only signed in viewers can see it.",
+      status: 422,
+      code: "NO_FORMATS",
+    };
+  }
   // Copy protection, found at lookup (DrmProtectedError) or reported by the
   // extractor itself. Final, and nothing here tries to get around it.
   if (/DRM protected/i.test(msg)) {

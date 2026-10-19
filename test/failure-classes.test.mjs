@@ -171,6 +171,13 @@ test("a Facebook video only signed in viewers can see says so", () => {
   assert.equal(r.code, "LOGIN_ONLY");
   assert.equal(r.status, 422);
   assert.doesNotMatch(r.error, /[-‐-―]/);
+  // A post with no video in it, which yt-dlp follows on to a 404.
+  const post = userFacingError(
+    new Error("ERROR: [facebook] pfbid02oLEnD5sp1913zmAaXYttEYLp3hKxChKh6M3jBEcQQJeb5HSSXuuEX2PRhZrobucol: Unable to download webpage: HTTP Error 404: Not Found"),
+  );
+  assert.equal(post.code, "NO_FORMATS");
+  assert.match(post.error, /photo or text post/);
+  assert.doesNotMatch(post.error, /[-‐-―]/);
   // Other sites' parse errors are not claimed for Facebook.
   assert.notEqual(userFacingError(new Error("ERROR: [SomeSite] 1: Cannot parse data")).code, "LOGIN_ONLY");
 });
