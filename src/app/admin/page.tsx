@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-guard";
-import { getStats } from "@/lib/analytics";
+import { FAILURE_WINDOW_DAYS, getStats } from "@/lib/analytics";
 import { getGaSummary } from "@/lib/ga-data";
 import { serviceAccountError } from "@/lib/google-auth";
 import { proxyUsageToday } from "@/lib/proxy-budget";
@@ -273,12 +273,11 @@ export default async function AdminDashboard() {
         */}
         <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
-            Failing links by site
+            Failing links by site, last {FAILURE_WINDOW_DAYS} days
           </h2>
           {stats.lookupFailures.length === 0 ? (
             <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
-              Nothing recorded yet. Failures started carrying a site and a reason
-              from this release, so older ones are not counted here.
+              Nothing has failed in the last {FAILURE_WINDOW_DAYS} days.
             </p>
           ) : (
             <ul className="mt-3 space-y-2">
@@ -299,7 +298,10 @@ export default async function AdminDashboard() {
           )}
           <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
             UNSUPPORTED_SITE on a site you support usually means a URL shape
-            changed, not that visitors are pasting rubbish.
+            changed, not that visitors are pasting rubbish. AGE_CHECK_REGION
+            means the site holds videos back from visitors in the server&apos;s
+            country (France) until they prove their age; only an exit in another
+            country changes that.
           </p>
         </section>
 

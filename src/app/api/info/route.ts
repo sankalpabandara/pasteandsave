@@ -1,15 +1,18 @@
 import type { NextRequest } from "next/server";
 import {
+  DrmProtectedError,
   fetchInfo,
   isSafeUrl,
+  vimeoStreamsAreDrm,
   userFacingError,
   failureFingerprint,
+  failureReason,
   type YtDlpFormat,
 } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError, lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
-import { resolveShareLink } from "@/lib/share-links";
+import { isShareLink, resolveShareLink } from "@/lib/share-links";
 
 export const runtime = "nodejs";
 
@@ -205,6 +208,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const info = await fetchInfo(target);
+    // Before the success is counted: a list of qualities that all fail at
+    // the download is worse than saying so now.
+    if (await vimeoStreamsAreDrm(info)) throw new DrmProtectedError();
     void logEvent({
       type: "lookup",
       ok: true,
@@ -327,7 +333,16 @@ export async function POST(request: NextRequest) {
         { status: 503 },
       );
     }
-    const { error, status, code } = userFacingError(err);
+    let { error, status, code } = userFacingError(err);
+    // A share link we could not follow reached the extractor as it was, and
+    // "not a site we can download from" is wrong about Pinterest and Facebook.
+    // Nearly always the post behind it was deleted.
+    if (code === "UNSUPPORTED_SITE" && target === url && isShareLink(url)) {
+      error =
+        "That share link doesn't lead to a video any more, it may have been deleted. If it still opens for you, copy the link from the address bar and paste that instead.";
+      status = 422;
+      code = "SHARE_LINK_DEAD";
+    }
     const fingerprint = failureFingerprint(err);
     void logEvent({ type: "lookup", ok: false, host: failHost, code });
     // Only the unexpected ones get a stack; private and removed videos are
@@ -338,7 +353,9 @@ export async function POST(request: NextRequest) {
     if (status >= 500) {
       console.error(`yt-dlp info error code=${code} marks=${fingerprint}`, err);
     } else {
-      console.warn(`lookup failed code=${code} host=${failHost} marks=${fingerprint}`);
+      console.warn(
+        `lookup failed code=${code} host=${failHost} marks=${fingerprint} why=${failureReason(err)}`,
+      );
     }
     // code and marks describe the shape of the failure, never its contents,
     // so a problem can be diagnosed without shell access to the server.

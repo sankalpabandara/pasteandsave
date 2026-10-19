@@ -18,8 +18,23 @@
 const FACEBOOK_HOSTS =
   /^(?:[a-z0-9-]+\.)*(?:facebook\.com|fb\.watch|fb\.com|facebook\.net)$/i;
 
+// Pinterest's app shares pin.it/XXXX, which no extractor matches: 120 lookups
+// were turned away as "not a site we can download from" while the same pin's
+// pinterest.com/pin/ address downloads fine. Measured from the server, the
+// chain is pin.it, then api.pinterest.com/url_shortener/XXXX/redirect/, then
+// the pin. A dead code lands on the Pinterest home page instead.
+const PINTEREST_HOSTS = /^(?:[a-z0-9-]+\.)*(?:pin\.it|pinterest(?:\.[a-z]{2,3}){1,2})$/i;
+
 const MAX_HOPS = 5;
 const TIMEOUT_MS = 8000;
+
+type Family = "facebook" | "pinterest";
+
+function familyOf(host: string): Family | null {
+  if (FACEBOOK_HOSTS.test(host)) return "facebook";
+  if (PINTEREST_HOSTS.test(host)) return "pinterest";
+  return null;
+}
 
 /** Cheap test first, so ordinary links never pay for a network round trip. */
 export function isShareLink(rawUrl: string): boolean {
@@ -32,15 +47,68 @@ export function isShareLink(rawUrl: string): boolean {
   const host = u.hostname.toLowerCase().replace(/^www\./, "");
   if (host === "fb.watch") return true;
   if (/(?:^|\.)facebook\.com$/.test(host) && /^\/share\//i.test(u.pathname)) return true;
+  if (host === "pin.it" && u.pathname.length > 1) return true;
   return false;
 }
 
-function sameFamily(rawUrl: string): boolean {
+function sameFamily(rawUrl: string, family: Family): boolean {
   try {
-    return FACEBOOK_HOSTS.test(new URL(rawUrl).hostname);
+    return familyOf(new URL(rawUrl).hostname) === family;
   } catch {
     return false;
   }
+}
+
+/**
+ * The pin a Pinterest address is for, in the one form the extractor matches.
+ *
+ * The landing address carries tracking (/sent/?invite_code=...&sender=...),
+ * which is the sharer's, not the pin's, and is dropped. Anything that is not a
+ * pin, such as the home page a dead short link ends on, gives null.
+ */
+export function canonicalPin(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl);
+    if (familyOf(u.hostname) !== "pinterest") return null;
+    const m = u.pathname.match(/^\/pin\/(?:[\w-]+--)?(\d+)(?:\/|$)/);
+    return m ? `https://www.pinterest.com/pin/${m[1]}/` : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns a vimeo.com page address into the embed player's, which still works.
+ *
+ * yt-dlp reads a vimeo.com page through Vimeo's API, and the only client that
+ * could do that without an account stopped working upstream (yt-dlp issue
+ * 17271): every lookup failed with "The web client only works when logged-in".
+ * The embed player is what plays the video on other people's sites, needs no
+ * account, and answered this server directly, with every quality.
+ *
+ * Not every video survives the change. An owner can limit embedding to their
+ * own domains, and those answer 401 to everyone else; they failed before this
+ * too, and say so now in their own words.
+ */
+export function vimeoPlayerUrl(rawUrl: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (!/^(?:www\.)?vimeo\.com$/i.test(u.hostname)) return null;
+  const p = u.pathname.replace(/\/+$/, "");
+  const m =
+    p.match(/^\/(\d+)(?:\/([0-9a-f]{6,}))?$/i) ??
+    p.match(/^\/channels\/[\w-]+\/(\d+)$/i) ??
+    p.match(/^\/groups\/[\w-]+\/videos\/(\d+)$/i) ??
+    p.match(/^\/(?:showcase|album)\/\d+\/video\/(\d+)$/i);
+  if (!m) return null;
+  // An unlisted video is only reachable with its hash, from the path or ?h=.
+  const hash = m[2] ?? u.searchParams.get("h");
+  const h = hash && /^[0-9a-f]{6,}$/i.test(hash) ? `?h=${hash}` : "";
+  return `https://player.vimeo.com/video/${m[1]}${h}`;
 }
 
 /**
@@ -93,19 +161,33 @@ async function askRelay(rawUrl: string): Promise<string | null> {
     if (!res.ok) return null;
     const body = (await res.json()) as { url?: string | null };
     const out = typeof body.url === "string" ? body.url : null;
-    return out && sameFamily(out) && !isShareLink(out) ? out : null;
+    return out && sameFamily(out, "facebook") && !isShareLink(out) ? out : null;
   } catch {
     return null;
   }
 }
 
 export async function resolveShareLink(rawUrl: string): Promise<string | null> {
+  // No network needed: the player address follows from the page address.
+  const player = vimeoPlayerUrl(rawUrl);
+  if (player) return player;
+
   if (!isShareLink(rawUrl)) return null;
+  let family: Family;
+  try {
+    const f = familyOf(new URL(rawUrl).hostname);
+    if (!f) return null;
+    family = f;
+  } catch {
+    return null;
+  }
 
   // The relay first: it is the only party here with an address Facebook will
-  // answer honestly.
-  const viaRelay = await askRelay(rawUrl);
-  if (viaRelay) return viaRelay;
+  // answer honestly. Pinterest answers this server as it is, so is not sent.
+  if (family === "facebook") {
+    const viaRelay = await askRelay(rawUrl);
+    if (viaRelay) return viaRelay;
+  }
 
   let current = rawUrl;
   for (let hop = 0; hop < MAX_HOPS; hop++) {
@@ -148,11 +230,17 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
       } catch {
         return null;
       }
-      if (!sameFamily(next)) return null;
+      if (!sameFamily(next, family)) return null;
       current = next;
       // A redirect to a login page means Facebook would not show this to us
       // anyway, and handing that on produces a worse error than the original.
       if (/\/login\b/i.test(new URL(current).pathname)) return null;
+      // Arriving at the pin is the answer. Fetching the pin page as well would
+      // only spend a request, and its own redirects say nothing about the pin.
+      if (family === "pinterest") {
+        const pin = canonicalPin(current);
+        if (pin) return pin;
+      }
       continue;
     }
     break;
@@ -160,5 +248,8 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
 
   if (current === rawUrl) return null;
   if (isShareLink(current)) return null;
-  return sameFamily(current) ? current : null;
+  // Only a pin is worth handing on. A dead short link ends on the home page,
+  // and the extractor would call that unsupported, which is no better.
+  if (family === "pinterest") return canonicalPin(current);
+  return sameFamily(current, family) ? current : null;
 }

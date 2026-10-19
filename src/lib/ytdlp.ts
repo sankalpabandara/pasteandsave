@@ -452,6 +452,7 @@ export function isBlockedByPlatform(stderr: string): boolean {
 // embeds the full proxy URL (credentials included) in connection errors and
 // temp-directory paths in write errors.
 export type FailureCategory =
+  | "DRM_PROTECTED"
   | "PROXY_UNAVAILABLE"
   | "UPSTREAM_BLOCKED"
   | "MEDIA_UNAVAILABLE"
@@ -462,6 +463,7 @@ export type FailureCategory =
   | "INTERNAL_ERROR";
 
 const CATEGORY_MESSAGE: Record<FailureCategory, string> = {
+  DRM_PROTECTED: "This video is copy protected, so it can't be downloaded.",
   PROXY_UNAVAILABLE:
     "Our connection to this site is temporarily unavailable. Please try again in a moment.",
   UPSTREAM_BLOCKED:
@@ -488,7 +490,12 @@ export function classifyFailure(stderr: string): {
   const s = stderr || "";
   let category: FailureCategory = "INTERNAL_ERROR";
 
-  if (/proxy|ProxyError|Tunnel connection failed|EAI_AGAIN|ECONNREFUSED/i.test(s)) {
+  // First, because it is final: no retry, proxy or other quality gets past
+  // it, and nothing here tries to. Vimeo's player serves some videos with
+  // Apple FairPlay, which yt-dlp only discovers once the download starts.
+  if (/DRM protected/i.test(s)) {
+    category = "DRM_PROTECTED";
+  } else if (/proxy|ProxyError|Tunnel connection failed|EAI_AGAIN|ECONNREFUSED/i.test(s)) {
     category = "PROXY_UNAVAILABLE";
   } else if (isBlockedByPlatform(s)) {
     category = "UPSTREAM_BLOCKED";
@@ -520,6 +527,7 @@ export { isSafeUrl } from "./ip-guard";
 export type YtDlpFormat = {
   format_id: string;
   ext: string;
+  url?: string;
   resolution?: string;
   height?: number;
   width?: number;
@@ -670,6 +678,48 @@ export function userFacingError(err: unknown): {
       code: "SITE_UNAVAILABLE_HERE",
     };
   }
+  // The server is in France, and these sites hold their videos back from
+  // French visitors until they prove their age (Pornhub's owner left France
+  // altogether in 2025). Measured from the server on 2026-10-19: Pornhub
+  // redirects every video to its age page, XVideos and xHamster leave the
+  // player out (xHamster's page says userCountry France,
+  // isAgeVerificationRequired true). Through WARP nothing changes, its exits
+  // are in Strasbourg. These were reported as a sign in being needed or as
+  // "no video at that link", which sent visitors looking for a fault in their
+  // link. If the server ever moves country, this is the check to revisit.
+  if (
+    /\[(?:PornHub|YouPorn|RedTube|Tube8|XVideos|XNXX|XHamster)[^\]]*\][^\n]*(?:no video formats|redirection detected|requires? login|only works when logged)/i.test(
+      msg,
+    )
+  ) {
+    return {
+      error:
+        "This site asks visitors from our server's country to prove their age first, so it won't give us the video. Other sites still work.",
+      status: 451,
+      code: "AGE_CHECK_REGION",
+    };
+  }
+  // Copy protection, found at lookup (DrmProtectedError) or reported by the
+  // extractor itself. Final, and nothing here tries to get around it.
+  if (/DRM protected/i.test(msg)) {
+    return {
+      error: "This video is copy protected, so it can't be downloaded.",
+      status: 422,
+      code: "DRM_PROTECTED",
+    };
+  }
+  // Vimeo links are read through the embed player (see share-links.ts), and
+  // an owner can limit their embed to their own websites. Everyone else gets a
+  // 401 or 403, which the block check below would call a temporary block of
+  // our server and invite a retry that can never work.
+  if (/\[vimeo[^\]]*\][^\n]*HTTP Error 40[13]/i.test(msg)) {
+    return {
+      error:
+        "The owner of this Vimeo video only lets it play on their own website, so it can't be downloaded here.",
+      status: 422,
+      code: "EMBED_ONLY",
+    };
+  }
   // Ahead of the block check: an age gate is about the video, and retrying
   // will never get past it, so it must not read as a temporary block.
   if (/confirm your age|age.?restrict|inappropriate for some users/i.test(msg)) {
@@ -805,6 +855,76 @@ export function failureFingerprint(err: unknown): string {
   add("extractfail", /unable to extract|failed to extract|unable to download/);
   add("exitcode", /exited with code/);
   return marks.length ? marks.join("+") : "none";
+}
+
+/**
+ * The extractor's own one-line reason, for the server log only.
+ *
+ * The fingerprint says which shapes were present; this says what the site
+ * answered, which is what tells a photo post from a broken extractor. Without
+ * it, 23 failed x.com lookups in three days could not be told apart from the
+ * log. The video id, every URL and every file path are taken out: a URL can
+ * carry the proxy's credentials, and which video a visitor wanted is not
+ * something the log needs to keep.
+ */
+export function failureReason(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const line = msg.split("\n").find((l) => /^ERROR:/.test(l.trim())) ?? "";
+  return line
+    .trim()
+    .replace(/^ERROR:\s*/, "")
+    .replace(/^\[([^\]]+)\]\s*[^\s:]+:\s*/, "[$1] ")
+    .replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "<url>")
+    .replace(/(?:\/[\w.-]+){2,}/g, "<path>")
+    .replace(/;\s*please report this issue.*$/i, "")
+    .slice(0, 140);
+}
+
+/** Thrown at lookup for a video whose streams are encrypted. */
+export class DrmProtectedError extends Error {
+  constructor() {
+    super("DRM protected");
+  }
+}
+
+// A key tag naming a DRM system. Plain AES-128 is not one: that is ordinary
+// HLS encryption with the key served alongside, which yt-dlp handles itself.
+const DRM_KEY_TAG =
+  /#EXT-X-(?:SESSION-)?KEY:[^\n]*(?:METHOD=SAMPLE-AES|KEYFORMAT="(?:com\.apple\.streamingkeydelivery|urn:uuid:))/i;
+
+/**
+ * Whether a Vimeo video's streams are DRM protected, asked before the visitor
+ * is shown a list of qualities that can never be saved.
+ *
+ * Vimeo's player serves some videos with Apple FairPlay (measured 2026-10-19:
+ * 76979871 encrypted, 22439234 clear), and yt-dlp lists them as ordinary
+ * formats, finding out only once the download starts. One variant playlist
+ * answers for the whole video. Only Vimeo's own CDN is asked, so nothing from
+ * the extractor's output can point this request somewhere else, and any
+ * failure to ask counts as "not protected", which is what happened before.
+ */
+export async function vimeoStreamsAreDrm(info: YtDlpInfo): Promise<boolean> {
+  if (!/^vimeo/i.test(info.extractor_key || info.extractor || "")) return false;
+  const probe = (info.formats ?? []).find((f) => {
+    if (!f.url || !/^m3u8/i.test(f.protocol || "")) return false;
+    try {
+      const u = new URL(f.url);
+      return u.protocol === "https:" && /(?:^|\.)vimeocdn\.com$/i.test(u.hostname);
+    } catch {
+      return false;
+    }
+  });
+  if (!probe?.url) return false;
+  try {
+    const res = await fetch(probe.url, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) {
+      await res.arrayBuffer().catch(() => undefined);
+      return false;
+    }
+    return DRM_KEY_TAG.test((await res.text()).slice(0, 65536));
+  } catch {
+    return false;
+  }
 }
 
 /**

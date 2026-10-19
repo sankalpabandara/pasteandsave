@@ -66,6 +66,115 @@ test("a bare 403 is a block worth reporting but not a reason to swap the address
   assert.equal(isAddressRefused(msg), false);
 });
 
+// userFacingError has a return type with braces in it, so it is lifted from
+// the body that follows the signature, with stand ins for the classes it tests.
+function liftUserFacingError() {
+  const start = src.indexOf("export function userFacingError(");
+  assert.notEqual(start, -1);
+  const open = src.indexOf("} {", start) + 2;
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}" && --depth === 0) {
+      return new Function(
+        "isBlockedByPlatform",
+        `class UnsupportedSiteError extends Error {}
+         class ProxyUnreachableError extends Error {}
+         class SiteUnavailableHereError extends Error {}
+         class PlatformBlockedError extends Error {}
+         function userFacingError(err) ${src.slice(open, j + 1)}
+         return { userFacingError, PlatformBlockedError };`,
+      )(isBlockedByPlatform);
+    }
+  }
+  throw new Error("could not read userFacingError");
+}
+const { userFacingError, PlatformBlockedError } = liftUserFacingError();
+const failureReason = (() => {
+  const start = src.indexOf("export function failureReason(");
+  const open = src.indexOf("{", start);
+  let depth = 0;
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}" && --depth === 0) {
+      return new Function(`function failureReason(err) ${src.slice(open, j + 1)}; return failureReason;`)();
+    }
+  }
+  throw new Error("could not read failureReason");
+})();
+
+// Copied from the server on 2026-10-19, which is in France.
+const PORNHUB_FR = "ERROR: [PornHub] ph5af5fef7c2aa7: Redirection detected; the video may be deleted or require login";
+const XVIDEOS_FR =
+  "ERROR: [XVideos] ucfifdo284a: No video formats found!; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template.";
+const XHAMSTER_FR = "ERROR: [XHamster] xh58v06: No video formats found!; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues";
+
+test("the French age check is named as such, not as a missing sign in or video", () => {
+  for (const msg of [PORNHUB_FR, XVIDEOS_FR, XHAMSTER_FR]) {
+    const r = userFacingError(new Error(msg));
+    assert.equal(r.code, "AGE_CHECK_REGION", msg);
+    assert.equal(r.status, 451);
+  }
+});
+
+test("no formats on any other site is still a photo or text post", () => {
+  const r = userFacingError(new Error("ERROR: [twitter] 1790637656616943991: No video could be found in this tweet"));
+  assert.equal(r.code, "NO_FORMATS");
+  const ig = userFacingError(new Error("ERROR: [Instagram] abc: No video formats found!"));
+  assert.equal(ig.code, "NO_FORMATS");
+});
+
+test("a Vimeo embed limited to its owner's sites is not called a block of our server", () => {
+  const r401 = userFacingError(new Error("ERROR: [vimeo] 33951933: Unable to download webpage: HTTP Error 401: Unauthorized"));
+  assert.equal(r401.code, "EMBED_ONLY");
+  // A 403 matches the block check, which would invite a retry that cannot work.
+  const r403 = userFacingError(
+    new PlatformBlockedError('ERROR: [vimeo] 54469442: Got HTTP Error 403 when using impersonate target "chrome-146:macos-26".'),
+  );
+  assert.equal(r403.code, "EMBED_ONLY");
+  // A 403 anywhere else is still a block.
+  assert.equal(userFacingError(new Error("ERROR: unable to download video data: HTTP Error 403: Forbidden")).code, "UPSTREAM_BLOCKED");
+});
+
+test("copy protection is final, whether found at lookup or by the extractor", () => {
+  // DrmProtectedError carries exactly this message.
+  assert.equal(userFacingError(new Error("DRM protected")).code, "DRM_PROTECTED");
+  assert.equal(userFacingError(new Error("ERROR: [SomeSite] 1: This video is DRM protected")).code, "DRM_PROTECTED");
+});
+
+test("Vimeo's FairPlay key tag reads as DRM, plain AES and no key do not", () => {
+  const m = src.match(/const DRM_KEY_TAG =\s*(\/.+\/i);/);
+  assert.ok(m, "DRM_KEY_TAG not found in ytdlp.ts");
+  const re = new Function(`return ${m[1]};`)();
+  // From the variant playlists of 76979871 and 22439234, fetched 2026-10-19.
+  assert.equal(
+    re.test('#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://abc",KEYFORMAT="com.apple.streamingkeydelivery",KEYFORMATVERSIONS="1"\n'),
+    true,
+  );
+  assert.equal(re.test('#EXT-X-KEY:METHOD=SAMPLE-AES-CTR,KEYFORMAT="urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed"'), true);
+  assert.equal(re.test('#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="https://example.test/key"\n'), false);
+  assert.equal(re.test("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6.0,\nseg1.mp4\n"), false);
+});
+
+test("visible error text has no dashes or hyphens", () => {
+  for (const msg of [PORNHUB_FR, "ERROR: [vimeo] 1: HTTP Error 401", "DRM protected"]) {
+    assert.doesNotMatch(userFacingError(new Error(msg)).error, /[-\u2010-\u2015]/);
+  }
+});
+
+test("the logged reason keeps what the site said and drops ids, URLs and paths", () => {
+  assert.equal(
+    failureReason(new Error("WARNING: x\nERROR: [twitter] 1790637656616943991: No video could be found in this tweet")),
+    "[twitter] No video could be found in this tweet",
+  );
+  assert.equal(failureReason(new Error(XVIDEOS_FR)), "[XVideos] No video formats found!");
+  const proxied = failureReason(
+    new Error("ERROR: Unable to connect to socks5h://user:secret@1.2.3.4:1080 while writing /tmp/ps-abc/file.part"),
+  );
+  assert.doesNotMatch(proxied, /secret|1\.2\.3\.4|ps-abc/);
+  assert.equal(failureReason(new Error("no error line here")), "");
+});
+
 test("a removed video is neither", () => {
   const msg = "ERROR: [youtube] abc: Video unavailable. This video has been removed by the uploader";
   assert.equal(isAddressRefused(msg), false);

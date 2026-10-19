@@ -90,6 +90,24 @@ test("failed lookups are attributed to a site and a reason", async () => {
   assert.equal(stats.lookupFailures[0].host, "tiktok.com");
 });
 
+test("failures older than the window drop off the panel", async () => {
+  // 846 YouTube relay failures from before the WARP pool led this panel long
+  // after the last one, above problems that were happening that day.
+  process.chdir(scratch);
+  const old = Date.now() - 8 * 24 * 60 * 60 * 1000;
+  fs.appendFileSync(
+    path.join(scratch, "data", "events.jsonl"),
+    JSON.stringify({ t: old, type: "lookup", ok: false, host: "youtu.be", code: "RELAY_DOWN" }) + "\n",
+  );
+  await logEvent({ type: "lookup", ok: false, host: "pin.it", code: "UNSUPPORTED_SITE" });
+  const stats = await getStats();
+  process.chdir(cwd);
+  assert.equal(stats.lookupFailures.find((f) => f.host === "youtu.be"), undefined);
+  assert.equal(stats.lookupFailures.find((f) => f.host === "pin.it").count, 1);
+  // Still a lookup that happened, so the all time totals keep it.
+  assert.ok(stats.totalLookups >= 2);
+});
+
 test("a successful lookup is never counted as a failure", async () => {
   process.chdir(scratch);
   const before = (await getStats()).lookupFailures.reduce((n, f) => n + f.count, 0);

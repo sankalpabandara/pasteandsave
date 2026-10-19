@@ -103,6 +103,8 @@ async function readEvents(maxLines = 100_000): Promise<AnalyticsEvent[]> {
   return events;
 }
 
+export const FAILURE_WINDOW_DAYS = 7;
+
 function dayKey(t: number): string {
   return new Date(t).toISOString().slice(0, 10);
 }
@@ -123,7 +125,15 @@ export type Stats = {
    * costs nothing, and only the ones who press save do.
    */
   downloadSites: { site: string; count: number; proxied: number }[];
-  /** Failed lookups grouped by site, worst first, with the commonest reason. */
+  /**
+   * Failed lookups in the last FAILURE_WINDOW_DAYS, grouped by site, worst
+   * first, with the commonest reason.
+   *
+   * A window rather than everything on file: counted since July, YouTube led
+   * this panel with 846 relay failures, every one of them from before the
+   * WARP pool and none in the three days before it was read, while the
+   * problems actually happening sat further down.
+   */
   lookupFailures: { host: string; count: number; topCode: string }[];
   topPages: { path: string; count: number }[];
   byDay: { day: string; pageviews: number; downloads: number }[];
@@ -169,6 +179,7 @@ export async function getStats(): Promise<Stats> {
   const events = await readEvents();
   const now = Date.now();
   const dayAgo = now - 24 * 60 * 60 * 1000;
+  const failuresSince = now - FAILURE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
   let totalPageviews = 0;
   let totalLookups = 0;
@@ -200,7 +211,7 @@ export async function getStats(): Promise<Stats> {
     } else if (ev.type === "lookup") {
       totalLookups++;
       if (ev.ok) lookupOk++;
-      else if (ev.host) {
+      else if (ev.host && ev.t >= failuresSince) {
         const key = ev.host.toLowerCase();
         const row = failHosts.get(key) ?? { host: key, count: 0, codes: new Map() };
         row.count++;
