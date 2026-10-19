@@ -30,6 +30,12 @@ stamp() { date "+%Y-%m-%d %H:%M:%S"; }
 alert() { send_alert "$1" "$2"; }
 # shellcheck source=/dev/null
 . "$(dirname "$0")/lib-app.sh"
+# shellcheck source=/dev/null
+. "$(dirname "$0")/lib-exposure.sh"
+
+# First, and whatever the site's health: an open container is a problem even
+# while the site is answering perfectly.
+check_public_containers
 
 # The port comes from ecosystem.config.js. This used to default to 3000 after
 # the app had moved to 4100, so every check failed, and once the daily counter

@@ -1,0 +1,20 @@
+# Applies ops/docker-user-firewall.sh whenever Docker starts, including after
+# a reboot, so no container is ever reachable from the internet.
+#
+# Install once, as root:
+#   install -m 644 /opt/pasteandsave/ops/pasteandsave-docker-firewall.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now pasteandsave-docker-firewall.service
+
+[Unit]
+Description=Keep Docker containers off the public internet (DOCKER-USER guard)
+Documentation=file:///opt/pasteandsave/ops/docker-user-firewall.sh
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash /opt/pasteandsave/ops/docker-user-firewall.sh
+
+[Install]
+WantedBy=docker.service
