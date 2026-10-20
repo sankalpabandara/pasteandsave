@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
-import { startJob } from "@/lib/jobs";
+import { startFileJob, startJob } from "@/lib/jobs";
+import { photoIndexOf, photosFor } from "@/lib/x-photos";
 import { isSafeUrl, isValidFormatId, usesProxy } from "@/lib/ytdlp";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError, VisitorBusyError } from "@/lib/concurrency";
@@ -63,6 +64,34 @@ export async function POST(request: NextRequest) {
     typeof body.bitrate === "number" && ALLOWED_BITRATES.includes(body.bitrate)
       ? body.bitrate
       : null;
+
+  // A photo from an X post, listed at lookup from X's embed data because
+  // yt-dlp reads no photos from X. Saved straight from pbs.twimg.com.
+  const photoIndex = mode === "video" ? photoIndexOf(body.formatId) : null;
+  if (photoIndex !== null) {
+    const photo = photosFor(target)?.[photoIndex - 1];
+    if (!photo) {
+      return Response.json(
+        { error: "That photo link has expired. Paste the post again to get a fresh one." },
+        { status: 410 },
+      );
+    }
+    try {
+      const id = startFileJob({
+        owner: clientIp(request),
+        url: photo.url,
+        title: photoIndex > 1 ? `${title} ${photoIndex}` : title,
+        ext: photo.ext,
+      });
+      void logEvent({ type: "download", mode: "video", site: "Twitter", proxied: false });
+      return Response.json({ jobId: id });
+    } catch (err) {
+      if (err instanceof VisitorBusyError) return Response.json({ error: err.message }, { status: 429 });
+      if (err instanceof BusyError) return Response.json({ error: err.message }, { status: 503 });
+      console.error("start photo job error", err);
+      return Response.json({ error: "Couldn't start the download." }, { status: 500 });
+    }
+  }
 
   // Only downloads routed through the metered proxy count against the daily
   // budget; everything that works direct is never limited.

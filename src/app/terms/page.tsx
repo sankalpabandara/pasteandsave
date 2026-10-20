@@ -119,7 +119,7 @@ export default function TermsPage() {
               rights holder.
             </li>
             <li>
-              Circumvent, disable, or interfere with any rate-limiting,
+              Circumvent, disable, or interfere with any rate limiting,
               security, or access-control feature of the Service or of any
               third-party site it interacts with.
             </li>

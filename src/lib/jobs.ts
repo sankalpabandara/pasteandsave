@@ -223,12 +223,17 @@ type StartJobOptions = { owner?: string } & (
     }
 );
 
-export function startJob(opts: StartJobOptions): string {
+/**
+ * Takes this visitor's share and a site-wide slot, makes the job's folder and
+ * registers the job. Shared by every kind of download so they all count
+ * against the same limits.
+ */
+function openJob(owner?: string): { id: string; job: Job; tmpDir: string; releaseOnce: () => void } {
   sweepStaleJobs();
 
   // This visitor's share first, so someone already at their limit is told
   // that, rather than taking a site-wide slot only to give it back.
-  const releaseOwner = opts.owner ? jobsPerVisitor.tryTake(opts.owner) : () => {};
+  const releaseOwner = owner ? jobsPerVisitor.tryTake(owner) : () => {};
   if (!releaseOwner) {
     throw new VisitorBusyError();
   }
@@ -266,6 +271,56 @@ export function startJob(opts: StartJobOptions): string {
     createdAt: Date.now(),
   };
   jobs.set(id, job);
+  return { id, job, tmpDir, releaseOnce };
+}
+
+// A photo is a few megabytes; anything far past that is not what was asked for.
+const MAX_FILE_BYTES = 40 * 1024 * 1024;
+
+/**
+ * Saves one file straight from its address, for media yt-dlp does not list,
+ * such as the photos in an X post. The caller passes only addresses it has
+ * already checked (x-photos.ts keeps pbs.twimg.com media links and nothing
+ * else), and redirects are refused, so this never fetches anywhere else.
+ */
+export function startFileJob(opts: { owner?: string; url: string; title: string; ext: string }): string {
+  const { id, job, tmpDir, releaseOnce } = openJob(opts.owner);
+  const ext = /^[a-z0-9]{2,5}$/i.test(opts.ext) ? opts.ext.toLowerCase() : "bin";
+  void (async () => {
+    try {
+      job.status = "downloading";
+      const res = await fetch(opts.url, {
+        redirect: "error",
+        signal: AbortSignal.timeout(60_000),
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" },
+      });
+      const declared = Number(res.headers.get("content-length") || 0);
+      if (!res.ok || declared > MAX_FILE_BYTES) {
+        await res.arrayBuffer().catch(() => undefined);
+        throw new Error(`file fetch answered ${res.status}`);
+      }
+      const body = Buffer.from(await res.arrayBuffer());
+      if (body.length === 0 || body.length > MAX_FILE_BYTES) throw new Error("file was empty or too large");
+      const filePath = path.join(tmpDir, `file.${ext}`);
+      await fsp.writeFile(filePath, body);
+      job.filePath = filePath;
+      job.filename = `${sanitizeFilename(opts.title)}.${ext}`;
+      job.percent = 100;
+      job.status = "done";
+    } catch (err) {
+      console.error(`[job ${id}] file download failed url_host=${safeHost(opts.url)}: ${err instanceof Error ? err.message : "error"}`);
+      job.status = "error";
+      job.error = "That file couldn't be saved. Please try again.";
+      fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    } finally {
+      releaseOnce();
+    }
+  })();
+  return id;
+}
+
+export function startJob(opts: StartJobOptions): string {
+  const { id, job, tmpDir, releaseOnce } = openJob(opts.owner);
 
   const outputTemplate = path.join(tmpDir, "file.%(ext)s");
   // The same YouTube hardening the lookup uses: without matching player

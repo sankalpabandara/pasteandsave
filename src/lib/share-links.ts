@@ -190,10 +190,52 @@ async function askRelay(rawUrl: string): Promise<string | null> {
   }
 }
 
+/**
+ * A Wikimedia Commons file in the one form yt-dlp matches,
+ * commons.wikimedia.org/wiki/File:<name>, or null.
+ *
+ * Measured on the server on 2026-10-20: that form gives formats, images
+ * included, while index.php?title=File:..., the mobile site and the file's own
+ * upload.wikimedia.org address all answered "No suitable extractor", which is
+ * what 6 lookups in a day were told.
+ */
+export function canonicalCommons(rawUrl: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  const page = (name: string) => `https://commons.wikimedia.org/wiki/File:${name}`;
+  const hasExt = (name: string) => /\.[A-Za-z0-9]{2,5}$/.test(name);
+  if (host === "commons.wikimedia.org" || host === "commons.m.wikimedia.org") {
+    // The media viewer: any page with #/media/File:<name>.
+    const viewer = /^#\/media\/File:(.+)$/.exec(u.hash);
+    if (viewer && hasExt(viewer[1])) return page(viewer[1]);
+    const wiki = /^\/wiki\/File:([^/]+)$/.exec(u.pathname);
+    if (wiki && hasExt(wiki[1])) return page(wiki[1]);
+    if (u.pathname === "/w/index.php") {
+      const title = u.searchParams.get("title") ?? "";
+      const m = /^File:(.+)$/.exec(title);
+      if (m && hasExt(m[1])) return page(encodeURI(m[1].replace(/ /g, "_")));
+    }
+    return null;
+  }
+  if (host === "upload.wikimedia.org") {
+    // /wikipedia/commons/a/ab/Name.ext, its /thumb/ copies and /transcoded/ versions.
+    const m = /^\/wikipedia\/commons\/(?:thumb\/|transcoded\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/.exec(u.pathname);
+    if (m && hasExt(m[1])) return page(m[1]);
+  }
+  return null;
+}
+
 export async function resolveShareLink(rawUrl: string): Promise<string | null> {
   // No network needed: the player address follows from the page address.
   const player = vimeoPlayerUrl(rawUrl);
   if (player) return player;
+  const commons = canonicalCommons(rawUrl);
+  if (commons) return commons !== rawUrl ? commons : null;
 
   if (!isShareLink(rawUrl)) {
     // A Facebook address pasted as it is can still carry share tracking.

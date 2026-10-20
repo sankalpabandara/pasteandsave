@@ -539,7 +539,7 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "Yes. Paste a playlist link and the tool lists its videos so you can download any of them without copying each link. Large playlists are shown up to a set limit.",
       },
       {
-        q: "Can I download age-restricted or private videos?",
+        q: "Can I download age restricted or private videos?",
         a: "No. Only videos you could watch in a browser without signing in will work.",
       },
       {

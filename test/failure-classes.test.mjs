@@ -192,6 +192,67 @@ test("a Facebook video only signed in viewers can see says so", () => {
   assert.notEqual(userFacingError(new Error("ERROR: [SomeSite] 1: Cannot parse data")).code, "LOGIN_ONLY");
 });
 
+// Copied from the server log on 2026-10-20, ids and addresses cut.
+const SEEN = {
+  liability: "ERROR: [Liability] This website is not supported and will not be supported.\nThere are legal reasons",
+  piracy: "ERROR: [Piracy] This website is no longer supported since it has been determined to be primarily used for piracy.",
+  drmSite: "ERROR: [DRM] The requested site is known to use DRM protection. It will NOT be supported.",
+  suspended: "ERROR: [twitter] 1599108751385972737: Suspended",
+  xUnavailable: "ERROR: [twitter] 1599108751385972737: Video #1 is unavailable",
+  xNotVideo: "ERROR: [twitter] 1: Media #1 is not a video",
+  fb404: "ERROR: [facebook] 1794878554585921: Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)",
+  igEmpty: "ERROR: [Instagram] C1a: Instagram sent an empty media response. Check if this post is accessible in your browser without being logged-in.",
+  ttIp: "ERROR: [TikTok] 7300: Your IP address is blocked from accessing this post",
+  ttLogin: "ERROR: [TikTok] 7300: This post may not be comfortable for some audiences. Log in for access. Use --cookies-from-browser",
+  dmFrench: "ERROR: [dailymotion] x8: Le propriétaire de cette vidéo ne souhaite pas la diffuser dans votre pays.",
+};
+
+test("each failure seen in the log gets its own honest answer", () => {
+  const code = (m) => userFacingError(new Error(m)).code;
+  assert.equal(code(SEEN.liability), "SITE_NOT_SUPPORTED");
+  assert.equal(code(SEEN.piracy), "SITE_NOT_SUPPORTED");
+  assert.equal(code(SEEN.drmSite), "DRM_PROTECTED");
+  assert.equal(code(SEEN.suspended), "MEDIA_REMOVED");
+  assert.equal(code(SEEN.xUnavailable), "NO_FORMATS");
+  assert.equal(code(SEEN.xNotVideo), "NO_FORMATS");
+  assert.equal(code(SEEN.fb404), "MEDIA_REMOVED");
+  assert.equal(code(SEEN.igEmpty), "LOGIN_REQUIRED");
+  assert.equal(code(SEEN.ttIp), "GEO_BLOCKED");
+  assert.equal(code(SEEN.ttLogin), "LOGIN_REQUIRED");
+  assert.equal(code(SEEN.dmFrench), "GEO_BLOCKED");
+  // A deleted X post found through the embed data.
+  assert.equal(code("ERROR: [twitter] This post has been deleted"), "MEDIA_REMOVED");
+});
+
+test("none of those answers says unknown, and none has a dash", () => {
+  for (const m of Object.values(SEEN)) {
+    const r = userFacingError(new Error(m));
+    assert.notEqual(r.code, "UNKNOWN", m);
+    assert.doesNotMatch(r.error, /[-‐-―]/, r.error);
+  }
+});
+
+test("an extractor that prints null is a failed lookup, not a crash", () => {
+  const start = src.indexOf("function parseInfoJson(");
+  const open = src.indexOf("{", start);
+  let depth = 0, body = "";
+  for (let j = open; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}" && --depth === 0) { body = src.slice(open, j + 1); break; }
+  }
+  const parseInfoJson = new Function(`return function parseInfoJson(stdout) ${body.replace(/let parsed: unknown;/, "let parsed;").replace(/ as YtDlpInfo/g, "")};`)();
+  assert.throws(() => parseInfoJson("null"), /emptyout/);
+  assert.throws(() => parseInfoJson("[]"), /emptyout/);
+  assert.throws(() => parseInfoJson(""), /emptyout/);
+  assert.throws(() => parseInfoJson("<html>"), /badjson/);
+  assert.equal(parseInfoJson('{"id":"x"}').id, "x");
+});
+
+test("a pool exit the impersonating client cannot reach counts as a broken exit", () => {
+  const ig = "ERROR: [Instagram] C1a: Unable to download webpage: Failed to perform, curl: (7) Failed to connect to www.instagram.com:443 over proxy 127.0.0.1 after 0 ms";
+  assert.equal(exitUnreachable(ig), true);
+});
+
 test("copy protection is final, whether found at lookup or by the extractor", () => {
   // DrmProtectedError carries exactly this message.
   assert.equal(userFacingError(new Error("DRM protected")).code, "DRM_PROTECTED");

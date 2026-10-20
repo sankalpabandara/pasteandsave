@@ -12,6 +12,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  canonicalCommons,
   canonicalFacebook,
   canonicalPin,
   isShareLink,
@@ -188,6 +189,47 @@ test("a Facebook address pasted with tracking is cleaned, a clean one left alone
     "https://www.facebook.com/reel/2535988590166522",
   );
   assert.equal(await resolveShareLink("https://www.facebook.com/reel/2535988590166522"), null);
+});
+
+// --- Wikimedia Commons ---------------------------------------------------------
+// Only commons.wikimedia.org/wiki/File:<name> has an extractor; the other forms
+// answered "No suitable extractor", measured on the server on 2026-10-20.
+
+test("every Commons link form becomes the File page yt-dlp reads", () => {
+  const page = "https://commons.wikimedia.org/wiki/File:Folgers.ogv";
+  assert.equal(canonicalCommons("https://commons.wikimedia.org/w/index.php?title=File:Folgers.ogv"), page);
+  assert.equal(canonicalCommons("https://commons.m.wikimedia.org/wiki/File:Folgers.ogv"), page);
+  assert.equal(canonicalCommons("https://upload.wikimedia.org/wikipedia/commons/a/a0/Folgers.ogv"), page);
+  assert.equal(
+    canonicalCommons("https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Folgers.ogv/320px--Folgers.ogv.jpg"),
+    page,
+  );
+  assert.equal(
+    canonicalCommons("https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a0/Folgers.ogv/Folgers.ogv.480p.vp9.webm"),
+    page,
+  );
+  assert.equal(canonicalCommons("https://commons.wikimedia.org/wiki/Main_Page#/media/File:Folgers.ogv"), page);
+  assert.equal(canonicalCommons("https://commons.wikimedia.org/wiki/File:Folgers.ogv?uselang=de"), page);
+  // Titles with spaces, as index.php carries them, take underscores.
+  assert.equal(
+    canonicalCommons("https://commons.wikimedia.org/w/index.php?title=File:Two%20toed%20sloth.webm"),
+    "https://commons.wikimedia.org/wiki/File:Two_toed_sloth.webm",
+  );
+});
+
+test("Commons pages that are not one file are left alone", () => {
+  assert.equal(canonicalCommons("https://commons.wikimedia.org/wiki/Category:Videos"), null);
+  assert.equal(canonicalCommons("https://commons.wikimedia.org/wiki/Main_Page"), null);
+  assert.equal(canonicalCommons("https://en.wikipedia.org/wiki/File:Folgers.ogv"), null);
+  assert.equal(canonicalCommons("https://upload.wikimedia.org/wikipedia/en/a/a0/Local.jpg"), null);
+});
+
+test("a Commons link already in the right form is not rewritten", async () => {
+  assert.equal(await resolveShareLink("https://commons.wikimedia.org/wiki/File:Folgers.ogv"), null);
+  assert.equal(
+    await resolveShareLink("https://commons.m.wikimedia.org/wiki/File:Folgers.ogv"),
+    "https://commons.wikimedia.org/wiki/File:Folgers.ogv",
+  );
 });
 
 // --- Vimeo -------------------------------------------------------------------

@@ -12,6 +12,34 @@ import {
   type YtDlpInfo,
 } from "@/lib/ytdlp";
 import { embedFromPage, rememberedEmbed } from "@/lib/page-embeds";
+import {
+  X_NO_VIDEO,
+  fetchTweetPhotos,
+  rememberPhotos,
+  tweetIdFrom,
+  type XPhoto,
+} from "@/lib/x-photos";
+
+/** The quality list for an X photo post: its photos, nothing else. */
+function xPhotoPayload(photos: XPhoto[]) {
+  return {
+    title: photos.length === 1 ? "Photo from X" : "Photos from X",
+    thumbnail: photos[0].url,
+    duration: null,
+    uploader: null,
+    site: "Twitter",
+    video: [],
+    audio: [],
+    images: photos.map((p, i) => ({
+      formatId: `xphoto-${i + 1}`,
+      ext: p.ext,
+      label:
+        `Photo ${i + 1} (${p.ext.toUpperCase()})` +
+        (p.width && p.height ? ` ${p.width}x${p.height}` : ""),
+      filesize: null,
+    })),
+  };
+}
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { BusyError, lookupLimiter, MAX_LOOKUP_QUEUE } from "@/lib/concurrency";
 import { logEvent } from "@/lib/analytics";
@@ -215,6 +243,20 @@ export async function POST(request: NextRequest) {
     try {
       info = await fetchInfo(source);
     } catch (e) {
+      // An X post with photos and no video. yt-dlp reads only video from X,
+      // so the photos are listed from X's embed data instead.
+      const tweetId = tweetIdFrom(target);
+      if (tweetId && e instanceof Error && X_NO_VIDEO.test(e.message)) {
+        const found = await fetchTweetPhotos(tweetId);
+        if (found.photos.length > 0) {
+          rememberPhotos(target, found.photos);
+          const payload = xPhotoPayload(found.photos);
+          void logEvent({ type: "lookup", ok: true, site: "Twitter" });
+          cacheSet(target, payload);
+          return Response.json(payload);
+        }
+        if (found.removed) throw new Error("ERROR: [twitter] This post has been deleted");
+      }
       // Not a video address but a page with a player in it, such as the site
       // a Vimeo owner limited their video to. The player is found in the page
       // and read with the page as its referer, which is what that limit asks

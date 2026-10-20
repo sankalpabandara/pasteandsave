@@ -487,10 +487,10 @@ const CATEGORY_MESSAGE: Record<FailureCategory, string> = {
   PROXY_UNAVAILABLE:
     "Our connection to this site is temporarily unavailable. Please try again in a moment.",
   UPSTREAM_BLOCKED:
-    "This site is rate-limiting our server right now. Give it a minute and try again.",
+    "This site is turning our server away right now. Give it a minute and try again.",
   MEDIA_UNAVAILABLE: "This video was removed or is no longer available.",
   PRIVATE_OR_LOGIN_REQUIRED:
-    "This one is private or needs a sign-in, so it can't be downloaded.",
+    "This one is private or needs a sign in, so it can't be downloaded.",
   FORMAT_UNAVAILABLE:
     "That quality isn't available for this video. Try a different one.",
   CONVERSION_FAILED: "The file couldn't be prepared. Please try another quality.",
@@ -646,11 +646,19 @@ function parseInfoJson(stdout: string): YtDlpInfo {
   if (!text) {
     throw new Error("emptyout: no output from extractor");
   }
+  let parsed: unknown;
   try {
-    return JSON.parse(text) as YtDlpInfo;
+    parsed = JSON.parse(text);
   } catch {
     throw new Error(`badjson: extractor returned ${text.length} bytes that are not JSON`);
   }
+  // yt-dlp can print a bare `null` and exit cleanly. Passed on, that crashed
+  // the lookup route on `info.extractor_key` ("Cannot read properties of
+  // null", 3 times in the log) instead of reporting a failed lookup.
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("emptyout: extractor returned no video information");
+  }
+  return parsed as YtDlpInfo;
 }
 
 // Turns a raw yt-dlp failure into an honest, specific message, so a deleted
@@ -721,6 +729,69 @@ export function userFacingError(err: unknown): {
       code: "AGE_CHECK_REGION",
     };
   }
+  // Sites yt-dlp refuses by design, naming the reason in brackets: [DRM] for
+  // sites built on copy protection, [Piracy] and [Liability] for sites its
+  // makers will not support. suno.com and udio.com are on the liability list,
+  // so no suno.com link can work here. 22 such lookups in the recent log were
+  // told "Couldn't read that link", which invites a retry that never works.
+  if (/\[DRM\][^\n]*DRM protection/i.test(msg)) {
+    return {
+      error: "This site protects its videos with DRM, so they can't be downloaded.",
+      status: 422,
+      code: "DRM_PROTECTED",
+    };
+  }
+  if (/\[(?:Liability|Piracy)\][^\n]*(?:will not be supported|no longer supported)/i.test(msg)) {
+    return {
+      error: "Downloads from this site aren't supported.",
+      status: 400,
+      code: "SITE_NOT_SUPPORTED",
+    };
+  }
+  // X: an account that was suspended, and a post with no video yt-dlp can
+  // reach (a photo post with no photos left, a video marked sensitive, which
+  // needs a login, or one removed). Photo posts themselves are listed from X's
+  // embed data before this is reached.
+  if (/\[twitter[^\]]*\][^\n]*\bSuspended\b/.test(msg)) {
+    return {
+      error: "The account that posted this was suspended, so its videos can't be reached.",
+      status: 422,
+      code: "MEDIA_REMOVED",
+    };
+  }
+  if (/\[twitter[^\]]*\][^\n]*(?:Video #\d+ is unavailable|No video could be found|is not a video)/i.test(msg)) {
+    return {
+      error:
+        "There's no video in this X post that we can reach. It may be a photo or text post, marked sensitive, which needs a login, or removed.",
+      status: 422,
+      code: "NO_FORMATS",
+    };
+  }
+  // A Facebook video address that answers 404 is gone or was cut short when
+  // copied. (pfbid post addresses have their own message below.)
+  if (/\[facebook[^\]]*\]\s*\d+:[^\n]*HTTP Error 404/i.test(msg)) {
+    return {
+      error: "This Facebook video was removed, or the link was cut short when it was copied.",
+      status: 422,
+      code: "MEDIA_REMOVED",
+    };
+  }
+  // Instagram sends an empty answer for posts only signed in viewers can see.
+  if (/\[Instagram[^\]]*\][^\n]*empty media response/i.test(msg)) {
+    return {
+      error: "This Instagram post can only be seen when signed in, or it's private, so it can't be downloaded.",
+      status: 422,
+      code: "LOGIN_REQUIRED",
+    };
+  }
+  // TikTok withholds some posts from some countries, saying so in these words.
+  if (/\[TikTok[^\]]*\][^\n]*IP address is blocked from accessing this post/i.test(msg)) {
+    return {
+      error: "TikTok doesn't show this post in our server's region, so we can't reach it.",
+      status: 451,
+      code: "GEO_BLOCKED",
+    };
+  }
   // Facebook leaves the video out of the page for anyone not signed in when
   // the post is limited to friends, groups or adults, and yt-dlp then says
   // "Cannot parse data". It is reached only after the pool has been tried, and
@@ -774,7 +845,7 @@ export function userFacingError(err: unknown): {
   // will never get past it, so it must not read as a temporary block.
   if (/confirm your age|age.?restrict|inappropriate for some users/i.test(msg)) {
     return {
-      error: "This video is age-restricted and needs a sign-in, so it can't be fetched.",
+      error: "This video is age restricted and needs a sign in, so it can't be fetched.",
       status: 422,
       code: "AGE_RESTRICTED",
     };
@@ -800,12 +871,12 @@ export function userFacingError(err: unknown): {
   // like a fault on our side. It is not: nothing here will make it work, and
   // saying so is more useful than inviting a retry.
   if (
-    /only works when logged.?in|requires? (?:a )?login|you must be logged in|log ?in to (?:view|watch|continue)/i.test(
+    /only works when logged.?in|requires? (?:a )?login|you must be logged in|log ?in to (?:view|watch|continue)|log ?in for access/i.test(
       msg,
     )
   ) {
     return {
-      error: "This site now requires a sign-in, so it can't be downloaded here.",
+      error: "This needs a sign in to watch, so it can't be downloaded here.",
       status: 422,
       code: "LOGIN_REQUIRED",
     };
@@ -819,7 +890,7 @@ export function userFacingError(err: unknown): {
   }
   if (/age.?restrict|confirm your age|inappropriate for some users/i.test(msg)) {
     return {
-      error: "This video is age-restricted and needs a sign-in, so it can't be fetched.",
+      error: "This video is age restricted and needs a sign in, so it can't be fetched.",
       status: 422,
       code: "AGE_RESTRICTED",
     };
@@ -836,7 +907,9 @@ export function userFacingError(err: unknown): {
     };
   }
   if (
-    /not available in your (?:country|region|location)|geo.?restrict|blocked it in your country|not available from your location/i.test(
+    // Dailymotion answers in the server's language: "Le propriétaire de cette
+    // vidéo ne souhaite pas la diffuser dans votre pays".
+    /not available in your (?:country|region|location)|geo.?restrict|blocked it in your country|not available from your location|dans votre pays/i.test(
       msg,
     )
   ) {
@@ -852,7 +925,7 @@ export function userFacingError(err: unknown): {
     )
   ) {
     return {
-      error: "No video found at that link, it may be a photo, a story, or a text-only post.",
+      error: "No video found at that link. It may be a photo, a story, or a post with only text.",
       status: 422,
       code: "NO_FORMATS",
     };
@@ -981,17 +1054,22 @@ export async function vimeoStreamsAreDrm(info: YtDlpInfo): Promise<boolean> {
  * Whether a lookup through one pool exit failed because of that exit: refused,
  * not answering, or stalled. Those are worth another exit. A removed or
  * private video is not, and fails the same everywhere.
+ *
+ * "Failed to connect to www.instagram.com:443 over proxy" is the exit not
+ * answering too, from the impersonating client's own wording. It was missing
+ * here, so 6 Instagram lookups in the recent log stopped at that exit instead
+ * of moving on to the next.
  */
+function exitFailed(url: string, err: unknown): boolean {
+  if (err instanceof ProxyUnreachableError) return true;
+  if (err instanceof PlatformBlockedError && refusedThroughProxy(url, err.message)) return true;
+  return err instanceof Error && (/timed out|timeout/i.test(err.message) || exitUnreachable(err.message));
+}
+
 // A lookup through the pool gives up starting new attempts after this long.
 // Each attempt may take 35 seconds, so the last one still ends inside the
 // browser's two minute wait.
 const POOL_START_BY_MS = 70_000;
-
-function exitFailed(url: string, err: unknown): boolean {
-  if (err instanceof ProxyUnreachableError) return true;
-  if (err instanceof PlatformBlockedError && refusedThroughProxy(url, err.message)) return true;
-  return err instanceof Error && /timed out|timeout/i.test(err.message);
-}
 
 export async function fetchInfo(url: string): Promise<YtDlpInfo> {
   // Through the WARP pool when it has healthy exits. A refused or stalled exit
