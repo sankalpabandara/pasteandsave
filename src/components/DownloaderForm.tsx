@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { detectPlatform } from "@/lib/platforms";
 import { useAdGate } from "@/components/ads/AdProvider";
+import ShareBar from "@/components/ShareBar";
 
 type VideoTier = {
   formatId: string;
@@ -224,6 +225,8 @@ export default function DownloaderForm({
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
   const [tab, setTab] = useState<"video" | "audio">("video");
+  // Set once a download has started, to offer the share row under the result.
+  const [saved, setSaved] = useState(false);
   const sourcesRef = useRef<Record<string, EventSource>>({});
   const autoRanRef = useRef(false);
   const mp3PrefRef = useRef(false);
@@ -239,6 +242,7 @@ export default function DownloaderForm({
       setError(null);
       setResult(null);
       setJobs({});
+      setSaved(false);
       if (fromPlaylist) setSelectedUrl(trimmed);
       // Kick off the lookup and show the ad gate at the same time, so the ad
       // overlaps the existing wait instead of adding delay.
@@ -387,6 +391,7 @@ export default function DownloaderForm({
           if (payload.status === "done") {
             source.close();
             window.location.href = `/api/jobs/${data.jobId}/file`;
+            setSaved(true);
             setJobs((prev) => {
               const next = { ...prev };
               delete next[key];
@@ -449,6 +454,7 @@ export default function DownloaderForm({
     setJobs({});
     setError(null);
     setTab("video");
+    setSaved(false);
   }
 
   // Extension deep links with ?mp3=1 skip the extra click: the MP3 job starts
@@ -721,6 +727,8 @@ export default function DownloaderForm({
           </div>
         </div>
       )}
+
+      {result && saved && <ShareBar />}
     </div>
   );
 }

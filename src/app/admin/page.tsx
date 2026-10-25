@@ -348,6 +348,40 @@ export default async function AdminDashboard() {
           )}
         </section>
 
+        {/*
+          The share row under each finished download. Visits are people who
+          opened a shared address, so visits against presses says whether
+          sharing brings anyone in.
+        */}
+        <section className="glass glass-hairline rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
+            Shares
+          </h2>
+          {stats.shares.length === 0 ? (
+            <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
+              No shares yet. The share row appears under a result once a
+              download starts.
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              <li className="flex items-center justify-between text-xs text-neutral-500 dark:text-neutral-400">
+                <span>Channel</span>
+                <span>Presses / visits back</span>
+              </li>
+              {stats.shares.map((s) => (
+                <li key={s.via} className="flex items-center justify-between text-sm">
+                  <span className="text-neutral-700 dark:text-neutral-300">{s.via}</span>
+                  <span className="font-medium text-neutral-900 dark:text-white">
+                    {s.presses.toLocaleString()}
+                    <span className="mx-1 font-normal text-neutral-400">/</span>
+                    {s.visits.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
             Top pages

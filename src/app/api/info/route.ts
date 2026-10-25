@@ -373,8 +373,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Only offer audio when the source actually has a soundtrack.
-    const audio: AudioOption[] = all.some(hasAudio) ? AUDIO_OPTIONS : [];
+    // Only offer audio when the source actually has a soundtrack. A photo is
+    // not one: Commons reports no codecs for its images, which read as "has
+    // audio", so a photo was offered as MP3 only and the photo row, which sits
+    // under the Video tab, was never shown.
+    const audio: AudioOption[] = all.some((f) => !isImageFormat(f) && hasAudio(f))
+      ? AUDIO_OPTIONS
+      : [];
 
     const payload = {
       title: info.title ?? "Untitled",
