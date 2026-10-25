@@ -349,9 +349,9 @@ export default async function AdminDashboard() {
         </section>
 
         {/*
-          The Trustpilot prompt after a browser's first download. Opened is
-          the review page being opened from it, not a review written: whether
-          one was written only shows on Trustpilot.
+          The Trustpilot prompt after a browser's first download, and its next
+          one if closed. Opened is the review page being opened from it, not a
+          review written: whether one was written only shows on Trustpilot.
         */}
         <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">

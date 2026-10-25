@@ -4,17 +4,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { detectPlatform } from "@/lib/platforms";
 import { useAdGate } from "@/components/ads/AdProvider";
 import ReviewPrompt from "@/components/ReviewPrompt";
-import { takeReviewTurn } from "@/lib/review";
-
-// The browser's own storage, or null where reading it throws (blocked site
-// data, some private windows).
-function browserStore(): Storage | null {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
+import { browserStore, takeReviewTurn } from "@/lib/review";
 
 type VideoTier = {
   formatId: string;
@@ -236,7 +226,8 @@ export default function DownloaderForm({
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
   const [tab, setTab] = useState<"video" | "audio">("video");
-  // The Trustpilot prompt, open after this browser's first download only.
+  // The Trustpilot prompt, after this browser's first download and, if it
+  // was closed without a review, its next one.
   const [askReview, setAskReview] = useState(false);
   const closeReview = useCallback(() => setAskReview(false), []);
   const sourcesRef = useRef<Record<string, EventSource>>({});
