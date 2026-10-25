@@ -346,7 +346,7 @@ export function looksLikeIpBlock(stderr: string): boolean {
  */
 export function worthProxyRetry(stderr: string): boolean {
   const s = stderr || "";
-  return !/video unavailable|been removed|has been deleted|no longer available|not available anymore|account.*(terminated|closed|suspended)|removed by the (?:uploader|user)|no suitable extractor|unsupported url|is private|private video|this content isn'?t available/i.test(
+  return !/video unavailable|been removed|has been deleted|no longer available|not available anymore|account.*(terminated|closed|suspended)|removed by the (?:uploader|user)|no suitable extractor|unsupported url|is private|private video|this content isn'?t available|\[wikimedia\.org\][^\n]*unable to extract video info/i.test(
     s,
   );
 }
@@ -792,6 +792,26 @@ export function userFacingError(err: unknown): {
       code: "GEO_BLOCKED",
     };
   }
+  // Commons answers for a file that was deleted, renamed or misspelled with no
+  // file details at all, which yt-dlp reports as "Unable to extract video
+  // info". 4 lookups in the five days after the Commons link fix, each one
+  // after a 16 second tour of the proxy pool (now skipped, see worthProxyRetry).
+  if (/\[wikimedia\.org\][^\n]*Unable to extract video info/i.test(msg)) {
+    return {
+      error:
+        "This file isn't on Wikimedia Commons. It may have been deleted or renamed, or the link was cut short when it was copied.",
+      status: 422,
+      code: "MEDIA_REMOVED",
+    };
+  }
+  // A document, such as a PDF on Commons (NotMediaError, from the lookup).
+  if (/^not media: /i.test(msg)) {
+    return {
+      error: "This link is a document, not a video, audio or photo, so there's nothing here to save.",
+      status: 422,
+      code: "NOT_MEDIA",
+    };
+  }
   // Facebook leaves the video out of the page for anyone not signed in when
   // the post is limited to friends, groups or adults, and yt-dlp then says
   // "Cannot parse data". It is reached only after the pool has been tried, and
@@ -1007,6 +1027,13 @@ export function failureReason(err: unknown): string {
 export class DrmProtectedError extends Error {
   constructor() {
     super("DRM protected");
+  }
+}
+
+/** Thrown at lookup when every format is a document, such as a PDF. */
+export class NotMediaError extends Error {
+  constructor() {
+    super("not media: document only");
   }
 }
 

@@ -7,6 +7,7 @@ import {
   userFacingError,
   failureFingerprint,
   failureReason,
+  NotMediaError,
   UnsupportedSiteError,
   type YtDlpFormat,
   type YtDlpInfo,
@@ -100,7 +101,15 @@ const IMAGE_EXTS = new Set([
   "bmp",
   "tiff",
   "avif",
+  // Drawings on Commons. They were listed as "480p" video.
+  "svg",
 ]);
+
+// Documents yt-dlp will not save: it skips unusual extensions so a site cannot
+// slip an executable through it, and a PDF is not what this site is for.
+// Commons lists a scanned PDF as one "source" format, which showed as "1080p"
+// and then failed at the download.
+const DOCUMENT_EXTS = new Set(["pdf", "djvu"]);
 
 function isImageFormat(f: { ext?: string; vcodec?: string; acodec?: string }): boolean {
   const ext = (f.ext ?? "").toLowerCase();
@@ -111,7 +120,7 @@ function isImageFormat(f: { ext?: string; vcodec?: string; acodec?: string }): b
 }
 
 function imageLabel(f: { ext: string; width?: number; height?: number }): string {
-  const kind = f.ext ? `Photo (${f.ext.toUpperCase()})` : "Photo";
+  const kind = !f.ext ? "Photo" : f.ext === "svg" ? "Image (SVG)" : `Photo (${f.ext.toUpperCase()})`;
   if (f.width && f.height) return `${kind} ${f.width}x${f.height}`;
   return kind;
 }
@@ -270,13 +279,14 @@ export async function POST(request: NextRequest) {
     // Before the success is counted: a list of qualities that all fail at
     // the download is worse than saying so now.
     if (await vimeoStreamsAreDrm(info)) throw new DrmProtectedError();
+    const all = (info.formats ?? []).filter((f) => !DOCUMENT_EXTS.has((f.ext ?? "").toLowerCase()));
+    if (all.length === 0 && (info.formats?.length ?? 0) > 0) throw new NotMediaError();
     void logEvent({
       type: "lookup",
       ok: true,
       site: info.extractor_key ?? info.extractor ?? undefined,
     });
 
-    const all = info.formats ?? [];
     const sizeOf = (f: YtDlpFormat) => f.filesize ?? f.filesize_approx ?? null;
 
     // Photo posts (Instagram carousels, TikTok slideshows) have no streams to

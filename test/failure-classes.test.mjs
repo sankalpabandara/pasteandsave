@@ -205,6 +205,9 @@ const SEEN = {
   ttIp: "ERROR: [TikTok] 7300: Your IP address is blocked from accessing this post",
   ttLogin: "ERROR: [TikTok] 7300: This post may not be comfortable for some audiences. Log in for access. Use --cookies-from-browser",
   dmFrench: "ERROR: [dailymotion] x8: Le propriétaire de cette vidéo ne souhaite pas la diffuser dans votre pays.",
+  // 2026-10-25, a Commons file page for a file that does not exist.
+  commonsMissing: "ERROR: [wikimedia.org] Does_not_exist.webm: Unable to extract video info; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues",
+  notMedia: "not media: document only",
 };
 
 test("each failure seen in the log gets its own honest answer", () => {
@@ -222,6 +225,16 @@ test("each failure seen in the log gets its own honest answer", () => {
   assert.equal(code(SEEN.dmFrench), "GEO_BLOCKED");
   // A deleted X post found through the embed data.
   assert.equal(code("ERROR: [twitter] This post has been deleted"), "MEDIA_REMOVED");
+  assert.equal(code(SEEN.commonsMissing), "MEDIA_REMOVED");
+  assert.equal(code(SEEN.notMedia), "NOT_MEDIA");
+  // Other sites saying "unable to extract" keep the general answer.
+  assert.equal(code("ERROR: [SomeSite] 1: Unable to extract video info"), "NO_FORMATS");
+});
+
+test("a Commons file that does not exist is not retried through the proxy pool", () => {
+  const worthProxyRetry = lift("worthProxyRetry");
+  assert.equal(worthProxyRetry(SEEN.commonsMissing), false);
+  assert.equal(worthProxyRetry("ERROR: [SomeSite] 1: Unable to extract video info"), true);
 });
 
 test("none of those answers says unknown, and none has a dash", () => {
