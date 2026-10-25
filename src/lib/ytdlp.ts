@@ -891,7 +891,7 @@ export function userFacingError(err: unknown): {
   // like a fault on our side. It is not: nothing here will make it work, and
   // saying so is more useful than inviting a retry.
   if (
-    /only works when logged.?in|requires? (?:a )?login|you must be logged in|log ?in to (?:view|watch|continue)|log ?in for access/i.test(
+    /only works when logged.?in|requires? (?:a )?login|you must be logged in|log ?in to (?:view|watch|continue)|log ?in for access|only available for registered users/i.test(
       msg,
     )
   ) {

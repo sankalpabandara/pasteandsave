@@ -208,6 +208,8 @@ const SEEN = {
   // 2026-10-25, a Commons file page for a file that does not exist.
   commonsMissing: "ERROR: [wikimedia.org] Does_not_exist.webm: Unable to extract video info; please report this issue on  https://github.com/yt-dlp/yt-dlp/issues",
   notMedia: "not media: document only",
+  // 2026-10-25, the two Facebook lookups still logged as UNKNOWN.
+  fbRegistered: "ERROR: [facebook] 1396940475856258: This video is only available for registered users. Use --cookies-from-browser or --cookies for the authentication.",
 };
 
 test("each failure seen in the log gets its own honest answer", () => {
@@ -227,6 +229,12 @@ test("each failure seen in the log gets its own honest answer", () => {
   assert.equal(code("ERROR: [twitter] This post has been deleted"), "MEDIA_REMOVED");
   assert.equal(code(SEEN.commonsMissing), "MEDIA_REMOVED");
   assert.equal(code(SEEN.notMedia), "NOT_MEDIA");
+  assert.equal(code(SEEN.fbRegistered), "LOGIN_REQUIRED");
+  // A pfbid post with no video keeps its own answer.
+  assert.equal(
+    code("ERROR: [facebook] pfbid02r7N1Gw: Unable to download webpage: HTTP Error 404: Not Found (caused by <HTTPError 404: Not Found>)"),
+    "NO_FORMATS",
+  );
   // Other sites saying "unable to extract" keep the general answer.
   assert.equal(code("ERROR: [SomeSite] 1: Unable to extract video info"), "NO_FORMATS");
 });
