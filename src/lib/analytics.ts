@@ -16,7 +16,7 @@ const MAX_EVENTS_BYTES = 8 * 1024 * 1024; // ~8 MB
 const KEEP_EVENTS = 50_000;
 let appendsSinceCheck = 0;
 
-export type EventType = "pageview" | "lookup" | "download" | "share";
+export type EventType = "pageview" | "lookup" | "download" | "review";
 
 export type AnalyticsEvent = {
   t: number;
@@ -46,10 +46,8 @@ export type AnalyticsEvent = {
    * Recorded so spend can be attributed to a platform after the fact.
    */
   proxied?: boolean;
-  /** A share: which button was pressed (see src/lib/share.ts). */
-  via?: string;
-  /** A pageview that arrived through a shared address, by its channel. */
-  from?: string;
+  /** The Trustpilot prompt: shown, opened or closed (see src/lib/review.ts). */
+  action?: string;
 };
 
 let dirReady = false;
@@ -141,11 +139,10 @@ export type Stats = {
   lookupFailures: { host: string; count: number; topCode: string }[];
   topPages: { path: string; count: number }[];
   /**
-   * Share buttons pressed after a download, and visits that came back through
-   * a shared address, per channel. Visits over presses is whether sharing is
-   * bringing anyone in.
+   * The Trustpilot prompt after a first download: how often it appeared, how
+   * often the review page was opened from it, and how often it was closed.
    */
-  shares: { via: string; presses: number; visits: number }[];
+  reviewPrompt: { shown: number; opened: number; closed: number };
   byDay: { day: string; pageviews: number; downloads: number }[];
   recent: AnalyticsEvent[];
   generatedAt: number;
@@ -202,12 +199,7 @@ export async function getStats(): Promise<Stats> {
   const dlSites = new Map<string, { site: string; count: number; proxied: number }>();
   const failHosts = new Map<string, { host: string; count: number; codes: Map<string, number> }>();
   const pageCounts = new Map<string, number>();
-  const shareRows = new Map<string, { via: string; presses: number; visits: number }>();
-  const shareRow = (via: string) => {
-    const row = shareRows.get(via) ?? { via, presses: 0, visits: 0 };
-    shareRows.set(via, row);
-    return row;
-  };
+  const reviewPrompt = { shown: 0, opened: 0, closed: 0 };
   const dayMap = new Map<string, { pageviews: number; downloads: number }>();
 
   // Seed the last 14 days so the chart always has a full axis.
@@ -224,9 +216,10 @@ export async function getStats(): Promise<Stats> {
       if (ev.t >= dayAgo) pageviews24h++;
       if (bucket) bucket.pageviews++;
       if (ev.path) pageCounts.set(ev.path, (pageCounts.get(ev.path) ?? 0) + 1);
-      if (ev.from) shareRow(ev.from).visits++;
-    } else if (ev.type === "share") {
-      if (ev.via) shareRow(ev.via).presses++;
+    } else if (ev.type === "review") {
+      if (ev.action === "shown" || ev.action === "opened" || ev.action === "closed") {
+        reviewPrompt[ev.action]++;
+      }
     } else if (ev.type === "lookup") {
       totalLookups++;
       if (ev.ok) lookupOk++;
@@ -279,8 +272,6 @@ export async function getStats(): Promise<Stats> {
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  const shares = [...shareRows.values()].sort((a, b) => b.presses + b.visits - (a.presses + a.visits));
-
   const byDay = [...dayMap.entries()].map(([day, v]) => ({ day, ...v }));
 
   const recent = events.slice(-25).reverse();
@@ -298,7 +289,7 @@ export async function getStats(): Promise<Stats> {
     downloadSites,
     lookupFailures,
     topPages,
-    shares,
+    reviewPrompt,
     byDay,
     recent,
     generatedAt: now,

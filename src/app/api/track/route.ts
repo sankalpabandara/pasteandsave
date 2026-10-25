@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { logEvent } from "@/lib/analytics";
 import { SITE_URL } from "@/lib/site";
-import { isShareChannel } from "@/lib/share";
+import { isReviewAction } from "@/lib/review";
 
 export const runtime = "nodejs";
 
@@ -25,24 +25,24 @@ function externalRefHost(raw: unknown, requestHost: string | null): string | und
   }
 }
 
-// Records an anonymous pageview, or a press of a share button. No cookies or
-// IPs are stored, only the path and, for visits arriving from another site,
-// the referring hostname, or the channel a shared address was sent on.
+// Records an anonymous pageview, or what a visitor did with the Trustpilot
+// prompt. No cookies or IPs are stored, only the path and, for visits arriving
+// from another site, the referring hostname.
 export async function POST(request: NextRequest) {
   if (!rateLimit(`track:${clientIp(request)}`, 120, 60_000)) {
     return new Response(null, { status: 204 });
   }
 
-  let body: { path?: string; ref?: string; from?: string; share?: string };
+  let body: { path?: string; ref?: string; review?: string };
   try {
     body = await request.json();
   } catch {
     return new Response(null, { status: 204 });
   }
 
-  // Only the channel names the share row uses are kept, never free text.
-  if (body.share !== undefined) {
-    if (isShareChannel(body.share)) void logEvent({ type: "share", via: body.share });
+  // Only the prompt's own action names are kept, never free text.
+  if (body.review !== undefined) {
+    if (isReviewAction(body.review)) void logEvent({ type: "review", action: body.review });
     return new Response(null, { status: 204 });
   }
 
@@ -50,8 +50,7 @@ export async function POST(request: NextRequest) {
   // Store the path only, capped, and strip any query string.
   const path = raw.split("?")[0]!.slice(0, 120);
   const ref = externalRefHost(body.ref, request.nextUrl.hostname.toLowerCase());
-  const from = isShareChannel(body.from) ? body.from : undefined;
 
-  void logEvent({ type: "pageview", path, ...(ref ? { ref } : {}), ...(from ? { from } : {}) });
+  void logEvent({ type: "pageview", path, ...(ref ? { ref } : {}) });
   return new Response(null, { status: 204 });
 }

@@ -108,21 +108,17 @@ test("failures older than the window drop off the panel", async () => {
   assert.ok(stats.totalLookups >= 2);
 });
 
-test("share presses and the visits they bring back are tallied per channel", async () => {
+test("the Trustpilot prompt is tallied by what visitors did with it", async () => {
   process.chdir(scratch);
-  await logEvent({ type: "share", via: "whatsapp" });
-  await logEvent({ type: "share", via: "whatsapp" });
-  await logEvent({ type: "share", via: "copy" });
-  await logEvent({ type: "pageview", path: "/", from: "whatsapp" });
-  // An ordinary visit is not a share visit.
-  await logEvent({ type: "pageview", path: "/" });
+  await logEvent({ type: "review", action: "shown" });
+  await logEvent({ type: "review", action: "shown" });
+  await logEvent({ type: "review", action: "opened" });
+  await logEvent({ type: "review", action: "closed" });
+  // Anything else written under the type is ignored, not counted somewhere.
+  await logEvent({ type: "review", action: "bogus" });
   const stats = await getStats();
   process.chdir(cwd);
-  const wa = stats.shares.find((s) => s.via === "whatsapp");
-  assert.deepEqual(wa, { via: "whatsapp", presses: 2, visits: 1 });
-  assert.deepEqual(stats.shares.find((s) => s.via === "copy"), { via: "copy", presses: 1, visits: 0 });
-  assert.equal(stats.shares[0].via, "whatsapp", "busiest channel first");
-  assert.equal(stats.shares.length, 2);
+  assert.deepEqual(stats.reviewPrompt, { shown: 2, opened: 1, closed: 1 });
 });
 
 test("a successful lookup is never counted as a failure", async () => {

@@ -84,14 +84,11 @@ export default function Analytics() {
     // Referrer is only useful on the landing pageview; after an internal
     // navigation it would just be our own host.
     const ref = isLanding && document.referrer ? document.referrer : "";
-    // A shared address carries ?from=<channel> (see src/lib/share.ts). WhatsApp
-    // sends no referrer, so this is the only way such a visit is counted.
-    const from = isLanding ? (new URLSearchParams(window.location.search).get("from") ?? "") : "";
 
     fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: pathname, ref, ...(from ? { from } : {}) }),
+      body: JSON.stringify({ path: pathname, ref }),
       keepalive: true,
     }).catch(() => {});
 
