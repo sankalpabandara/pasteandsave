@@ -58,6 +58,11 @@ export const metadata: Metadata = {
       "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites.",
   },
   robots: { index: true, follow: true },
+  other: {
+    // Proves ownership of the domain for the Trustpilot business profile
+    // (claimed 2026-10-26). Trustpilot reads it from the home page.
+    "trustpilot-one-time-domain-verification-id": "3f4759c8-d951-418b-84ba-f2f30a94e9f9",
+  },
 };
 
 export default async function RootLayout({
