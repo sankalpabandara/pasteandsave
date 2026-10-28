@@ -28,7 +28,15 @@ type ReportRow = {
 // so connecting the dashboard needs only the key file.
 const DEFAULT_PROPERTY_ID = "547077098";
 
-export async function getGaSummary(): Promise<GaResult> {
+/**
+ * GA reports whole calendar days in the property's time zone, so a period of
+ * N days here is the last N days including today, and 1 day is today so far.
+ */
+export function gaDateRange(days: number): { startDate: string; endDate: string } {
+  return { startDate: days <= 1 ? "today" : `${days - 1}daysAgo`, endDate: "today" };
+}
+
+export async function getGaSummary(days = 28): Promise<GaResult> {
   const propertyId = process.env.GA4_PROPERTY_ID?.trim() || DEFAULT_PROPERTY_ID;
   if (!googleConfigured() || !propertyId) return { status: "unconfigured" };
 
@@ -41,7 +49,7 @@ export async function getGaSummary(): Promise<GaResult> {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     };
-    const dateRanges = [{ startDate: "28daysAgo", endDate: "today" }];
+    const dateRanges = [gaDateRange(days)];
 
     async function run(body: object): Promise<{ rows?: ReportRow[] }> {
       const res = await fetch(endpoint, {

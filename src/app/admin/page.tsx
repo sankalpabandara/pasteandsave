@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-guard";
-import { FAILURE_WINDOW_DAYS, getStats } from "@/lib/analytics";
+import { RANGE_DAYS, getStats, rangeFrom, type RangeDays } from "@/lib/analytics";
 import { getGaSummary } from "@/lib/ga-data";
 import { serviceAccountError } from "@/lib/google-auth";
 import { proxyUsageToday } from "@/lib/proxy-budget";
@@ -19,6 +19,56 @@ export const dynamic = "force-dynamic";
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
+}
+
+/** "last 24 hours" or "last 7 days", for headings and empty states. */
+function periodLabel(days: RangeDays): string {
+  return days === 1 ? "last 24 hours" : `last ${days} days`;
+}
+
+/** How a count moved against the period of the same length before it. */
+function changeNote(now: number, before: number, days: RangeDays): string {
+  const prior = days === 1 ? "the day before" : `the ${days} days before`;
+  if (before === 0) return now === 0 ? `none in ${prior} either` : `none in ${prior}`;
+  const change = Math.round(((now - before) / before) * 100);
+  if (change === 0) return `same as ${prior}`;
+  return `${change > 0 ? "up" : "down"} ${Math.abs(change)}% on ${prior}`;
+}
+
+/** A chart bar's caption: the hour (UTC) for a day, the date otherwise. */
+function barLabel(start: number, end: number, days: RangeDays): string {
+  return days === 1
+    ? new Date(start).toISOString().slice(11, 13)
+    : new Date(end - 1).toISOString().slice(5, 10);
+}
+
+/**
+ * The period switch. Plain links, so the choice lives in the address
+ * (/admin?range=28d) and survives Refresh, a reload, or a bookmark.
+ */
+function RangeSwitch({ current }: { current: RangeDays }) {
+  return (
+    <nav
+      aria-label="Period"
+      className="glass glass-hairline inline-flex rounded-xl p-1"
+    >
+      {RANGE_DAYS.map((d) => (
+        <Link
+          key={d}
+          href={`/admin?range=${d}d`}
+          scroll={false}
+          aria-current={d === current ? "page" : undefined}
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+            d === current
+              ? "bg-violet-600 text-white"
+              : "text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+          }`}
+        >
+          {d === 1 ? "1 day" : `${d} days`}
+        </Link>
+      ))}
+    </nav>
+  );
 }
 
 function StatCard({
@@ -47,11 +97,17 @@ function StatCard({
   );
 }
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   await requireAdmin();
-  const stats = await getStats();
+  const range = rangeFrom((await searchParams).range);
+  const period = periodLabel(range);
+  const stats = await getStats(range);
   const gaId = process.env.NEXT_PUBLIC_GA_ID;
-  const ga = await getGaSummary();
+  const ga = await getGaSummary(range);
   const proxyOn = !!process.env.YTDLP_PROXY;
   const proxy = proxyOn ? await proxyUsageToday() : null;
   // What the server has actually learned about reaching each site. This is the
@@ -59,13 +115,18 @@ export default async function AdminDashboard() {
   // is costing nothing today, whatever the host list says.
   const routing = Object.entries(routingReport()).sort((a, b) => a[0].localeCompare(b[0]));
 
-  const maxDay = Math.max(
+  const maxBar = Math.max(
     1,
-    ...stats.byDay.map((d) => Math.max(d.pageviews, d.downloads)),
+    ...stats.series.map((d) => Math.max(d.pageviews, d.downloads)),
   );
+  // Captions under every bar crowd a phone screen at 24 or 28 bars.
+  const labelEvery = range === 1 ? 6 : range === 28 ? 7 : 1;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8">
+    // w-full matters: the body is a flex column, where a centred <main> sizes
+    // itself to its widest content (the 640px ads table) rather than the
+    // screen, which zoomed the whole dashboard out on a phone.
+    <main className="mx-auto w-full max-w-5xl px-4 py-8">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-bold text-neutral-900 dark:text-white">
@@ -89,21 +150,36 @@ export default async function AdminDashboard() {
         <AdminBar generatedAt={stats.generatedAt} />
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <RangeSwitch current={range} />
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          Figures below cover the {period}, apart from the routing, proxy and
+          recent activity panels, which are always live.
+          {stats.dataFrom !== null && stats.dataFrom > stats.since && (
+            <>
+              {" "}
+              Records start on {new Date(stats.dataFrom).toISOString().slice(0, 10)}, so
+              this period is not complete.
+            </>
+          )}
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
           label="Pageviews"
-          value={stats.totalPageviews.toLocaleString()}
-          sub={`${stats.pageviews24h.toLocaleString()} in last 24h`}
+          value={stats.pageviews.toLocaleString()}
+          sub={changeNote(stats.pageviews, stats.previous.pageviews, range)}
         />
         <StatCard
           label="Downloads"
-          value={stats.totalDownloads.toLocaleString()}
-          sub={`${stats.downloads24h.toLocaleString()} in last 24h`}
+          value={stats.downloads.toLocaleString()}
+          sub={changeNote(stats.downloads, stats.previous.downloads, range)}
         />
         <StatCard
           label="Link lookups"
-          value={stats.totalLookups.toLocaleString()}
-          sub={`${pct(stats.lookupSuccessRate)} succeeded`}
+          value={stats.lookups.toLocaleString()}
+          sub={`${pct(stats.lookupSuccessRate)} succeeded, ${changeNote(stats.lookups, stats.previous.lookups, range)}`}
         />
         <StatCard
           label="Lookup → download"
@@ -202,27 +278,32 @@ export default async function AdminDashboard() {
 
       <section className="mt-6 glass glass-hairline rounded-2xl p-5">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
-          Last 14 days
+          {range === 1 ? "Last 24 hours, by hour (UTC)" : `Last ${range} days, by day`}
         </h2>
-        <div className="mt-4 flex items-end gap-1.5" style={{ height: 140 }}>
-          {stats.byDay.map((d) => (
+        <div
+          className={`mt-4 flex items-end ${range === 7 ? "gap-1.5" : "gap-0.5 sm:gap-1"}`}
+          style={{ height: 140 }}
+        >
+          {stats.series.map((d, i) => (
             <div
-              key={d.day}
-              className="group flex flex-1 flex-col items-center justify-end gap-1"
-              title={`${d.day}: ${d.pageviews} views, ${d.downloads} downloads`}
+              key={d.start}
+              className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-1"
+              title={`${new Date(d.start).toISOString().slice(0, 16).replace("T", " ")} to ${new Date(d.end).toISOString().slice(0, 16).replace("T", " ")} UTC: ${d.pageviews} views, ${d.downloads} downloads`}
             >
-              <div className="flex w-full items-end justify-center gap-0.5" style={{ height: 110 }}>
+              <div className="flex w-full items-end justify-center gap-px" style={{ height: 110 }}>
                 <div
                   className="w-1/2 rounded-t bg-violet-200 dark:bg-violet-900/60"
-                  style={{ height: `${(d.pageviews / maxDay) * 100}%` }}
+                  style={{ height: `${(d.pageviews / maxBar) * 100}%` }}
                 />
                 <div
                   className="w-1/2 rounded-t bg-violet-600"
-                  style={{ height: `${(d.downloads / maxDay) * 100}%` }}
+                  style={{ height: `${(d.downloads / maxBar) * 100}%` }}
                 />
               </div>
-              <span className="text-[9px] text-neutral-400">
-                {d.day.slice(5)}
+              <span className="h-3 text-[9px] leading-3 text-neutral-400">
+                {(stats.series.length - 1 - i) % labelEvery === 0
+                  ? barLabel(d.start, d.end, range)
+                  : ""}
               </span>
             </div>
           ))}
@@ -273,11 +354,11 @@ export default async function AdminDashboard() {
         */}
         <section className="glass glass-hairline rounded-2xl p-5">
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
-            Failing links by site, last {FAILURE_WINDOW_DAYS} days
+            Failing links by site, {period}
           </h2>
           {stats.lookupFailures.length === 0 ? (
             <p className="mt-3 text-sm text-neutral-500 dark:text-neutral-400">
-              Nothing has failed in the last {FAILURE_WINDOW_DAYS} days.
+              Nothing has failed in the {period}.
             </p>
           ) : (
             <ul className="mt-3 space-y-2">
@@ -322,8 +403,8 @@ export default async function AdminDashboard() {
           ) : (
             <ul className="mt-3 space-y-2">
               {stats.downloadSites.map((s) => {
-                const share = stats.totalDownloads
-                  ? Math.round((s.count / stats.totalDownloads) * 100)
+                const share = stats.downloads
+                  ? Math.round((s.count / stats.downloads) * 100)
                   : 0;
                 return (
                   <li key={s.site} className="flex items-center justify-between text-sm">
@@ -413,7 +494,10 @@ export default async function AdminDashboard() {
           <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">
             Google Analytics
           </h2>
-          <span className="text-xs text-neutral-400">last 28 days</span>
+          {/* GA counts whole days in the property's time zone (see gaDateRange). */}
+          <span className="text-xs text-neutral-400">
+            {range === 1 ? "today so far" : `last ${range} days, including today`}
+          </span>
         </div>
 
         {ga.status === "ok" ? (
@@ -542,6 +626,7 @@ export default async function AdminDashboard() {
                   {ev.type === "lookup" &&
                     `Looked up ${ev.site ?? "a link"}${ev.ok === false ? " (failed)" : ""}`}
                   {ev.type === "download" && `Downloaded ${ev.mode === "audio" ? "MP3 audio" : "video"}`}
+                  {ev.type === "review" && `Trustpilot prompt ${ev.action ?? ""}`}
                 </span>
                 <span className="shrink-0 text-xs text-neutral-400">
                   {new Date(ev.t).toLocaleString()}

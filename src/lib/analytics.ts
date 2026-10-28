@@ -105,18 +105,38 @@ async function readEvents(maxLines = 100_000): Promise<AnalyticsEvent[]> {
   return events;
 }
 
-export const FAILURE_WINDOW_DAYS = 7;
+/**
+ * The periods the dashboard can show, in days. Each is a rolling window that
+ * ends now, so "1 day" is the last 24 hours rather than today since midnight.
+ */
+export const RANGE_DAYS = [1, 7, 28] as const;
 
-function dayKey(t: number): string {
-  return new Date(t).toISOString().slice(0, 10);
+export type RangeDays = (typeof RANGE_DAYS)[number];
+
+export const DEFAULT_RANGE: RangeDays = 7;
+
+/** Reads the dashboard's ?range=1d, 7d or 28d. Anything else is the default. */
+export function rangeFrom(value: unknown): RangeDays {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const m = typeof raw === "string" ? /^(\d+)d$/.exec(raw) : null;
+  const days = m ? Number(m[1]) : NaN;
+  return (RANGE_DAYS as readonly number[]).includes(days) ? (days as RangeDays) : DEFAULT_RANGE;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
 export type Stats = {
-  totalPageviews: number;
-  totalLookups: number;
-  totalDownloads: number;
-  downloads24h: number;
-  pageviews24h: number;
+  rangeDays: RangeDays;
+  /** Where the period starts, in ms. */
+  since: number;
+  /** The oldest event on file, so a period reaching back past it can say so. */
+  dataFrom: number | null;
+  pageviews: number;
+  lookups: number;
+  downloads: number;
+  /** The same counts for the period of the same length just before. */
+  previous: { pageviews: number; lookups: number; downloads: number };
   conversionRate: number;
   lookupSuccessRate: number;
   downloadsByMode: { video: number; audio: number };
@@ -128,10 +148,10 @@ export type Stats = {
    */
   downloadSites: { site: string; count: number; proxied: number }[];
   /**
-   * Failed lookups in the last FAILURE_WINDOW_DAYS, grouped by site, worst
-   * first, with the commonest reason.
+   * Failed lookups in the period, grouped by site, worst first, with the
+   * commonest reason.
    *
-   * A window rather than everything on file: counted since July, YouTube led
+   * A period rather than everything on file: counted since July, YouTube led
    * this panel with 846 relay failures, every one of them from before the
    * WARP pool and none in the three days before it was read, while the
    * problems actually happening sat further down.
@@ -143,7 +163,9 @@ export type Stats = {
    * often the review page was opened from it, and how often it was closed.
    */
   reviewPrompt: { shown: number; opened: number; closed: number };
-  byDay: { day: string; pageviews: number; downloads: number }[];
+  /** The chart's bars, oldest first: one an hour for 1 day, one a day otherwise. */
+  series: { start: number; end: number; pageviews: number; downloads: number }[];
+  /** The latest events, whatever the period. */
   recent: AnalyticsEvent[];
   generatedAt: number;
 };
@@ -182,38 +204,50 @@ export async function getBacklinks(): Promise<Backlink[]> {
   return [...map.values()].sort((a, b) => b.lastSeen - a.lastSeen).slice(0, 50);
 }
 
-export async function getStats(): Promise<Stats> {
+export async function getStats(rangeDays: RangeDays = DEFAULT_RANGE): Promise<Stats> {
   const events = await readEvents();
   const now = Date.now();
-  const dayAgo = now - 24 * 60 * 60 * 1000;
-  const failuresSince = now - FAILURE_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const since = now - rangeDays * DAY_MS;
+  const previousSince = since - rangeDays * DAY_MS;
 
-  let totalPageviews = 0;
-  let totalLookups = 0;
-  let totalDownloads = 0;
-  let downloads24h = 0;
-  let pageviews24h = 0;
+  let pageviews = 0;
+  let lookups = 0;
+  let downloads = 0;
   let lookupOk = 0;
+  const previous = { pageviews: 0, lookups: 0, downloads: 0 };
+  let dataFrom: number | null = null;
   const modeCounts = { video: 0, audio: 0 };
   const siteCounts = new Map<string, number>();
   const dlSites = new Map<string, { site: string; count: number; proxied: number }>();
   const failHosts = new Map<string, { host: string; count: number; codes: Map<string, number> }>();
   const pageCounts = new Map<string, number>();
   const reviewPrompt = { shown: 0, opened: 0, closed: 0 };
-  const dayMap = new Map<string, { pageviews: number; downloads: number }>();
 
-  // Seed the last 14 days so the chart always has a full axis.
-  for (let i = 13; i >= 0; i--) {
-    const key = dayKey(now - i * 24 * 60 * 60 * 1000);
-    dayMap.set(key, { pageviews: 0, downloads: 0 });
-  }
+  // Every bar exists even when nothing happened in it, so the chart always has
+  // a full axis: 24 hours for a day, a bar per day otherwise.
+  const bucketMs = rangeDays === 1 ? HOUR_MS : DAY_MS;
+  const series = Array.from({ length: Math.round((now - since) / bucketMs) }, (_, i) => ({
+    start: since + i * bucketMs,
+    end: since + (i + 1) * bucketMs,
+    pageviews: 0,
+    downloads: 0,
+  }));
 
   for (const ev of events) {
-    const day = dayKey(ev.t);
-    const bucket = dayMap.get(day);
+    if (!Number.isFinite(ev.t)) continue;
+    if (dataFrom === null || ev.t < dataFrom) dataFrom = ev.t;
+    if (ev.t < since) {
+      if (ev.t >= previousSince) {
+        if (ev.type === "pageview") previous.pageviews++;
+        else if (ev.type === "lookup") previous.lookups++;
+        else if (ev.type === "download") previous.downloads++;
+      }
+      continue;
+    }
+    // An event stamped a moment after "now" (a clock step) lands in the last bar.
+    const bucket = series[Math.min(series.length - 1, Math.floor((ev.t - since) / bucketMs))];
     if (ev.type === "pageview") {
-      totalPageviews++;
-      if (ev.t >= dayAgo) pageviews24h++;
+      pageviews++;
       if (bucket) bucket.pageviews++;
       if (ev.path) pageCounts.set(ev.path, (pageCounts.get(ev.path) ?? 0) + 1);
     } else if (ev.type === "review") {
@@ -221,9 +255,9 @@ export async function getStats(): Promise<Stats> {
         reviewPrompt[ev.action]++;
       }
     } else if (ev.type === "lookup") {
-      totalLookups++;
+      lookups++;
       if (ev.ok) lookupOk++;
-      else if (ev.host && ev.t >= failuresSince) {
+      else if (ev.host) {
         const key = ev.host.toLowerCase();
         const row = failHosts.get(key) ?? { host: key, count: 0, codes: new Map() };
         row.count++;
@@ -236,8 +270,7 @@ export async function getStats(): Promise<Stats> {
         siteCounts.set(key, (siteCounts.get(key) ?? 0) + 1);
       }
     } else if (ev.type === "download") {
-      totalDownloads++;
-      if (ev.t >= dayAgo) downloads24h++;
+      downloads++;
       if (ev.mode === "audio") modeCounts.audio++;
       else modeCounts.video++;
       if (bucket) bucket.downloads++;
@@ -272,25 +305,25 @@ export async function getStats(): Promise<Stats> {
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  const byDay = [...dayMap.entries()].map(([day, v]) => ({ day, ...v }));
-
   const recent = events.slice(-25).reverse();
 
   return {
-    totalPageviews,
-    totalLookups,
-    totalDownloads,
-    downloads24h,
-    pageviews24h,
-    conversionRate: totalLookups ? totalDownloads / totalLookups : 0,
-    lookupSuccessRate: totalLookups ? lookupOk / totalLookups : 0,
+    rangeDays,
+    since,
+    dataFrom,
+    pageviews,
+    lookups,
+    downloads,
+    previous,
+    conversionRate: lookups ? downloads / lookups : 0,
+    lookupSuccessRate: lookups ? lookupOk / lookups : 0,
     downloadsByMode: modeCounts,
     topSites,
     downloadSites,
     lookupFailures,
     topPages,
     reviewPrompt,
-    byDay,
+    series,
     recent,
     generatedAt: now,
   };
