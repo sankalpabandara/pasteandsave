@@ -46,6 +46,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/blog" className="hover:text-neutral-900 dark:hover:text-white">
+                  Blog and guides
+                </Link>
+              </li>
+              <li>
                 <Link href="/terms" className="hover:text-neutral-900 dark:hover:text-white">
                   Terms of Service
                 </Link>

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_URL } from "@/lib/site";
+import { POSTS } from "@/lib/blog";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
@@ -15,6 +16,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(),
       changeFrequency: "weekly" as const,
       priority: 0.9,
+    })),
+    {
+      url: `${SITE_URL}/blog`,
+      lastModified: new Date(
+        Math.max(...POSTS.map((p) => Date.parse(p.updated))),
+      ),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    },
+    ...POSTS.map((p) => ({
+      url: `${SITE_URL}/blog/${p.slug}`,
+      lastModified: new Date(p.updated),
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
     })),
     {
       url: `${SITE_URL}/extension`,

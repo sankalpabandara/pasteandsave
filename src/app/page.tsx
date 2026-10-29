@@ -8,6 +8,7 @@ import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import Bookmarklet from "@/components/Bookmarklet";
 import AdSlot from "@/components/ads/AdSlot";
+import BlogTeaser, { homePosts } from "@/components/BlogTeaser";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
@@ -126,6 +127,7 @@ export default function Home() {
             </p>
           </div>
         </section>
+        <BlogTeaser heading="Learn more about saving videos" posts={homePosts()} />
         <Faq />
         <AdSlot slot="homeBottom" className="px-4 pb-10" />
       </main>

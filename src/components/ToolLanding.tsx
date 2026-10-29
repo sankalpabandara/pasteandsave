@@ -4,6 +4,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import AdSlot from "@/components/ads/AdSlot";
+import BlogTeaser from "@/components/BlogTeaser";
+import { getPost, postsForTool } from "@/lib/blog";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { TOOL_PAGES, type ToolPage } from "@/lib/seo-pages";
 
@@ -155,6 +157,25 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
+        {/* Guides written for this downloader, or general ones where there
+            are none yet, so every downloader page links into the blog. */}
+        {(() => {
+          const own = postsForTool(`/${tool.slug}`);
+          return (
+            <BlogTeaser
+              heading={own.length > 0 ? "Guides for this downloader" : "Helpful guides"}
+              posts={
+                own.length > 0
+                  ? own
+                  : [
+                      getPost("save-videos-on-iphone-and-android"),
+                      getPost("video-quality-explained"),
+                      getPost("video-wont-download"),
+                    ]
+              }
+            />
+          );
+        })()}
 
         <section className="mx-auto max-w-5xl px-4 pb-12 sm:pb-16">
           <h2 className="font-display text-center text-lg font-bold dark:text-white">

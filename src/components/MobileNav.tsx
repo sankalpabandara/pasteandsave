@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-// Phone navigation: a hamburger that opens a glass dropdown with full-width
-// touch targets. Desktop keeps the inline links; this renders only below sm.
+// Phone and tablet navigation: a hamburger that opens a glass dropdown with
+// full width touch targets. Wide screens keep the inline links; this renders
+// only below lg.
 export default function MobileNav({
   links,
 }: {
@@ -33,7 +34,7 @@ export default function MobileNav({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="sm:hidden">
+    <div ref={rootRef} className="lg:hidden">
       <button
         type="button"
         aria-label={open ? "Close menu" : "Open menu"}

@@ -10,6 +10,7 @@ const NAV_TOOLS = [
   { label: "YouTube", href: "/youtube-video-downloader" },
   { label: "MP3 Converter", href: "/video-to-mp3-converter" },
   { label: "Extension", href: "/extension" },
+  { label: "Blog", href: "/blog" },
 ];
 
 export default function Header() {
@@ -19,8 +20,9 @@ export default function Header() {
         <Link href="/" className="shrink-0">
           <Logo />
         </Link>
-        {/* Desktop keeps inline links; phones get the hamburger dropdown. */}
-        <nav className="hidden min-w-0 gap-5 text-sm font-medium text-neutral-600 sm:flex dark:text-neutral-300">
+        {/* Wide screens keep inline links; phones and tablets get the
+            hamburger dropdown, since seven links do not fit below lg. */}
+        <nav className="hidden min-w-0 gap-5 text-sm font-medium text-neutral-600 lg:flex dark:text-neutral-300">
           {NAV_TOOLS.map((t) => (
             <Link
               key={t.href}
