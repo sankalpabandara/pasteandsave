@@ -66,11 +66,7 @@ export default function BlogIndex() {
       <Header />
       <main className="mx-auto w-full max-w-5xl px-4 pb-16">
         <section className="pb-10 pt-14 text-center sm:pb-14 sm:pt-20">
-          <span className="glass glass-hairline inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-200">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            {POSTS.length} free guides · no sign up
-          </span>
-          <h1 className="font-display mx-auto mt-5 max-w-3xl text-4xl font-bold tracking-tight text-neutral-900 sm:text-6xl dark:text-white">
+          <h1 className="font-display mx-auto max-w-3xl text-4xl font-bold tracking-tight text-neutral-900 sm:text-6xl dark:text-white">
             Learn to save{" "}
             <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-sky-500 bg-clip-text text-transparent">
               any online video

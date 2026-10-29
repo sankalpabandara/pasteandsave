@@ -48,11 +48,7 @@ export default function Home() {
       <main>
         <section className="px-4 pb-14 pt-14 sm:pb-20 sm:pt-20">
           <div className="mx-auto max-w-2xl text-center">
-            <span className="glass glass-hairline inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-200">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              1,200+ sites · HD · MP3 · no signup
-            </span>
-            <h1 className="font-display mt-5 text-4xl font-bold tracking-tight text-neutral-900 sm:text-6xl dark:text-white">
+            <h1 className="font-display text-4xl font-bold tracking-tight text-neutral-900 sm:text-6xl dark:text-white">
               Free Online
               <br />
               <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-sky-500 bg-clip-text text-transparent">

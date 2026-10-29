@@ -108,11 +108,7 @@ export default function ExtensionPage() {
       <Header />
       <main>
         <section className="mx-auto max-w-3xl px-4 pb-10 pt-10 text-center sm:pt-16">
-          <span className="glass glass-hairline inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Free · Chrome · Firefox · Edge
-          </span>
-          <h1 className="font-display mt-5 text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-5xl dark:text-white">
+          <h1 className="font-display text-3xl font-extrabold tracking-tight text-neutral-900 sm:text-5xl dark:text-white">
             Download videos{" "}
             <span className="bg-gradient-to-r from-violet-600 via-fuchsia-500 to-sky-500 bg-clip-text text-transparent">
               while you browse
