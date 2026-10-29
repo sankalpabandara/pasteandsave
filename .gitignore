@@ -46,6 +46,9 @@ ga-key.json
 # first-party analytics data
 /data
 
+# browser extension packages for the web stores (extension/build-store.mjs)
+/store/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

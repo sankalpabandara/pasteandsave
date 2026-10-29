@@ -32,6 +32,13 @@ let minBytes = DEFAULT_MIN_BYTES;
 // array in storage so it survives a worker restart and syncs across browsers.
 let disabledHosts = [];
 
+// Sites this copy leaves alone completely: nothing is captured, no button is
+// drawn and no link is sent to PasteAndSave, whatever the user switches.
+// Empty in the copy on pasteandsave.com. The Chrome Web Store copy is built
+// with YouTube listed here by build-store.mjs, because that store does not
+// accept extensions that save YouTube videos.
+const OFF_LIMITS = [];
+
 // Swallows the rejection a browser API promise gives when, for example, the
 // tab it was aimed at has closed. A try/catch cannot catch those.
 function quiet(p) {
@@ -52,9 +59,15 @@ function cleanHost(hostOrUrl) {
     : String(hostOrUrl || "").replace(/^www\./, "").toLowerCase();
 }
 
+function offLimits(hostOrUrl) {
+  const host = cleanHost(hostOrUrl);
+  return Boolean(host) && OFF_LIMITS.some((h) => host === h || host.endsWith("." + h));
+}
+
 function siteEnabled(hostOrUrl) {
   const host = cleanHost(hostOrUrl);
   if (!host) return true;
+  if (offLimits(host)) return false;
   // A disabled entry covers its subdomains too, so switching off "example.com"
   // also covers "cdn.example.com" without listing every one.
   return !disabledHosts.some((h) => host === h || host.endsWith("." + h));
@@ -370,6 +383,7 @@ api.tabs.onRemoved.addListener((tabId) => {
 });
 
 function openOnSite(target) {
+  if (offLimits(target)) return;
   quiet(api.tabs.create({ url: `${siteBase}/?url=${encodeURIComponent(target)}` }));
 }
 
@@ -672,7 +686,7 @@ api.runtime.onStartup?.addListener(setupMenus);
 // Sends a resolved target where it can be handled: a plain media file is
 // saved by the browser, anything else goes to the site.
 function deliver(target) {
-  if (!target) return;
+  if (!target || offLimits(target.url)) return;
   if (target.kind === "file" || isPlainFileUrl(target.url)) {
     quiet(startBrowserDownload({ url: target.url, filename: filenameFrom(target.url, "") }).catch(() => {}));
     return;
@@ -730,6 +744,7 @@ function validJob(job) {
   if (!job || typeof job !== "object") return false;
   if (job.mode !== "video" && job.mode !== "audio") return false;
   if (typeof job.url !== "string" || !/^https?:\/\//i.test(job.url)) return false;
+  if (offLimits(job.url)) return false;
   if (job.mode === "video" && !/^[\w.+\-/]{1,80}$/.test(String(job.formatId || ""))) return false;
   return true;
 }
@@ -751,6 +766,7 @@ function handleMessage(msg, sender, sendResponse) {
         minBytes,
         siteBase,
         siteEnabled: msg.host ? siteEnabled(msg.host) : true,
+        offLimits: msg.host ? offLimits(msg.host) : false,
       });
     });
     return;
@@ -814,6 +830,9 @@ function handleMessage(msg, sender, sendResponse) {
   if (type === "getFormats") {
     if (typeof msg.url !== "string" || !/^https?:\/\//i.test(msg.url)) {
       return sendResponse({ ok: false, error: "That link isn't valid." });
+    }
+    if (offLimits(msg.url)) {
+      return sendResponse({ ok: false, error: "This version of the extension can't save from that site." });
     }
     fetchFormats(msg.url)
       .then((data) => sendResponse({ ok: true, data }))

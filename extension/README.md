@@ -85,11 +85,16 @@ details page and click Extension options):
   own copy, set it to your server, for example `http://localhost:3030`.
 - **Minimum file size**: files smaller than this never show in the list.
 
-## Store note
+## Store copies
 
-Chrome Web Store and Mozilla Add-ons both restrict extensions that download
-from YouTube. This extension is distributed from pasteandsave.com instead of
-the stores for that reason.
+`node extension/build-store.mjs` writes the web store packages to `store/`.
+The Chrome Web Store does not accept extensions that save YouTube videos, so
+its copy is built with YouTube switched off completely (`OFF_LIMITS` in
+background.js, and the content script excluded from YouTube's pages). The
+Firefox copy is the same as the one on pasteandsave.com. Listing text, store
+images and the answers to each store's forms are in
+`docs/extension-store-listing.md`; `node scripts/store-images.mjs` draws the
+images.
 
 ## Permissions it asks for and why
 

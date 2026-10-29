@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PasteAndSave - Video Downloader",
-  "version": "2.2.0",
-  "description": "Puts a Save button on the videos you watch, and spots downloadable video and audio on any page. Save files directly, or send a page to PasteAndSave for MP4 and MP3.",
+  "name": "PasteAndSave Video Downloader",
+  "version": "2.3.0",
+  "description": "Adds a Save button to the videos you watch and lists the video and audio files on any page, ready to save as MP4 or MP3.",
   "permissions": [
     "contextMenus",
     "activeTab",

@@ -5,13 +5,13 @@ import JsonLd from "@/components/JsonLd";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - PasteAndSave Video Downloader",
+  title: "Privacy Policy | PasteAndSave Video Downloader",
   description:
-    "How PasteAndSave handles the links you submit, server logs, IP addresses, cookies, analytics and data retention.",
+    "How PasteAndSave and its browser extension handle the links you submit, server logs, IP addresses, cookies, analytics and data retention.",
   alternates: { canonical: "/privacy" },
 };
 
-const LAST_UPDATED = "July 25, 2026";
+const LAST_UPDATED = "October 29, 2026";
 
 function Section({
   title,
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
           "@type": "WebPage",
           name: "Privacy Policy",
           description:
-            "How PasteAndSave handles submitted links, server logs, IP addresses, cookies, analytics and data retention.",
+            "How PasteAndSave and its browser extension handle submitted links, server logs, IP addresses, cookies, analytics and data retention.",
           url: `${SITE_URL.replace(/\/$/, "")}/privacy`,
           isPartOf: {
             "@type": "WebSite",
@@ -111,11 +111,37 @@ export default function PrivacyPage() {
         <Section title="Proxy providers">
           <p>
             Some sites block requests coming from data centres. For those, our
-            server routes the request through a third-party residential proxy
+            server routes the request through a third party residential proxy
             provider so the download can complete. The proxy sees the address of
             the media being fetched, as any network provider in the path would.
             It does not receive your IP address, because the request is made by
             our server rather than by your browser.
+          </p>
+        </Section>
+
+        <Section title="The browser extension">
+          <p>
+            The {SITE_NAME} extension for Chrome and Firefox has no account and
+            contains no analytics or tracking. To list the video and audio on
+            the page you are on, it looks at the media files that page loads.
+            That happens inside your browser, and the list is kept only while
+            the tab is open. It is never sent to us.
+          </p>
+          <p>
+            When you choose to save something through {SITE_NAME}, with the
+            Download now button, the toolbar button, the right click menu or
+            the keyboard shortcut, the extension sends the address of that
+            video or page to our server, the same as pasting it on this site.
+            Everything above about links you submit then applies. Files you
+            save directly go from the website that hosts them straight to your
+            downloads folder, without passing through us.
+          </p>
+          <p>
+            Your extension settings (the minimum file size, the sites you
+            switched it off for, and the site address) are stored by your
+            browser, and synced between your own browsers if you have browser
+            sync turned on. We do not sell or share any of this, and it is
+            never used for advertising.
           </p>
         </Section>
 

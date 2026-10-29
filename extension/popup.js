@@ -214,6 +214,7 @@ async function init() {
     minBytes,
     siteBase,
     siteEnabled = true,
+    offLimits = false,
   } = await new Promise((resolve) =>
     api.runtime.sendMessage({ type: "getMedia", tabId: tab.id, host: pageHost }, (res) =>
       resolve(res ?? {}),
@@ -222,9 +223,18 @@ async function init() {
   allItems = items;
   if (siteBase) site = siteBase;
 
+  // A site this copy of the extension is built to leave alone (the store
+  // copy and YouTube): say so plainly instead of a button that does nothing.
+  if (offLimits) {
+    saveBtn.disabled = true;
+    document.getElementById("save-page-label").textContent = "Not available on this site";
+    document.getElementById("empty").textContent =
+      "This version of the extension doesn't work on this site. It works on most other video sites.";
+  }
+
   // Per-site switch. Turning it off stops both the capture and the in-page
   // button, for people who want the extension quiet on a particular site.
-  if (pageHost) {
+  if (pageHost && !offLimits) {
     const wrap = document.getElementById("site-toggle-wrap");
     const toggle = document.getElementById("site-toggle");
     document.getElementById("toggle-host").textContent = pageHost;

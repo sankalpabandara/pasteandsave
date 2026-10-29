@@ -14,15 +14,17 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { chromeStoreBackground, chromeStoreManifest } from "../build-store.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE = fs.readFileSync(path.join(here, "..", "background.js"), "utf8");
+const STORE_SOURCE = chromeStoreBackground(SOURCE);
 const later = (ms, fn) => new Promise((r) => setTimeout(() => r(fn()), ms));
 const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
 const H = (obj) => Object.entries(obj).map(([name, value]) => ({ name, value }));
 
 /** Loads background.js afresh. Storage answers after `delay` ms. */
-function loadWorker({ sync = {}, session = {}, delay = 5, fetch, tabAnswers = {} } = {}) {
+function loadWorker({ sync = {}, session = {}, delay = 5, fetch, tabAnswers = {}, source = SOURCE } = {}) {
   const listeners = {};
   const opened = [];
   const tabMessages = [];
@@ -99,7 +101,7 @@ function loadWorker({ sync = {}, session = {}, delay = 5, fetch, tabAnswers = {}
     clearInterval,
     console,
   });
-  vm.runInContext(SOURCE, context);
+  vm.runInContext(source, context);
 
   const POPUP = { id: "ext", url: "chrome-extension://ext/popup.html" };
   const ask = (msg, sender = POPUP) =>
@@ -259,4 +261,71 @@ test("a malformed job from a page is refused", async () => {
   const w = loadWorker({ delay: 0, fetch: siteWith([]) });
   const res = await w.ask({ type: "startDownload", job: { url: "javascript:alert(1)", mode: "video", formatId: "18" }, requestId: "r3" }, CONTENT);
   assert.equal(res.ok, false);
+});
+
+// --- the Chrome Web Store copy (build-store.mjs) ------------------------------
+
+const ON_PAGE = (url) => ({ id: "ext", tab: { id: 12 }, url });
+
+test("the store copy captures nothing on YouTube and cannot be switched on there", async () => {
+  const w = loadWorker({ delay: 0, source: STORE_SOURCE });
+  await w.fire({ tabId: 1, url: "https://rr1.googlevideo.com/videoplayback?itag=22", initiator: "https://www.youtube.com", responseHeaders: H({ "content-type": "video/mp4" }) });
+  await w.fire({ tabId: 1, url: "https://i.ytimg.com/an/clip.mp4", responseHeaders: H({ "content-length": "9000000" }) });
+  const media = await w.ask({ type: "getMedia", tabId: 1, host: "m.youtube.com" });
+  assert.equal(media.items.length, 0);
+  assert.equal(media.offLimits, true, "the popup is told why");
+  assert.equal(media.siteEnabled, false);
+  await w.ask({ type: "setSiteEnabled", host: "youtube.com", enabled: true });
+  for (const host of ["youtube.com", "www.youtube.com", "music.youtube.com", "youtu.be"]) {
+    assert.equal((await w.ask({ type: "isSiteEnabled", host }, ON_PAGE("https://example.com/"))).enabled, false, host);
+  }
+});
+
+test("the store copy never sends a YouTube address to the site, by any route", async () => {
+  const w = loadWorker({
+    delay: 0,
+    source: STORE_SOURCE,
+    fetch: siteWith([{ status: "done", filename: "x.mp4" }]),
+    tabAnswers: { resolvePageTarget: { url: "https://youtu.be/CLIP", kind: "page" } },
+  });
+  w.listeners.menu({ menuItemId: "ps-link", linkUrl: "https://www.youtube.com/watch?v=abc" });
+  w.listeners.menu({ menuItemId: "ps-page", pageUrl: "https://www.youtube.com/" }, { id: 9, url: "https://www.youtube.com/" });
+  await w.ask({ type: "sendTabToSite", tabId: 9, url: "https://www.youtube.com/watch?v=abc" });
+  await w.ask({ type: "openOnSite", url: "https://m.youtube.com/shorts/abc" }, ON_PAGE("https://example.com/"));
+  const formats = await w.ask({ type: "getFormats", url: "https://www.youtube.com/watch?v=abc" }, ON_PAGE("https://example.com/"));
+  const job = await w.ask({ type: "startDownload", job: JOB, requestId: "r4" }, ON_PAGE("https://example.com/"));
+  await tick(30);
+  assert.deepEqual(w.opened, [], "no tab opened on the site");
+  assert.equal(formats.ok, false);
+  assert.equal(job.ok, false);
+  assert.equal(w.downloads.length, 0);
+});
+
+test("the store copy still works everywhere else", async () => {
+  const w = loadWorker({ delay: 0, source: STORE_SOURCE });
+  await w.fire({ tabId: 2, url: "https://v16.tiktokcdn-us.com/clip.mp4", initiator: "https://www.tiktok.com", responseHeaders: H({ "content-type": "video/mp4" }) });
+  assert.equal((await w.ask({ type: "getMedia", tabId: 2, host: "tiktok.com" })).items.length, 1);
+  w.listeners.menu({ menuItemId: "ps-link", linkUrl: "https://www.tiktok.com/@a/video/1" });
+  await tick();
+  assert.equal(w.opened.length, 1);
+});
+
+test("the copy on pasteandsave.com leaves YouTube working", async () => {
+  const w = loadWorker({ delay: 0 });
+  assert.equal((await w.ask({ type: "getMedia", tabId: 1, host: "youtube.com" })).offLimits, false);
+  w.listeners.menu({ menuItemId: "ps-link", linkUrl: "https://www.youtube.com/watch?v=abc" });
+  await tick();
+  assert.equal(w.opened.length, 1);
+});
+
+test("the store manifest keeps the page script off YouTube and nowhere else", () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(here, "..", "manifest.json"), "utf8"));
+  const store = chromeStoreManifest(manifest);
+  const exclude = store.content_scripts[0].exclude_matches;
+  assert.ok(exclude.includes("*://*.youtube.com/*"));
+  assert.ok(exclude.includes("*://*.youtu.be/*"));
+  assert.deepEqual(store.content_scripts[0].matches, manifest.content_scripts[0].matches);
+  assert.equal(manifest.content_scripts[0].exclude_matches, undefined, "the original is not changed");
+  assert.ok(manifest.description.length <= 132, "the Chrome Web Store limit");
+  assert.doesNotMatch(manifest.name + manifest.description, /[-‐-―]|youtube/i);
 });
