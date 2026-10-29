@@ -51,6 +51,8 @@ Think of a video file as a lunch box.
 
 A player needs to open both: the box and the packing. That is why two files that both end in .mp4 can behave differently. One holds H.264, which everything plays, and the other holds AV1, which older devices can't decode.
 
+![](/blog/images/video-container-and-codec-explained.webp "An MP4 file is a container holding separately packed tracks")
+
 ## The four video formats you will meet
 
 | Format | Usually holds | Plays well on | Good for |

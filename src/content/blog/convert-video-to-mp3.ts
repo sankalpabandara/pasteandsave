@@ -64,6 +64,8 @@ Bitrate is how much data is spent on each second of sound, written in kilobits p
 | 256 kbps | about 1.9 MB | about 8 MB | Music |
 | 320 kbps | about 2.3 MB | about 9 MB | Music from a very good source |
 
+![](/blog/images/mp3-file-size-by-bitrate.webp "The same 4 minute song at five bitrates")
+
 ## The catch: you can't add quality that isn't there
 
 A conversion can only keep what the source has. Most online platforms store audio at a modest rate. YouTube, for example, usually streams sound at around 128 to 160 kbps. Turning that into a 320 kbps MP3 makes a bigger file that sounds exactly the same.

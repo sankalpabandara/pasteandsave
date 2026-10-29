@@ -42,6 +42,8 @@ The download worked, the bar filled up, and now the video is nowhere to be found
 
 Here is exactly where files go and how to get them where you want them.
 
+![](/blog/images/where-downloaded-videos-go-iphone-android.webp "The path a downloaded video takes on each kind of phone")
+
 ## On iPhone and iPad
 
 ### Step 1: Download in Safari

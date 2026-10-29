@@ -59,6 +59,8 @@ All of these work only for **public** accounts. More on that below.
 4. Paste the link into the box and tap **Download**.
 5. Choose a quality. The top one is usually the full 1080p version.
 
+![](/blog/images/download-instagram-reel-steps.webp "Copy the Reel's link, paste it into PasteAndSave, choose a quality")
+
 On iPhone, the file goes to **Files**, then **Downloads**. Open it, tap share and choose **Save Video** to put it in Photos. On Android it goes to the **Download** folder, which your gallery app picks up by itself.
 
 ## How to download photos and carousels

@@ -5,16 +5,20 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import AdSlot from "@/components/ads/AdSlot";
+import BlogCover from "@/components/BlogCover";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import {
   POSTS,
   categoryLabel,
+  coverOf,
   formatDate,
   getPost,
   lessonNeighbours,
+  postImages,
   postsIn,
   relatedPosts,
 } from "@/lib/blog";
+import { IMAGES } from "@/content/blog/images";
 import { readingMinutes, renderMarkdown, tableOfContents } from "@/lib/markdown";
 
 export const dynamicParams = false;
@@ -31,6 +35,14 @@ export async function generateMetadata({
   const post = getPost((await params).slug);
   if (!post) return {};
   const path = `/blog/${post.slug}`;
+  const cover = coverOf(post);
+  const image = cover && {
+    url: cover.src,
+    width: cover.width,
+    height: cover.height,
+    alt: cover.alt,
+    type: "image/jpeg",
+  };
   return {
     title: post.seoTitle,
     description: post.description,
@@ -46,11 +58,13 @@ export async function generateMetadata({
       modifiedTime: post.updated,
       section: categoryLabel(post.category),
       tags: post.keywords,
+      images: image ? [image] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title: post.title,
       description: post.description,
+      images: image ? [{ url: image.url, alt: image.alt }] : undefined,
     },
   };
 }
@@ -82,12 +96,28 @@ export default async function BlogPostPage({
 
   const base = SITE_URL.replace(/\/$/, "");
   const url = `${base}/blog/${post.slug}`;
-  const html = renderMarkdown(post.body);
+  const html = renderMarkdown(post.body, IMAGES);
   const toc = tableOfContents(post.body);
   const minutes = readingMinutes(post.body);
   const { prev, next } = lessonNeighbours(post);
   const lessonCount = postsIn("basics").length;
   const related = relatedPosts(post);
+  const organization = { "@type": "Organization", name: SITE_NAME, url: base };
+  // Every picture is our own drawing; this is the same credit and copyright
+  // line that is written inside each file.
+  const images = postImages(post).map((img) => ({
+    "@type": "ImageObject",
+    contentUrl: `${base}${img.src}`,
+    url: `${base}${img.src}`,
+    width: img.width,
+    height: img.height,
+    caption: img.caption,
+    description: img.alt,
+    creator: organization,
+    creditText: SITE_NAME,
+    copyrightHolder: organization,
+    copyrightNotice: `Copyright ${post.published.slice(0, 4)} ${SITE_NAME}, ${base.replace(/^https?:\/\//, "")}`,
+  }));
 
   const jsonLd = [
     {
@@ -103,8 +133,10 @@ export default async function BlogPostPage({
       wordCount: post.body.split(/\s+/).filter(Boolean).length,
       mainEntityOfPage: url,
       url,
-      author: { "@type": "Organization", name: SITE_NAME, url: base },
-      publisher: { "@type": "Organization", name: SITE_NAME, url: base },
+      image: images,
+      thumbnailUrl: images[0]?.url,
+      author: organization,
+      publisher: { ...organization, logo: { "@type": "ImageObject", url: `${base}/icon.svg` } },
     },
     {
       "@context": "https://schema.org",
@@ -162,6 +194,13 @@ export default async function BlogPostPage({
 
         <div className="mt-10 lg:grid lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-12">
           <article className="min-w-0">
+            <BlogCover
+              post={post}
+              eager
+              sizes="(min-width: 1024px) 736px, 100vw"
+              className="glass-hairline mb-8 rounded-3xl border border-[var(--hairline)]"
+            />
+
             {toc.length > 0 && (
               <details className="glass glass-hairline mb-8 rounded-2xl p-5 lg:hidden">
                 <summary className="cursor-pointer text-sm font-semibold text-neutral-900 dark:text-white">
@@ -270,13 +309,16 @@ export default async function BlogPostPage({
               <Link
                 key={r.slug}
                 href={`/blog/${r.slug}`}
-                className="glass glass-hairline flex flex-col rounded-2xl p-5 transition hover:-translate-y-0.5"
+                className="glass glass-hairline flex flex-col overflow-hidden rounded-2xl transition hover:-translate-y-0.5"
               >
-                <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">
-                  {categoryLabel(r.category)}
+                <BlogCover post={r} sizes="(min-width: 640px) 330px, 100vw" />
+                <span className="flex flex-col p-5">
+                  <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+                    {categoryLabel(r.category)}
+                  </span>
+                  <span className="mt-2 font-semibold text-neutral-900 dark:text-white">{r.title}</span>
+                  <span className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{r.excerpt}</span>
                 </span>
-                <span className="mt-2 font-semibold text-neutral-900 dark:text-white">{r.title}</span>
-                <span className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{r.excerpt}</span>
               </Link>
             ))}
           </div>

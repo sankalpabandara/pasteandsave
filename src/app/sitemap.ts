@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_URL } from "@/lib/site";
-import { POSTS } from "@/lib/blog";
+import { POSTS, postImages } from "@/lib/blog";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
@@ -30,6 +30,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: new Date(p.updated),
       changeFrequency: "monthly" as const,
       priority: 0.7,
+      images: postImages(p).map((img) => `${SITE_URL.replace(/\/$/, "")}${img.src}`),
     })),
     {
       url: `${SITE_URL}/extension`,

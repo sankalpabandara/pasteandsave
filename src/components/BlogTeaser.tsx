@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BlogCover from "@/components/BlogCover";
 import { categoryLabel, getPost, type BlogPost } from "@/lib/blog";
 
 /**
@@ -29,13 +30,16 @@ export default function BlogTeaser({
           <Link
             key={p.slug}
             href={`/blog/${p.slug}`}
-            className="glass glass-hairline flex flex-col rounded-2xl p-5 transition hover:-translate-y-0.5"
+            className="glass glass-hairline flex flex-col overflow-hidden rounded-2xl transition hover:-translate-y-0.5"
           >
-            <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">
-              {categoryLabel(p.category)}
+            <BlogCover post={p} sizes="(min-width: 640px) 330px, 100vw" />
+            <span className="flex flex-col p-5">
+              <span className="text-xs font-semibold text-violet-700 dark:text-violet-300">
+                {categoryLabel(p.category)}
+              </span>
+              <span className="mt-2 font-semibold text-neutral-900 dark:text-white">{p.title}</span>
+              <span className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{p.excerpt}</span>
             </span>
-            <span className="mt-2 font-semibold text-neutral-900 dark:text-white">{p.title}</span>
-            <span className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{p.excerpt}</span>
           </Link>
         ))}
       </div>

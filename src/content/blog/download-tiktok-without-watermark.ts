@@ -43,6 +43,8 @@ TikTok's own **Save video** button stamps the TikTok logo and the creator's user
 
 TikTok stores a clean copy of every video, the one its app actually plays. A downloader like PasteAndSave fetches that copy. Here is how to do it on any device.
 
+![](/blog/images/download-tiktok-video-without-watermark-steps.webp "Copy the link in TikTok, paste it into PasteAndSave, pick a quality")
+
 ## On iPhone
 
 1. In TikTok, open the video and tap **Share**, the arrow on the right side.

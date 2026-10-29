@@ -202,6 +202,29 @@ body::before {
 .blog-prose tr:last-child td {
   border-bottom: 0;
 }
+/* The diagrams are drawn on a light background in both themes, so they keep
+   their own colours in dark mode and only gain a frame. */
+.blog-prose figure {
+  margin-top: 2em;
+  margin-bottom: 2em;
+}
+.blog-prose figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 1rem;
+}
+.blog-prose figcaption {
+  margin-top: 0.6em;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: center;
+  color: rgb(115 115 115);
+}
+.dark .blog-prose figcaption {
+  color: rgb(163 163 163);
+}
 .dark .blog-prose {
   color: rgb(212 212 212);
 }

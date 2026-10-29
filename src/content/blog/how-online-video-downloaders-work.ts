@@ -64,11 +64,15 @@ Here is what PasteAndSave does with a link, and most good downloaders work the s
 4. When you choose one, the server fetches that file. If the picture and sound are separate, it joins them into one MP4.
 5. The finished file is sent to your browser and lands in your normal downloads folder.
 
+![](/blog/images/how-a-video-downloader-works-from-link-to-file.webp "The five steps between pasting a link and getting a file")
+
 The reading part is done by **yt-dlp**, a free, open source program that understands the pages of more than a thousand websites. It is the reason one box can take a TikTok link, a Reddit link or a Vimeo link without you choosing a site first.
 
 ### Why YouTube HD takes a little longer
 
 If you pick a high quality YouTube video, the server has to fetch two files and stitch them together before anything reaches you. That is the progress bar you see. A 720p file with sound already inside skips that step, so it usually starts faster.
+
+![](/blog/images/youtube-hd-video-and-audio-joined.webp "YouTube keeps HD picture and sound in two files, and the server joins them")
 
 ## Why some videos can't be downloaded
 
@@ -93,15 +97,16 @@ You can judge any download site, including ours, with a few quick checks:
 * Ads, if it has them, stay in their boxes and don't open new tabs every time you click.
 * It tells you plainly what it keeps about you. Ours is in the [privacy policy](/privacy).
 
-Nobody has to trust a downloader blindly. The checks above take thirty seconds and catch nearly every bad one.
+Nobody has to trust a downloader blindly. The checks above take thirty seconds and catch nearly every bad one. Lesson 5, [Are Online Video Downloaders Safe?](/blog/are-online-video-downloaders-safe), goes through them in more detail.
 
 ## Where to go next
 
-You now know what a downloader actually does. The next three lessons make you good at using one:
+You now know what a downloader actually does. The next four lessons make you good at using one:
 
 1. [Video Quality Explained](/blog/video-quality-explained) covers what 720p, 1080p and 4K mean and how much space each takes.
 2. [MP4, WebM, MOV or MKV](/blog/video-formats-explained) explains which format plays where.
 3. [Is It Legal to Download Videos?](/blog/is-it-legal-to-download-videos) sets out the rules, in plain words.
+4. [Are Online Video Downloaders Safe?](/blog/are-online-video-downloaders-safe) shows how to spot a bad site before it costs you anything.
 
 Or skip the theory and paste a link into the [downloader](/) to see the quality list for yourself.
 `,

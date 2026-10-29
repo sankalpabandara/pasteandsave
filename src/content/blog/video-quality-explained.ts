@@ -61,6 +61,8 @@ The number is the height of the picture in pixels, the tiny dots that make up an
 
 Each step up holds more detail. 1080p has more than twice the pixels of 720p, and 4K has four times the pixels of 1080p.
 
+![](/blog/images/video-resolution-comparison-360p-720p-1080p-4k.webp "360p, 720p, 1080p and 4K, drawn to the same scale")
+
 ### What about vertical videos?
 
 TikToks, Reels and Shorts are tall, often 1080 pixels wide and 1920 tall. PasteAndSave names them by the short side, so that clip shows up as **1080p**. Otherwise you would see labels like 1920p that match nothing you know.
@@ -84,9 +86,15 @@ These are rough sizes for a typical online video, per minute of footage:
 * **1440p:** about 40 to 70 MB
 * **4K:** about 80 to 150 MB
 
+![](/blog/images/video-file-size-per-minute-by-quality.webp "Typical size of one minute of video at each quality")
+
 So a ten minute 1080p video lands somewhere between 200 and 400 MB. The same video in 4K can pass a gigabyte. On a phone with little space left, that difference matters a lot more than detail you can't see.
 
 ## Which quality should you pick?
+
+When you paste a link into PasteAndSave, every quality the site stores shows up as a row with its own Save button.
+
+![](/blog/images/pasteandsave-quality-list-video-and-audio-options.webp "The quality list, with video sizes on one tab and audio on the other")
 
 Match the quality to where you will watch it:
 

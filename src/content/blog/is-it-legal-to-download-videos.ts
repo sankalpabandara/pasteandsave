@@ -50,6 +50,8 @@ Posting a video publicly does not give it away. Public means anyone may **watch*
 
 Downloading creates a copy. Whether that copy is fine depends on what it is and what you do with it.
 
+![](/blog/images/is-downloading-videos-legal-fine-gray-area-not-okay.webp "The three groups this lesson covers, at a glance")
+
 ## Usually fine
 
 * **Your own videos.** Downloading what you uploaded, for a backup or to post on another app, is your right.
@@ -91,13 +93,8 @@ Keep the reply. A screenshot of a clear yes is your proof later.
 
 PasteAndSave is a tool, like a screen recorder or a browser. It only reaches videos anyone could watch without logging in, and it never touches copy protected streams. What you do with the file is your decision and your responsibility, which is why our [Terms of Service](/terms) ask you to download only what you have the right to use.
 
-## You've finished the basics
+## Next lesson
 
-That is the end of the four basics lessons. Put them to work with a guide for the app you use most:
-
-* [Download TikTok videos without a watermark](/blog/download-tiktok-without-watermark)
-* [Download Instagram Reels, Stories and photos](/blog/download-instagram-reels)
-* [Save videos to your iPhone or Android phone](/blog/save-videos-on-iphone-and-android)
-* [Convert a video to MP3](/blog/convert-video-to-mp3)
+One lesson left. [Are Online Video Downloaders Safe?](/blog/are-online-video-downloaders-safe) shows how to spot a bad download site in thirty seconds, and what a good one does with your data.
 `,
 };

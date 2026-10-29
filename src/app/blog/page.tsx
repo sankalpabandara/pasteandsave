@@ -3,13 +3,17 @@ import Link from "next/link";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
+import BlogCover from "@/components/BlogCover";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
-import { CATEGORIES, POSTS, postsIn } from "@/lib/blog";
+import { CATEGORIES, POSTS, countWord, coverOf, postsIn } from "@/lib/blog";
 import { readingMinutes } from "@/lib/markdown";
 
 const TITLE = "Video Download Guides and Tips | PasteAndSave Blog";
 const DESCRIPTION =
   "Free guides to saving online videos: how downloaders work, video quality and formats, the legal rules, step by step app guides and fixes for common errors.";
+
+// The first lesson's cover stands for the blog when a link to it is shared.
+const SHARE_IMAGE = coverOf(POSTS[0]);
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -21,8 +25,16 @@ export const metadata: Metadata = {
     url: "/blog",
     siteName: SITE_NAME,
     type: "website",
+    images: SHARE_IMAGE && [
+      { url: SHARE_IMAGE.src, width: SHARE_IMAGE.width, height: SHARE_IMAGE.height, alt: SHARE_IMAGE.alt },
+    ],
   },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: SHARE_IMAGE && [{ url: SHARE_IMAGE.src, alt: SHARE_IMAGE.alt }],
+  },
 };
 
 export default function BlogIndex() {
@@ -35,13 +47,17 @@ export default function BlogIndex() {
     description: DESCRIPTION,
     url: `${base}/blog`,
     inLanguage: "en",
-    blogPost: POSTS.map((p) => ({
-      "@type": "BlogPosting",
-      headline: p.title,
-      url: `${base}/blog/${p.slug}`,
-      datePublished: p.published,
-      dateModified: p.updated,
-    })),
+    blogPost: POSTS.map((p) => {
+      const cover = coverOf(p);
+      return {
+        "@type": "BlogPosting",
+        headline: p.title,
+        url: `${base}/blog/${p.slug}`,
+        datePublished: p.published,
+        dateModified: p.updated,
+        image: cover ? `${base}${cover.src}` : undefined,
+      };
+    }),
   };
 
   return (
@@ -69,26 +85,31 @@ export default function BlogIndex() {
         <section aria-labelledby="start-here">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <h2 id="start-here" className="font-display text-2xl font-bold text-neutral-900 dark:text-white">
-              Start here: the basics in four lessons
+              Start here: the basics in {countWord(lessons.length)} lessons
             </h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
               About {lessons.reduce((n, p) => n + readingMinutes(p.body), 0)} minutes in total
             </p>
           </div>
-          <ol className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <ol className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {lessons.map((p) => (
               <li key={p.slug}>
                 <Link
                   href={`/blog/${p.slug}`}
-                  className="glass glass-hairline flex h-full flex-col rounded-2xl p-5 transition hover:-translate-y-0.5"
+                  className="glass glass-hairline flex h-full flex-col overflow-hidden rounded-2xl transition hover:-translate-y-0.5"
                 >
-                  <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 text-sm font-bold text-white">
-                    {p.lesson}
-                  </span>
-                  <span className="mt-4 font-semibold text-neutral-900 dark:text-white">{p.title}</span>
-                  <span className="mt-2 flex-1 text-sm text-neutral-600 dark:text-neutral-400">{p.excerpt}</span>
-                  <span className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
-                    {readingMinutes(p.body)} min read
+                  <BlogCover post={p} sizes="(min-width: 1024px) 330px, (min-width: 640px) 50vw, 100vw" />
+                  <span className="flex flex-1 flex-col p-5">
+                    <span className="flex items-center gap-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-600 text-sm font-bold text-white">
+                        {p.lesson}
+                      </span>
+                      <span className="font-semibold text-neutral-900 dark:text-white">{p.title}</span>
+                    </span>
+                    <span className="mt-3 flex-1 text-sm text-neutral-600 dark:text-neutral-400">{p.excerpt}</span>
+                    <span className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+                      {readingMinutes(p.body)} min read
+                    </span>
                   </span>
                 </Link>
               </li>
@@ -102,17 +123,20 @@ export default function BlogIndex() {
               {c.label}
             </h2>
             <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{c.blurb}</p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {postsIn(c.key).map((p) => (
                 <Link
                   key={p.slug}
                   href={`/blog/${p.slug}`}
-                  className="glass glass-hairline flex flex-col rounded-2xl p-6 transition hover:-translate-y-0.5"
+                  className="glass glass-hairline flex flex-col overflow-hidden rounded-2xl transition hover:-translate-y-0.5"
                 >
-                  <span className="font-display text-lg font-bold text-neutral-900 dark:text-white">{p.title}</span>
-                  <span className="mt-2 flex-1 text-sm text-neutral-600 dark:text-neutral-400">{p.excerpt}</span>
-                  <span className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
-                    {readingMinutes(p.body)} min read
+                  <BlogCover post={p} sizes="(min-width: 1024px) 330px, (min-width: 640px) 50vw, 100vw" />
+                  <span className="flex flex-1 flex-col p-5">
+                    <span className="font-display text-lg font-bold text-neutral-900 dark:text-white">{p.title}</span>
+                    <span className="mt-2 flex-1 text-sm text-neutral-600 dark:text-neutral-400">{p.excerpt}</span>
+                    <span className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+                      {readingMinutes(p.body)} min read
+                    </span>
                   </span>
                 </Link>
               ))}

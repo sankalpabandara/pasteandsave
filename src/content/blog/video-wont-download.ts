@@ -43,6 +43,8 @@ Over one recent four week stretch, people pasted 3,699 links into PasteAndSave, 
 
 Find the message you saw below. Each one says what it means and what you can do.
 
+![](/blog/images/why-a-video-wont-download-nine-reasons.webp "The nine reasons, in the order this guide covers them")
+
 ## 1. "That link isn't from a site we can download from"
 
 **What it means:** the downloader doesn't know how to read that website. This is the most common failure on PasteAndSave by a wide margin, and it usually isn't the visitor's fault.
