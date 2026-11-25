@@ -1,5 +1,7 @@
 import { SITE_URL } from "./site";
 import { TOOL_PAGES } from "./seo-pages";
+import { POSTS } from "./blog";
+import { sitePaths } from "./site-paths";
 
 // A self-crawler that fetches the site's own rendered pages and runs technical
 // SEO checks on the real HTML, the way an Ahrefs/Semrush "Site Audit" does.
@@ -299,7 +301,10 @@ async function mapLimit<T, R>(
 }
 
 export async function crawlSite(): Promise<CrawlReport> {
-  const paths = ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/extension", "/terms"];
+  const paths = sitePaths(
+    TOOL_PAGES.map((p) => p.slug),
+    POSTS.map((p) => p.slug),
+  );
   const pages = await mapLimit(paths, CRAWL_CONCURRENCY, auditPath);
 
   // Flag pages that share a title or meta description with another page, then

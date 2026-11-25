@@ -4,6 +4,8 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { SITE_URL } from "./site";
 import { TOOL_PAGES } from "./seo-pages";
+import { POSTS } from "./blog";
+import { indexNowKeyPath, sitePaths } from "./site-paths";
 
 // IndexNow: the instant-indexing protocol used by Bing, Yandex, Seznam and
 // Naver. Instead of waiting for a crawl, we push our URLs the moment an
@@ -61,9 +63,10 @@ async function saveState(state: IndexNowState) {
 
 export function allSiteUrls(): string[] {
   const base = SITE_URL.replace(/\/$/, "");
-  return ["/", ...TOOL_PAGES.map((p) => `/${p.slug}`), "/extension", "/terms"].map(
-    (p) => `${base}${p === "/" ? "" : p}`,
-  );
+  return sitePaths(
+    TOOL_PAGES.map((p) => p.slug),
+    POSTS.map((p) => p.slug),
+  ).map((p) => `${base}${p === "/" ? "" : p}`);
 }
 
 /**
@@ -103,10 +106,13 @@ export async function submitToIndexNow(): Promise<IndexNowState> {
       body: JSON.stringify({
         host,
         key,
-        keyLocation: `${base}/indexnow/${key}`,
+        keyLocation: `${base}${indexNowKeyPath(key)}`,
         urlList: urls,
       }),
     });
+    // The body names the reason on a refusal; the bare status code hid the
+    // folder rule that caused months of 422s.
+    const reason = res.status === 200 || res.status === 202 ? "" : (await res.text().catch(() => "")).slice(0, 300);
     // IndexNow returns 200 or 202 on acceptance.
     state =
       res.status === 200 || res.status === 202
@@ -118,7 +124,7 @@ export async function submitToIndexNow(): Promise<IndexNowState> {
           }
         : {
             lastStatus: "failed",
-            lastDetail: `IndexNow answered HTTP ${res.status}.`,
+            lastDetail: `IndexNow answered HTTP ${res.status}.${reason ? ` ${reason}` : ""}`,
             lastSubmitAt: Date.now(),
             urlCount: urls.length,
           };

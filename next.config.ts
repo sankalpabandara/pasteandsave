@@ -66,6 +66,18 @@ const nextConfig: NextConfig = {
   // The certificate covers both hostnames, so https://www served the whole
   // site as a second copy. Everything belongs on the apex domain that the
   // canonical tags and sitemap already point at.
+  // IndexNow only accepts URLs in the key file's folder or below, so the key
+  // must be served from the root (see src/lib/site-paths.ts). beforeFiles, so
+  // the [tool] page never sees the request.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: "/:key([a-fA-F0-9-]{8,64}).txt", destination: "/indexnow/:key" },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async redirects() {
     return [
       {
