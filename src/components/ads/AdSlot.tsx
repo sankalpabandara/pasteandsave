@@ -133,6 +133,15 @@ export default function AdSlot({
               key={adsterraSize}
               title={label}
               src={`/ads/frame?slot=${encodeURIComponent(slot)}&size=${encodeURIComponent(adsterraSize)}`}
+              // allow-same-origin is deliberately absent. The frame is served
+              // from this site, so without the sandbox an ad script would run
+              // with the site's own origin: able to call the admin API with
+              // the signed-in operator's cookie, and to read anything kept in
+              // local storage. Left out, the document gets an origin of its
+              // own and can reach none of it. The rest is what an ad needs to
+              // be worth carrying: scripts to draw itself, and a click that
+              // opens the advertiser in a new tab.
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-forms"
               scrolling="no"
               loading="lazy"
               style={{

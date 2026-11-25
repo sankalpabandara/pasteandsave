@@ -34,12 +34,24 @@ export function proxy(request: NextRequest) {
   // does, so this is the one relaxation and it never ships.
   const devEval = isDev ? " 'unsafe-eval'" : "";
 
+  // The little document that holds one ad banner, and nothing else.
+  //
+  // Ad networks build their banner by evaluating strings, so their script
+  // dies on this policy with an EvalError and the slot stays empty. Allowing
+  // eval across the site would give up most of what the policy is for, so it
+  // is allowed only in here, where there is no site code and no site data to
+  // reach: the page frames this sandboxed, without allow-same-origin, so the
+  // document runs in an origin of its own with no cookies, no storage and no
+  // credentialed path to the admin API.
+  const isAdFrame = url.pathname === "/ads/frame";
+  const adEval = isAdFrame ? " 'unsafe-eval'" : "";
+
   const csp = [
     "default-src 'self'",
     // strict-dynamic lets a script this nonce vouched for load the chunks it
     // needs, without naming every generated filename. Older browsers ignore
     // it and fall back to the host list, which is why 'self' stays.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com${adHosts}${devEval}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.googletagmanager.com${adHosts}${adEval}${devEval}`,
     // Styles stay permissive. Tailwind and the theme both set style
     // attributes, and an injected stylesheet cannot execute anything.
     "style-src 'self' 'unsafe-inline'",
