@@ -15,7 +15,7 @@ import JsonLd from "@/components/JsonLd";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Browser Extension - Download Videos While You Browse",
+  title: "Browser Extension: Download Videos While You Browse",
   description:
     "Get the free PasteAndSave extension for Chrome and Firefox. It spots video and audio on the page you are on and saves it in one click, or sends it here.",
   alternates: { canonical: "/extension" },

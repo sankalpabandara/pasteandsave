@@ -30,7 +30,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "tiktok-video-downloader",
     navLabel: "TikTok",
-    title: "TikTok Video Downloader - Save Videos Without Watermark",
+    title: "TikTok Video Downloader: Save Videos Without Watermark",
     description:
       "Free TikTok video downloader without watermark. Paste a link and save TikTok videos in HD MP4, or convert TikTok to MP3. No login, no app, no registration.",
     keywords: [
@@ -119,7 +119,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "instagram-video-downloader",
     navLabel: "Instagram",
-    title: "Instagram Video Downloader - Save Reels, Stories, Photos HD",
+    title: "Instagram Video Downloader: Save Reels, Stories, Photos HD",
     description:
       "Download Instagram videos, Reels, Stories, photos and audio in HD. Free online Instagram downloader that works on iPhone, Android and PC. No login needed.",
     keywords: [
@@ -211,7 +211,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "instagram-reels-downloader",
     navLabel: "Reels",
-    title: "Instagram Reels Downloader - Save Reels as HD MP4 Free",
+    title: "Instagram Reels Downloader: Save Reels as HD MP4 Free",
     description:
       "Download Instagram Reels as HD MP4 files for free, or convert Reels to MP3. Paste the Reel link and save it to your phone or computer. No login required.",
     keywords: [
@@ -295,7 +295,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "facebook-video-downloader",
     navLabel: "Facebook",
-    title: "Facebook Video Downloader - Download FB Videos in HD",
+    title: "Facebook Video Downloader: Download FB Videos in HD",
     description:
       "Free Facebook video downloader online. Save Facebook videos, Reels, Stories and Watch clips as HD 1080p MP4 files. Works on iPhone, Android and PC.",
     keywords: [
@@ -391,7 +391,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "facebook-reels-downloader",
     navLabel: "FB Reels",
-    title: "Facebook Reels Downloader - Save Reels in HD Free",
+    title: "Facebook Reels Downloader: Save Reels in HD Free",
     description:
       "Download Facebook Reels in HD MP4 for free. Paste the Reel link and save it straight to your phone or computer. No login, no watermark, no app needed.",
     keywords: [
@@ -467,7 +467,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "youtube-video-downloader",
     navLabel: "YouTube",
-    title: "YouTube Video Downloader - Save Videos as HD MP4",
+    title: "YouTube Video Downloader: Save Videos as HD MP4",
     description:
       "Free YouTube video downloader online. Save YouTube videos and Shorts as HD MP4 with a full list of quality options. No registration, no software.",
     keywords: [
@@ -555,7 +555,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "youtube-to-mp3",
     navLabel: "YouTube MP3",
-    title: "YouTube to MP3 Converter - Free High Quality Downloads",
+    title: "YouTube to MP3 Converter: Free High Quality Downloads",
     description:
       "Convert YouTube to MP3 free online. Paste the link and download the audio at up to 320kbps in under a minute. No registration and no software to install.",
     keywords: [
@@ -638,7 +638,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "video-to-mp3-converter",
     navLabel: "MP3 Converter",
-    title: "Video to MP3 Converter - Free Online MP3 Downloader",
+    title: "Video to MP3 Converter: Free Online MP3 Downloader",
     description:
       "Free online MP3 downloader. Paste a link from any supported site and convert video to MP3 at up to 320kbps. Free, no registration, no ads on the file.",
     keywords: [
@@ -729,7 +729,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "twitter-video-downloader",
     navLabel: "X / Twitter",
-    title: "Twitter Video Downloader - Save X Videos and GIFs HD",
+    title: "Twitter Video Downloader: Save X Videos and GIFs HD",
     description:
       "Download videos and GIFs from X, formerly Twitter, as HD MP4 files. Paste the tweet link and save the video for free. No login and no app required.",
     keywords: [
@@ -810,7 +810,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "pinterest-video-downloader",
     navLabel: "Pinterest",
-    title: "Pinterest Video Downloader - Save Videos and Idea Pins",
+    title: "Pinterest Video Downloader: Save Videos and Idea Pins",
     description:
       "Download Pinterest videos and Idea Pins as HD MP4 files for free. Paste the pin link and save the video to your phone or computer. No login needed.",
     keywords: [
@@ -886,7 +886,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "reddit-video-downloader",
     navLabel: "Reddit",
-    title: "Reddit Video Downloader - Save Videos with Audio",
+    title: "Reddit Video Downloader: Save Videos with Audio",
     description:
       "Free Reddit video downloader. Paste a post link and save Reddit videos as MP4 with sound included. Works on iPhone, Android and PC, no login needed.",
     keywords: [
@@ -959,7 +959,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "linkedin-video-downloader",
     navLabel: "LinkedIn",
-    title: "LinkedIn Video Downloader - Save Videos in HD Free",
+    title: "LinkedIn Video Downloader: Save Videos in HD Free",
     description:
       "Free LinkedIn video downloader. Paste a post link and save LinkedIn videos in HD MP4 to your phone or computer. No login and no software to install.",
     keywords: [
@@ -1026,7 +1026,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "threads-video-downloader",
     navLabel: "Threads",
-    title: "Threads Video Downloader - Save Videos Free Online",
+    title: "Threads Video Downloader: Save Videos Free Online",
     description:
       "Free Threads video downloader. Paste a Threads post link and save the video as HD MP4. No login, no app, no watermark added to the file.",
     keywords: [
@@ -1093,7 +1093,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "vimeo-video-downloader",
     navLabel: "Vimeo",
-    title: "Vimeo Video Downloader - Save Videos in HD Free",
+    title: "Vimeo Video Downloader: Save Videos in HD Free",
     description:
       "Free Vimeo video downloader online. Paste a Vimeo link and save the video in HD MP4 to your phone or computer. No login and no software required.",
     keywords: [
@@ -1153,6 +1153,14 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "No. Only videos that are publicly viewable without a password can be downloaded.",
       },
       {
+        q: "Why does a Vimeo link say the video can only be played on another website?",
+        a: "Many Vimeo owners limit a video to their own website, so Vimeo refuses to play it anywhere else, including here. This is the most common reason a Vimeo link fails on this site. Paste the address of the page where the video plays instead of the vimeo.com link. The downloader finds the Vimeo player on that page and saves the video from there.",
+      },
+      {
+        q: "Why are some Vimeo videos refused even though they play?",
+        a: "Some Vimeo videos, often paid films and courses, are locked with encryption known as DRM. They play in the browser but the file cannot be saved, and this site does not try to get around that lock.",
+      },
+      {
         q: "Is this free?",
         a: "Yes, with no login and no download limit.",
       },
@@ -1161,7 +1169,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "dailymotion-video-downloader",
     navLabel: "Dailymotion",
-    title: "Dailymotion Video Downloader - Save Videos Free",
+    title: "Dailymotion Video Downloader: Save Videos Free",
     description:
       "Free Dailymotion video downloader. Paste a Dailymotion link and save the video as MP4 in the best available quality. No login, no app, no cost.",
     keywords: [
@@ -1216,6 +1224,14 @@ export const TOOL_PAGES: ToolPage[] = [
         a: "Paste the video's link above and choose an MP4 quality to save it.",
       },
       {
+        q: "How often do Dailymotion links work here?",
+        a: "In the 30 days to 25 November 2026, 51 of the 53 Dailymotion links pasted on this site loaded and could be saved. Both failures were videos the owner had blocked in some countries.",
+      },
+      {
+        q: "Why does a Dailymotion video say it is not available in my country?",
+        a: "The owner can block a video in some countries. Our server is in France, so a video blocked there cannot be saved here, even if it plays for you. Try another upload of the same video.",
+      },
+      {
         q: "Is this free?",
         a: "Yes, with no signup and no limit on downloads.",
       },
@@ -1224,7 +1240,7 @@ export const TOOL_PAGES: ToolPage[] = [
   {
     slug: "soundcloud-mp3-downloader",
     navLabel: "SoundCloud",
-    title: "SoundCloud MP3 Downloader - Save Tracks Free",
+    title: "SoundCloud MP3 Downloader: Save Tracks Free",
     description:
       "Free SoundCloud MP3 downloader. Paste a track link and save SoundCloud audio as MP3, up to 320kbps, straight to your phone or computer. No login needed.",
     keywords: [

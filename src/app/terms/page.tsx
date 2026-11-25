@@ -5,7 +5,7 @@ import JsonLd from "@/components/JsonLd";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - PasteAndSave Video Downloader",
+  title: "Terms of Service | PasteAndSave Video Downloader",
   description:
     "PasteAndSave Terms of Service: acceptable use, your responsibilities, copyright and DMCA policy, disclaimers, and the rules for using the downloader.",
   alternates: { canonical: "/terms" },
