@@ -90,7 +90,7 @@ export default function Home() {
               {SITE_NAME} is a free online video downloader that works with
               more than 1,200 websites. Paste a public link from TikTok,
               Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn,
-              Threads, Vimeo, SoundCloud or one of the smaller platforms. The
+              Vimeo, SoundCloud or one of the smaller platforms. The
               site is detected for you, so there is no menu to pick from.
               Every available quality shows up in a list, from small SD files
               up to full HD and, where the source offers it, 4K. Files save

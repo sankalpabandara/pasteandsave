@@ -25,15 +25,40 @@ const FACEBOOK_HOSTS =
 // the pin. A dead code lands on the Pinterest home page instead.
 const PINTEREST_HOSTS = /^(?:[a-z0-9-]+\.)*(?:pin\.it|pinterest(?:\.[a-z]{2,3}){1,2})$/i;
 
+// TikTok's app shares vt.tiktok.com/XXXX (vm. on older builds, tiktok.com/t/
+// on the web). yt-dlp follows those itself, but a slideshow lands on
+// /@user/photo/ID, which no extractor matches, and the visitor was told the
+// link is from a site we cannot download from. Resolving here lets the lookup
+// see the /photo/ address and list the slides (see tiktok-photos.ts).
+// Measured 2026-11-25: one 302 to the post, a dead code to the home page.
+const TIKTOK_HOSTS = /^(?:[a-z0-9-]+\.)*tiktok\.com$/i;
+
 const MAX_HOPS = 5;
 const TIMEOUT_MS = 8000;
 
-type Family = "facebook" | "pinterest";
+type Family = "facebook" | "pinterest" | "tiktok";
 
 function familyOf(host: string): Family | null {
   if (FACEBOOK_HOSTS.test(host)) return "facebook";
   if (PINTEREST_HOSTS.test(host)) return "pinterest";
+  if (TIKTOK_HOSTS.test(host)) return "tiktok";
   return null;
+}
+
+/**
+ * A TikTok post address without the sharer's tracking (?_r=1&_t=...), as
+ * www.tiktok.com/@user/video/ID or /photo/ID, or null for anything else, such
+ * as the home page a dead short link ends on.
+ */
+export function canonicalTiktok(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl);
+    if (!/^(?:www\.|m\.)?tiktok\.com$/i.test(u.hostname)) return null;
+    const m = /^\/@([\w.-]{1,64})\/(video|photo)\/(\d{8,25})\/?$/.exec(u.pathname);
+    return m ? `https://www.tiktok.com/@${m[1]}/${m[2]}/${m[3]}` : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Cheap test first, so ordinary links never pay for a network round trip. */
@@ -48,6 +73,8 @@ export function isShareLink(rawUrl: string): boolean {
   if (host === "fb.watch") return true;
   if (/(?:^|\.)facebook\.com$/.test(host) && /^\/share\//i.test(u.pathname)) return true;
   if (host === "pin.it" && u.pathname.length > 1) return true;
+  if ((host === "vt.tiktok.com" || host === "vm.tiktok.com") && u.pathname.length > 1) return true;
+  if (host === "tiktok.com" && /^\/t\/[\w-]+\/?$/.test(u.pathname)) return true;
   return false;
 }
 
@@ -310,6 +337,10 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
         const pin = canonicalPin(current);
         if (pin) return pin;
       }
+      if (family === "tiktok") {
+        const post = canonicalTiktok(current);
+        if (post) return post;
+      }
       // The same for Facebook: the first address that is not a share link is
       // the video's. Fetching it too cost a whole reel page per share link.
       if (family === "facebook" && !isShareLink(current)) return canonicalFacebook(current);
@@ -323,5 +354,6 @@ export async function resolveShareLink(rawUrl: string): Promise<string | null> {
   // Only a pin is worth handing on. A dead short link ends on the home page,
   // and the extractor would call that unsupported, which is no better.
   if (family === "pinterest") return canonicalPin(current);
+  if (family === "tiktok") return canonicalTiktok(current);
   return sameFamily(current, family) ? canonicalFacebook(current) : null;
 }

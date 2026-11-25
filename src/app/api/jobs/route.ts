@@ -9,6 +9,7 @@ import { peekExtractorKey } from "@/lib/info-cache";
 import { proxyBudgetOk } from "@/lib/proxy-budget";
 import { resolveShareLink } from "@/lib/share-links";
 import { rememberedEmbed } from "@/lib/page-embeds";
+import { tiktokVideoAddress } from "@/lib/tiktok-photos";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,9 @@ export async function POST(request: NextRequest) {
   const resolved = (await resolveShareLink(url)) ?? url;
   // A page with a player in it was turned into the player's address at lookup.
   const target = rememberedEmbed(resolved) ?? resolved;
+  // A TikTok slideshow's photos are kept under its /photo/ address; its
+  // soundtrack is only readable at the /video/ one.
+  const photoSite = tiktokVideoAddress(target) ? "TikTok" : "Twitter";
 
   if (mode !== "video" && mode !== "audio") {
     return Response.json({ error: "Invalid mode." }, { status: 400 });
@@ -65,8 +69,9 @@ export async function POST(request: NextRequest) {
       ? body.bitrate
       : null;
 
-  // A photo from an X post, listed at lookup from X's embed data because
-  // yt-dlp reads no photos from X. Saved straight from pbs.twimg.com.
+  // A photo from an X post or a TikTok slideshow, listed at lookup because
+  // yt-dlp reads neither. Saved straight from the image host the lookup
+  // checked (pbs.twimg.com, or TikTok's tiktokcdn hosts).
   const photoIndex = mode === "video" ? photoIndexOf(body.formatId) : null;
   if (photoIndex !== null) {
     const photo = photosFor(target)?.[photoIndex - 1];
@@ -83,7 +88,7 @@ export async function POST(request: NextRequest) {
         title: photoIndex > 1 ? `${title} ${photoIndex}` : title,
         ext: photo.ext,
       });
-      void logEvent({ type: "download", mode: "video", site: "Twitter", proxied: false });
+      void logEvent({ type: "download", mode: "video", site: photoSite, proxied: false });
       return Response.json({ jobId: id });
     } catch (err) {
       if (err instanceof VisitorBusyError) return Response.json({ error: err.message }, { status: 429 });
@@ -118,7 +123,7 @@ export async function POST(request: NextRequest) {
             title,
             hasAudio: body.hasAudio === true,
           })
-        : startJob({ owner, mode: "audio", url: target, title, audioFormat, bitrate });
+        : startJob({ owner, mode: "audio", url: tiktokVideoAddress(target) ?? target, title, audioFormat, bitrate });
     // The lookup a moment ago already named the platform, so reuse its answer
     // rather than guessing from the hostname; a miss just leaves it unlabelled.
     void logEvent({

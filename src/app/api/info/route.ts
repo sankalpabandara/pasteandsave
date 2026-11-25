@@ -20,6 +20,22 @@ import {
   tweetIdFrom,
   type XPhoto,
 } from "@/lib/x-photos";
+import { fetchTikTokPhotos, tiktokPhotoPost } from "@/lib/tiktok-photos";
+
+/**
+ * The quality list for a TikTok photo post: every slide. The soundtrack is
+ * not offered yet: the form shows photos under the Video tab, which only
+ * appears when there is video, so adding audio here hid the photos (seen in
+ * the browser on 2026-11-25). The download side already reads a slideshow's
+ * audio from its /video/ address for when the form lists photos on their own.
+ */
+function tiktokPhotoPayload(photos: XPhoto[], title: string | null) {
+  return {
+    ...xPhotoPayload(photos),
+    title: title ?? (photos.length === 1 ? "Photo from TikTok" : "Photos from TikTok"),
+    site: "TikTok",
+  };
+}
 
 /** The quality list for an X photo post: its photos, nothing else. */
 function xPhotoPayload(photos: XPhoto[]) {
@@ -247,6 +263,20 @@ export async function POST(request: NextRequest) {
   if (cached) return Response.json(cached);
 
   try {
+    // A TikTok slideshow. yt-dlp has no extractor for /photo/ addresses, so
+    // the slides are read from the post's own page instead.
+    const tiktokPost = tiktokPhotoPost(target);
+    if (tiktokPost) {
+      const found = await fetchTikTokPhotos(tiktokPost);
+      if (found.removed) throw new Error("ERROR: [TikTok] This post has been deleted");
+      if (found.photos.length > 0) {
+        rememberPhotos(target, found.photos);
+        const payload = tiktokPhotoPayload(found.photos, found.title);
+        void logEvent({ type: "lookup", ok: true, site: "TikTok" });
+        cacheSet(target, payload);
+        return Response.json(payload);
+      }
+    }
     let source = rememberedEmbed(target) ?? target;
     let info: YtDlpInfo;
     try {

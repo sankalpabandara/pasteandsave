@@ -10,7 +10,6 @@ const PLATFORMS: { name: string; color: string; initial: string; href?: string }
   { name: "Reddit", color: "from-orange-500 to-orange-600", initial: "R", href: "/reddit-video-downloader" },
   { name: "Vimeo", color: "from-sky-500 to-cyan-500", initial: "V", href: "/vimeo-video-downloader" },
   { name: "SoundCloud", color: "from-orange-400 to-amber-500", initial: "SC", href: "/soundcloud-mp3-downloader" },
-  { name: "Threads", color: "from-neutral-900 to-black", initial: "TH", href: "/threads-video-downloader" },
   { name: "LinkedIn", color: "from-blue-700 to-blue-600", initial: "IN", href: "/linkedin-video-downloader" },
   { name: "Dailymotion", color: "from-sky-600 to-blue-600", initial: "DM", href: "/dailymotion-video-downloader" },
 ];
