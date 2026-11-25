@@ -43,7 +43,7 @@ export function proxy(request: NextRequest) {
   // reach: the page frames this sandboxed, without allow-same-origin, so the
   // document runs in an origin of its own with no cookies, no storage and no
   // credentialed path to the admin API.
-  const isAdFrame = url.pathname === "/ads/frame";
+  const isAdFrame = request.nextUrl.pathname === "/ads/frame";
   const adEval = isAdFrame ? " 'unsafe-eval'" : "";
 
   const csp = [
