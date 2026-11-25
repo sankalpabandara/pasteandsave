@@ -114,20 +114,34 @@ atOptions = { key: ${jsString(unit.key)}, format: "iframe", height: ${height}, w
 (function () {
   var fallback = ${jsString(fallbackTag)};
   if (!fallback) return;
+  var done = false;
+
+  // Adsterra draws into this document when it has something to show, and
+  // the script is cross-origin, so there is nothing to ask and nothing it
+  // reports back. Whether it drew is the only signal there is.
+  function drawn() { return !!document.querySelector("iframe, img, ins, a"); }
+
+  function useFallback() {
+    if (done || drawn()) return;
+    done = true;
+    document.body.insertAdjacentHTML("beforeend", fallback);
+  }
+
+  // Polling, and not the script tag's load event: a plain script tag blocks
+  // the parser, so by the time this one runs the network's script has
+  // already loaded and run, and a load listener attached now would never
+  // fire. What is left to wait for is the network's own request for a
+  // banner, which is why three seconds is enough rather than the ten a
+  // cold script load would need.
   var waited = 0;
-  // Adsterra draws into this document when it has something to show. Polling
-  // for that is the only signal available: the script is cross-origin, so it
-  // reports nothing back, and it answers 200 with an empty body when it has
-  // no banner, which is indistinguishable from a slow one until time passes.
   var timer = setInterval(function () {
-    waited += 250;
-    var drawn = document.querySelector("iframe, img, ins, a");
-    if (drawn) { clearInterval(timer); return; }
-    if (waited >= 4000) {
+    waited += 200;
+    if (drawn()) { clearInterval(timer); return; }
+    if (waited >= 3000) {
       clearInterval(timer);
-      document.body.insertAdjacentHTML("beforeend", fallback);
+      useFallback();
     }
-  }, 250);
+  }, 200);
 })();
 </script>`;
 
