@@ -43,7 +43,44 @@ function attr(value: string): string {
 const BANNER_CSS = "body{display:flex;align-items:center;justify-content:center;height:100vh}";
 const NATIVE_CSS = "body{padding:8px 0}";
 
+// The frame is sandboxed without allow-same-origin, so the browser throws on
+// document.cookie and on storage. Adsterra's scripts read both and die on that
+// error, leaving the slot empty. These stand-ins keep values in memory for this
+// one document, which is all an ad's own frequency cap needs.
+const SANDBOX_SHIM = `(function () {
+  var jar = "";
+  try {
+    Object.defineProperty(document, "cookie", {
+      configurable: true,
+      get: function () { return jar; },
+      set: function (v) {
+        var pair = String(v).split(";")[0];
+        var name = pair.split("=")[0];
+        jar = jar.split("; ").filter(function (c) { return c && c.split("=")[0] !== name; }).concat(pair).join("; ");
+      }
+    });
+  } catch (e) {}
+  function mem() {
+    var s = {};
+    return {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(s, k) ? s[k] : null; },
+      setItem: function (k, v) { s[k] = String(v); },
+      removeItem: function (k) { delete s[k]; },
+      clear: function () { s = {}; },
+      key: function (i) { return Object.keys(s)[i] || null; },
+      get length() { return Object.keys(s).length; }
+    };
+  }
+  ["localStorage", "sessionStorage"].forEach(function (n) {
+    try { window[n].length; } catch (e) {
+      try { Object.defineProperty(window, n, { configurable: true, value: mem() }); } catch (e2) {}
+    }
+  });
+})();`;
+
 function htmlDocument(body: string, nonce: string, layout = BANNER_CSS): Response {
+  const shim = body ? `<script nonce="${attr(nonce)}">${SANDBOX_SHIM}</script>` : "";
+  body = shim + body;
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="robots" content="noindex">

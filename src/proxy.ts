@@ -60,6 +60,13 @@ export function proxy(request: NextRequest) {
   const isAdFrame = path === "/ads/frame";
   const adEval = isAdFrame || pageEval ? " 'unsafe-eval'" : "";
 
+  // Adsterra fetches its creatives from CDN domains it picks and rotates
+  // (cdn.show-creative1.com and others), so no host list keeps up. The sealed
+  // ad frame, and public pages while the Social Bar is on, may connect and
+  // frame any https address. Images already may; scripts still need a nonce.
+  const anyHttps = isAdFrame || pageEval;
+  const adConnect = anyHttps ? " https:" : adHosts;
+
   const csp = [
     "default-src 'self'",
     // strict-dynamic lets a script this nonce vouched for load the chunks it
@@ -72,10 +79,10 @@ export function proxy(request: NextRequest) {
     "img-src 'self' data: https:",
     "font-src 'self' data:",
     "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com" +
-      adHosts,
+      adConnect,
     // Banners and native ads live in /ads/frame ('self'); the network frames
     // inside them come from the ad hosts above. A-ADS was dropped on 2026-11-25.
-    "frame-src 'self'" + adHosts,
+    "frame-src 'self'" + adConnect,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
