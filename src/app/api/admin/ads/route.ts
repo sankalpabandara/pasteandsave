@@ -1,14 +1,7 @@
 import type { NextRequest } from "next/server";
 import { isAdmin } from "@/lib/admin-guard";
 import { AD_SLOTS, type AdSlotKey } from "@/lib/ads";
-import {
-  cleanAdsterra,
-  isValidGaId,
-  isValidUnitId,
-  readSettings,
-  writeSettings,
-  type AdUnits,
-} from "@/lib/ads-store";
+import { cleanAdsterra, isValidGaId, readSettings, writeSettings } from "@/lib/ads-store";
 
 export const runtime = "nodejs";
 
@@ -25,7 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   let body: {
-    units?: Record<string, unknown>;
     snippets?: Record<string, unknown>;
     adsterra?: unknown;
     gaId?: unknown;
@@ -34,30 +26,6 @@ export async function POST(request: NextRequest) {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
-  }
-
-  const incoming = body.units ?? {};
-  const units: AdUnits = {};
-  const rejected: string[] = [];
-
-  // Only known slots are accepted, and each value has to look like an A-ADS
-  // unit id before it goes anywhere near an iframe src.
-  for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
-    const raw = incoming[key];
-    if (raw === undefined || raw === null) continue;
-    const value = String(raw).trim();
-    if (!isValidUnitId(value)) {
-      rejected.push(key);
-      continue;
-    }
-    units[key] = value;
-  }
-
-  if (rejected.length > 0) {
-    return Response.json(
-      { error: `These need to be a plain unit number (digits only): ${rejected.join(", ")}` },
-      { status: 400 },
-    );
   }
 
   const gaId = String(body.gaId ?? "").trim();
@@ -70,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   // Snippets are taken as written. Every network formats its embed
   // differently, so a shape check would reject legitimate code; the admin
-  // session is the gate here, exactly as it is for the unit ids.
+  // session is the gate here.
   const snippets: Record<string, string> = {};
   for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
     const raw = body.snippets?.[key];
@@ -83,7 +51,7 @@ export async function POST(request: NextRequest) {
     body.adsterra === undefined ? undefined : cleanAdsterra(body.adsterra);
 
   try {
-    await writeSettings({ units, snippets, adsterra, gaId });
+    await writeSettings({ snippets, adsterra, gaId });
   } catch {
     return Response.json({ error: "Couldn't save. Check disk permissions." }, { status: 500 });
   }

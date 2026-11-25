@@ -5,7 +5,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -13,22 +12,18 @@ import { ADS_ENABLED } from "@/lib/ads";
 
 type AdContextValue = {
   /**
-   * Kept so the download flow can await it. It resolves immediately: the
-   * interstitial it used to show is gone, because A-ADS does not serve
-   * popups and a banner inside one is marked hidden.
+   * Kept so the download flow can await it. It resolves immediately: there is
+   * no interstitial before a download.
    */
   gate: () => Promise<void>;
-  /** Unit ids as configured in the admin panel, keyed by slot. */
-  units: Record<string, string>;
-  /** Raw embed code per slot, for networks other than A-ADS. */
+  /** Another network's embed per slot, pasted into the admin panel. */
   snippets: Record<string, string>;
-  /** Which Adsterra banner sizes have a unit, so a slot knows whether to ask for one. */
+  /** Which Adsterra banner sizes have a code, so a slot knows whether to ask for one. */
   adsterraSizes: string[];
 };
 
 const AdContext = createContext<AdContextValue>({
   gate: async () => {},
-  units: {},
   snippets: {},
   adsterraSizes: [],
 });
@@ -37,30 +32,24 @@ export const useAdConfig = () => useContext(AdContext);
 
 export function AdProvider({
   children,
-  initialUnits = {},
   initialSnippets = {},
   initialAdsterraSizes = [],
 }: {
   children: ReactNode;
   /**
-   * Ad configuration read on the server so the banners are in the HTML of the
-   * first response. The network verifies a unit by fetching the page and
-   * looking for its data-aa attribute, and it does not run our JavaScript, so
-   * a unit that only appears after a client fetch is invisible to it and is
-   * reported as "Not found", which means the unit never earns.
+   * Ad configuration read on the server, so the first HTML already reserves a
+   * box for every slot that will carry a banner and nothing moves when the
+   * banners arrive.
    */
-  initialUnits?: Record<string, string>;
   initialSnippets?: Record<string, string>;
   initialAdsterraSizes?: string[];
 }) {
-  const [units, setUnits] = useState<Record<string, string>>(initialUnits);
   const [snippets, setSnippets] = useState<Record<string, string>>(initialSnippets);
   const [adsterraSizes, setAdsterraSizes] = useState<string[]>(initialAdsterraSizes);
-  const unitsRef = useRef<Record<string, string>>(initialUnits);
 
   // The server value above is what the page ships with. This refresh is what
-  // lets the admin panel swap a unit in without waiting for a rebuild, and it
-  // is now a top-up rather than the only source.
+  // lets a change on the server show without waiting for a rebuild, because
+  // most pages are prerendered and their HTML is older than the settings.
   useEffect(() => {
     if (!ADS_ENABLED) return;
     let cancelled = false;
@@ -68,10 +57,6 @@ export function AdProvider({
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled || !data) return;
-        if (data.units) {
-          unitsRef.current = data.units;
-          setUnits(data.units);
-        }
         if (data.snippets) setSnippets(data.snippets);
         if (Array.isArray(data.adsterraSizes)) setAdsterraSizes(data.adsterraSizes);
       })
@@ -83,15 +68,12 @@ export function AdProvider({
     };
   }, []);
 
-  // The download interstitial is gone: A-ADS does not serve popups, and a
-  // banner inside one is reported back as hidden, which stops the unit
-  // earning wherever else the same id is used. Kept as a resolved promise so
-  // the download flow that awaits it needs no change, and so a network that
-  // does allow interstitials can be dropped back in here.
+  // No interstitial before a download. Kept as a resolved promise so the
+  // download flow that awaits it needs no change.
   const gate = useCallback(() => Promise.resolve(), []);
 
   return (
-    <AdContext.Provider value={{ gate, units, snippets, adsterraSizes }}>
+    <AdContext.Provider value={{ gate, snippets, adsterraSizes }}>
       {children}
     </AdContext.Provider>
   );

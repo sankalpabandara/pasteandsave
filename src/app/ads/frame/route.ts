@@ -1,12 +1,6 @@
 ﻿import type { NextRequest } from "next/server";
-import {
-  AD_SLOTS,
-  adsterraDimensions,
-  isAdsterraSize,
-  type AdPlacement,
-  type AdSlotKey,
-} from "@/lib/ads";
-import { isValidUnitId, readSettings } from "@/lib/ads-store";
+import { AD_SLOTS, adsterraDimensions, isAdsterraSize } from "@/lib/ads";
+import { readSettings } from "@/lib/ads-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +66,8 @@ export async function GET(request: NextRequest) {
   const slot = params.get("slot") ?? "";
   const size = params.get("size") ?? "";
 
+  // The slot name is only checked, never used: the size alone picks the code.
+  // Checking it still keeps a stray URL from serving banners.
   if (!Object.prototype.hasOwnProperty.call(AD_SLOTS, slot) || !isAdsterraSize(size)) {
     return htmlDocument("", nonce);
   }
@@ -79,71 +75,21 @@ export async function GET(request: NextRequest) {
   const settings = await readSettings();
   const unit = settings.adsterra[size];
 
-  // The A-ADS unit this slot would otherwise have shown, used when Adsterra
-  // has nothing. A brand new Adsterra unit serves an empty response for a
-  // while after it is created, and an empty slot earns nothing at all.
-  // Typed as the shared shape, the way the component does: `satisfies` gives
-  // each entry its own literal type, so the optional fields are missing from
-  // the slots that omit them.
-  const cfg: AdPlacement = AD_SLOTS[slot as AdSlotKey];
-  const shared = cfg.shareWith
-    ? (settings.units[cfg.shareWith as AdSlotKey] ?? "")
-    : "";
-  const fallbackId = (settings.units[slot as AdSlotKey] || shared || "").trim();
-  const fallback = isValidUnitId(fallbackId) ? fallbackId : "";
-
-  const fallbackTag = fallback
-    ? `<iframe title="Advertisement" data-aa="${attr(fallback)}" src="https://acceptable.a-ads.com/${attr(fallback)}/?size=Adaptive" referrerpolicy="no-referrer" style="width:100%;height:100%"></iframe>`
-    : "";
-
+  // No code of this size: an empty document. There used to be an A-ADS banner
+  // here as a stand in, and a timer that swapped it in when Adsterra was slow.
+  // A-ADS paid too little to keep, and the swap could also leave both banners
+  // in one slot when Adsterra answered after the timer had given up on it.
   if (!unit) {
-    return htmlDocument(fallbackTag, nonce);
+    return htmlDocument("", nonce);
   }
 
   const { width, height } = adsterraDimensions(size);
 
-  // The fallback is written by script rather than sitting in the markup, so
-  // the two never load at once. Two banners loading in one slot would bill
-  // both networks for an impression only one of them got to show.
   const body = `
 <script nonce="${attr(nonce)}">
 atOptions = { key: ${jsString(unit.key)}, format: "iframe", height: ${height}, width: ${width}, params: {} };
 </script>
-<script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>
-<script nonce="${attr(nonce)}">
-(function () {
-  var fallback = ${jsString(fallbackTag)};
-  if (!fallback) return;
-  var done = false;
-
-  // Adsterra draws into this document when it has something to show, and
-  // the script is cross-origin, so there is nothing to ask and nothing it
-  // reports back. Whether it drew is the only signal there is.
-  function drawn() { return !!document.querySelector("iframe, img, ins, a"); }
-
-  function useFallback() {
-    if (done || drawn()) return;
-    done = true;
-    document.body.insertAdjacentHTML("beforeend", fallback);
-  }
-
-  // Polling, and not the script tag's load event: a plain script tag blocks
-  // the parser, so by the time this one runs the network's script has
-  // already loaded and run, and a load listener attached now would never
-  // fire. What is left to wait for is the network's own request for a
-  // banner, which is why three seconds is enough rather than the ten a
-  // cold script load would need.
-  var waited = 0;
-  var timer = setInterval(function () {
-    waited += 200;
-    if (drawn()) { clearInterval(timer); return; }
-    if (waited >= 3000) {
-      clearInterval(timer);
-      useFallback();
-    }
-  }, 200);
-})();
-</script>`;
+<script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>`;
 
   return htmlDocument(body, nonce);
 }

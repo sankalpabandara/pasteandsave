@@ -3,12 +3,12 @@ import { readSettings } from "@/lib/ads-store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Public on purpose. An ad unit id ends up in an iframe src and a GA
-// measurement id ends up in a script tag, so neither is a secret. Serving them
-// here keeps the pages themselves static and fast while still letting the
-// admin panel change either one without a rebuild.
+// Public on purpose. A GA measurement id ends up in a script tag and a pasted
+// embed ends up in the page, so neither is a secret. Serving them here keeps
+// the pages themselves static and fast while still letting the admin panel
+// change either one without a rebuild.
 export async function GET() {
-  const { units, snippets, adsterra, gaId } = await readSettings();
+  const { snippets, adsterra, gaId } = await readSettings();
   // Only which sizes exist, never the keys. A slot needs to know whether a
   // banner of its size can be asked for; the key itself belongs in the frame
   // route, which is the only place that turns it into a script tag.
@@ -20,7 +20,7 @@ export async function GET() {
   // The payload is a couple of hundred bytes once per page load, so freshness
   // is worth far more than the saving.
   return Response.json(
-    { units, snippets, adsterraSizes, gaId },
+    { snippets, adsterraSizes, gaId },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

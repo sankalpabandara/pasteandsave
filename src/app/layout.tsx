@@ -70,12 +70,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read here rather than in the browser so the banners are part of the HTML
-  // the server sends. The ad network verifies a unit by fetching the page and
-  // looking for its data-aa attribute without running any JavaScript, so
-  // configuration that only arrived via a client fetch left it finding
-  // nothing, and an unverified unit earns nothing.
-  const { units, snippets, adsterra } = await readSettings();
+  // Read here rather than in the browser so the first HTML already reserves a
+  // box for every slot that will carry a banner, and nothing moves when the
+  // banners arrive.
+  const { snippets, adsterra } = await readSettings();
 
   return (
     <html
@@ -86,7 +84,6 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeScript />
         <AdProvider
-          initialUnits={units}
           initialSnippets={snippets}
           initialAdsterraSizes={Object.keys(adsterra)}
         >

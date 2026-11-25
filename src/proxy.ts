@@ -59,8 +59,9 @@ export function proxy(request: NextRequest) {
     "font-src 'self' data:",
     "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com" +
       adHosts,
-    "frame-src 'self' https://*.a-ads.com https://a-ads.com https://*.aads.com https://aads.com" +
-      adHosts,
+    // Banners live in /ads/frame ('self'); the network frames inside them come
+    // from the hosts in AD_NETWORK_DOMAINS. A-ADS was dropped on 2026-11-25.
+    "frame-src 'self'" + adHosts,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

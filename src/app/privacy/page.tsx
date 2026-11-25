@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/privacy" },
 };
 
-const LAST_UPDATED = "October 29, 2026";
+const LAST_UPDATED = "November 25, 2026";
 
 function Section({
   title,
@@ -159,7 +159,18 @@ export default function PrivacyPage() {
             We use Google Analytics to understand which pages are visited and
             roughly where visitors come from. It sets its own cookies and
             processes data under Google&apos;s privacy policy. The site also
-            displays advertising, which is served in a frame by the ad provider.
+            displays advertising from Adsterra, served in a frame that has no
+            access to this site&apos;s pages or your downloads. Adsterra may set
+            its own cookies and processes data under{" "}
+            <a
+              href="https://adsterra.com/privacy-policy/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              its privacy policy
+            </a>
+            .
           </p>
           <p>
             You can block analytics and advertising with any standard browser

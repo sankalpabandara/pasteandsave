@@ -2,16 +2,20 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { AD_SLOTS, ADSTERRA_SIZES, type AdSlotKey, type AdsterraSize } from "./ads";
 
-// Settings that an operator changes without touching code: ad unit ids and the
-// Google Analytics measurement id. Both used to be compile-time values, which
-// meant a code edit and a deploy to change an ad or switch analytics on. They
-// live here instead and are read at runtime, so a change takes effect on the
-// next page load while every page stays statically prerendered.
+// Settings that an operator changes without touching code: the Adsterra codes,
+// any other network's embed per slot, and the Google Analytics measurement id.
+// They used to be compile-time values, which meant a code edit and a deploy to
+// change an ad or switch analytics on. They live here instead and are read at
+// runtime, so a change takes effect on the next page load while every page
+// stays statically prerendered.
+//
+// Files written before 2026-11-25 also hold a "units" table of A-ADS ids. A-ADS
+// is no longer used, so that table is ignored on read and dropped on the next
+// save.
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const FILE = path.join(DATA_DIR, "site-settings.json");
 
-export type AdUnits = Partial<Record<AdSlotKey, string>>;
 export type AdSnippets = Partial<Record<AdSlotKey, string>>;
 
 /**
@@ -24,15 +28,13 @@ export type AdsterraUnit = { key: string; src: string };
 export type AdsterraUnits = Partial<Record<AdsterraSize, AdsterraUnit>>;
 
 export type SiteSettings = {
-  units: AdUnits;
   /**
-   * Raw embed code per slot, for networks other than A-ADS.
+   * Raw embed code per slot, for a network other than Adsterra.
    *
    * Being tied to one network turned out to be the expensive kind of
-   * constraint: A-ADS serves this site's traffic but has no advertisers
-   * paying for it, and switching meant a code change and a deploy. A slot
-   * with a snippet renders that instead of the A-ADS frame, so a network can
-   * be swapped from the admin panel in a minute.
+   * constraint: switching meant a code change and a deploy. A slot with a
+   * snippet renders that instead of its Adsterra banner, so a network can be
+   * tried from the admin panel in a minute.
    */
   snippets: AdSnippets;
   /**
@@ -47,15 +49,9 @@ export type SiteSettings = {
   gaId: string;
 };
 
-// An A-ADS unit id is a plain number, and a GA4 measurement id is G- followed
-// by uppercase alphanumerics. Anything else is refused rather than written
-// into an iframe src or a script tag.
-const UNIT_ID_RE = /^[0-9]{1,15}$/;
+// A GA4 measurement id is G- followed by uppercase alphanumerics. Anything
+// else is refused rather than written into a script tag.
 const GA_ID_RE = /^G-[A-Z0-9]{4,20}$/;
-
-export function isValidUnitId(value: string): boolean {
-  return value === "" || UNIT_ID_RE.test(value.trim());
-}
 
 export function isValidGaId(value: string): boolean {
   return value === "" || GA_ID_RE.test(value.trim().toUpperCase());
@@ -116,24 +112,10 @@ export function cleanAdsterra(input: unknown): AdsterraUnits {
 }
 
 export async function readSettings(): Promise<SiteSettings> {
-  // Whatever is compiled in acts as the fallback, so an existing deployment
-  // keeps working before anything is saved.
-  const fallback: AdUnits = {};
-  for (const [key, cfg] of Object.entries(AD_SLOTS)) {
-    if (cfg.unitId) fallback[key as AdSlotKey] = cfg.unitId;
-  }
   const envGa = (process.env.NEXT_PUBLIC_GA_ID ?? "").trim();
 
   try {
     const saved = JSON.parse(await fsp.readFile(FILE, "utf8")) as Partial<SiteSettings>;
-    const units: AdUnits = { ...fallback };
-    for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
-      const value = saved.units?.[key];
-      if (typeof value === "string" && isValidUnitId(value)) {
-        if (value.trim()) units[key] = value.trim();
-        else delete units[key];
-      }
-    }
     const snippets: AdSnippets = {};
     for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
       const value = saved.snippets?.[key];
@@ -141,27 +123,20 @@ export async function readSettings(): Promise<SiteSettings> {
     }
     const savedGa = typeof saved.gaId === "string" ? saved.gaId.trim().toUpperCase() : "";
     return {
-      units,
       snippets,
       adsterra: cleanAdsterra(saved.adsterra),
       gaId: isValidGaId(savedGa) && savedGa ? savedGa : envGa,
     };
   } catch {
-    return { units: fallback, snippets: {}, adsterra: {}, gaId: envGa };
+    return { snippets: {}, adsterra: {}, gaId: envGa };
   }
 }
 
 export async function writeSettings(input: {
-  units?: AdUnits;
   snippets?: AdSnippets;
   adsterra?: AdsterraUnits;
   gaId?: string;
 }): Promise<void> {
-  const units: AdUnits = {};
-  for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
-    const value = (input.units?.[key] ?? "").trim();
-    if (value && isValidUnitId(value)) units[key] = value;
-  }
   const snippets: AdSnippets = {};
   for (const key of Object.keys(AD_SLOTS) as AdSlotKey[]) {
     const value = (input.snippets?.[key] ?? "").trim();
@@ -173,9 +148,9 @@ export async function writeSettings(input: {
   const gaRaw = (input.gaId ?? "").trim().toUpperCase();
   const gaId = isValidGaId(gaRaw) ? gaRaw : "";
 
-  // Left alone unless the caller sends its own. The admin panel posts units,
-  // snippets and the analytics id, and writing the whole file from that would
-  // silently delete the Adsterra keys the moment anyone pressed Save.
+  // Left alone unless the caller sends its own. The admin panel posts snippets
+  // and the analytics id, and writing the whole file from that would silently
+  // delete the Adsterra keys the moment anyone pressed Save.
   const adsterra = input.adsterra
     ? cleanAdsterra(input.adsterra)
     : (await readSettings()).adsterra;
@@ -183,12 +158,7 @@ export async function writeSettings(input: {
   await fsp.mkdir(DATA_DIR, { recursive: true });
   await fsp.writeFile(
     FILE,
-    JSON.stringify({ units, snippets, adsterra, gaId }, null, 2),
+    JSON.stringify({ snippets, adsterra, gaId }, null, 2),
     "utf8",
   );
-}
-
-/** Convenience for callers that only care about the ad units. */
-export async function readAdUnits(): Promise<AdUnits> {
-  return (await readSettings()).units;
 }
