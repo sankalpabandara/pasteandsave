@@ -7,7 +7,68 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { AD_SLOTS, ADSTERRA_SIZES, adsterraDimensions } from "../src/lib/ads.ts";
+import { AD_SLOTS, ADSTERRA_SIZES, NATIVE_SLOTS, adsterraDimensions } from "../src/lib/ads.ts";
+import {
+  adsterraKey,
+  policyFromSettings,
+  scriptHost,
+  scriptSrcFromCode,
+} from "../src/lib/adsterra-code.ts";
+
+const KEY = "0123456789abcdef0123456789abcdef";
+
+test("a pasted Social Bar code gives its https script address", () => {
+  const code = `<script type='text/javascript' src='//pl28001234.profitableratecpm.com/ab/cd/ef/abcdef12.js'></script>`;
+  assert.equal(scriptSrcFromCode(code), "https://pl28001234.profitableratecpm.com/ab/cd/ef/abcdef12.js");
+  // A bare address works too, and http is lifted to https.
+  assert.equal(scriptSrcFromCode("http://example.com/a.js"), "https://example.com/a.js");
+  assert.equal(scriptSrcFromCode("//example.com/a.js"), "https://example.com/a.js");
+});
+
+test("a pasted Native Banner code gives its address and container key", () => {
+  const code = `<script async="async" data-cfasync="false" src="//pl28001235.profitableratecpm.com/${KEY}/invoke.js"></script>\n<div id="container-${KEY}"></div>`;
+  const src = scriptSrcFromCode(code);
+  assert.equal(src, `https://pl28001235.profitableratecpm.com/${KEY}/invoke.js`);
+  assert.equal(adsterraKey(src), KEY);
+  // Anti adblock codes end in the key instead.
+  assert.equal(adsterraKey(`https://bellnewyork.org/22/${KEY}`), KEY);
+});
+
+test("codes without a usable script address are refused", () => {
+  for (const bad of ["", "hello", "<div>no script</div>", "<script>alert(1)</script>", "javascript:alert(1)", "<script src='ftp://x.com/a.js'></script>"]) {
+    assert.equal(scriptSrcFromCode(bad), null, bad);
+  }
+  assert.equal(scriptHost("https://ex ample.com/a.js"), null);
+});
+
+test("the content policy gets every saved ad host and knows when the Social Bar is on", () => {
+  const policy = policyFromSettings({
+    adsterra: { "728x90": { key: KEY, src: `https://bellnewyork.org/22/${KEY}` } },
+    socialBar: "https://pl1.socialhost.com/a/b.js",
+    native: `https://pl2.nativehost.com/${KEY}/invoke.js`,
+    units: { homeTop: "2449325" },
+  });
+  assert.deepEqual(policy.hosts.sort(), [
+    "https://*.bellnewyork.org",
+    "https://*.pl1.socialhost.com",
+    "https://*.pl2.nativehost.com",
+    "https://bellnewyork.org",
+    "https://pl1.socialhost.com",
+    "https://pl2.nativehost.com",
+  ]);
+  assert.equal(policy.socialBar, true);
+  assert.equal(policyFromSettings({ socialBar: "" }).socialBar, false);
+  assert.deepEqual(policyFromSettings(null), { hosts: [], socialBar: false });
+  // A broken entry can never smuggle anything into the policy header.
+  assert.deepEqual(policyFromSettings({ socialBar: "https://a.com; script-src *" }).hosts, []);
+});
+
+test("native places reserve a sensible box", () => {
+  for (const [key, cfg] of Object.entries(NATIVE_SLOTS)) {
+    assert.ok(cfg.height >= 120 && cfg.height <= 600, `${key}: ${cfg.height}`);
+    assert.ok(cfg.label.length > 5);
+  }
+});
 
 test("every slot asks for a known Adsterra size and fits it", () => {
   for (const [key, cfg] of Object.entries(AD_SLOTS)) {

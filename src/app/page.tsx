@@ -8,14 +8,15 @@ import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import Bookmarklet from "@/components/Bookmarklet";
 import AdSlot from "@/components/ads/AdSlot";
+import NativeSlot from "@/components/ads/NativeSlot";
 import BlogTeaser, { homePosts } from "@/components/BlogTeaser";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
-// Rendered per request so the ad unit ids in the HTML are the ones currently
-// saved in the admin panel. Prerendered, this page would ship whatever was
-// configured at build time, and the network's verifier, which reads the HTML
-// of this exact page, would be checking a stale id after any change.
+// Rendered per request so the HTML reserves a box for exactly the ads that are
+// saved in the admin panel right now. Prerendered, it would ship whatever was
+// configured at build time, and a box for an ad switched on later would appear
+// only after the settings fetch, pushing the page down as it does.
 export const dynamic = "force-dynamic";
 
 const JSON_LD = [
@@ -124,6 +125,7 @@ export default function Home() {
           </div>
         </section>
         <BlogTeaser heading="Learn more about saving videos" posts={homePosts()} />
+        <NativeSlot slot="homeNative" className="px-4 py-8" />
         <Faq />
         <AdSlot slot="homeBottom" className="px-4 pb-10" />
       </main>

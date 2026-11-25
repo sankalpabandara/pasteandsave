@@ -1,10 +1,11 @@
-// Central ad configuration: where each banner goes and which size it asks for.
+// Central ad configuration: where each ad goes and which size it asks for.
 //
-// The banners come from Adsterra, one code per banner size. The codes are not
-// in this file: they live in data/site-settings.json on the server and are
-// changed with `node ops/set-adsterra.mjs`, which also updates the content
-// policy the browser enforces. A slot whose size has no code renders nothing,
-// so the site works fully before any code exists.
+// The ads come from Adsterra: banners (one code per size), a Native Banner and
+// a Social Bar. The codes are not in this file: they live in
+// data/site-settings.json on the server, set from the admin panel or with
+// `node ops/set-adsterra.mjs`. The content policy picks up the hosts of those
+// codes by itself (src/lib/ad-policy.ts). A place whose code is missing
+// renders nothing, so the site works fully before any code exists.
 //
 // A-ADS used to fill these slots, and later only stood in when Adsterra was
 // slow. It paid too little to keep, so it is gone (2026-11-25).
@@ -80,3 +81,36 @@ export type AdSlotKey = keyof typeof AD_SLOTS;
 export function adSlot(key: AdSlotKey): AdPlacement {
   return AD_SLOTS[key];
 }
+
+/**
+ * Places for the Adsterra Native Banner: a row of small ads with a picture and
+ * a headline each, which reads as part of the page rather than a banner. One
+ * code serves every place, and each place gets its own framed document, so
+ * two of them never fight over the same container on one page.
+ *
+ * `height` is what the box reserves before the ads arrive. The frame reports
+ * its real height once drawn and the box follows, because the widget is a grid
+ * whose height depends on the screen width and on the layout chosen in
+ * Adsterra. Every place sits below the first screen, so that late change is
+ * not something a visitor watches happen.
+ */
+export const NATIVE_SLOTS = {
+  homeNative: { height: 320, label: "Home: above the questions" },
+  toolNative: { height: 320, label: "Tool pages: after the questions" },
+  blogNative: { height: 320, label: "Blog posts: after the questions" },
+} as const;
+
+export type NativeSlotKey = keyof typeof NATIVE_SLOTS;
+
+export function isNativeSlot(value: string): value is NativeSlotKey {
+  return Object.prototype.hasOwnProperty.call(NATIVE_SLOTS, value);
+}
+
+/**
+ * Cookie set next to the admin session, readable by page scripts. The Social
+ * Bar runs in the page itself, not in a sealed frame, so it could use the admin
+ * session cookie to call the admin API. Pages skip the Social Bar for anyone
+ * carrying this marker. It proves nothing on its own; the session cookie stays
+ * the only thing the server trusts.
+ */
+export const ADMIN_MARKER_COOKIE = "pas_admin";

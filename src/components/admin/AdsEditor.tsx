@@ -19,10 +19,22 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
 const ORDER = Object.keys(SLOT_INFO) as AdSlotKey[];
 
 type AdsterraView = Partial<Record<string, { key: string; src: string }>>;
+type SettingsView = {
+  snippets?: Record<string, string>;
+  adsterra?: AdsterraView;
+  socialBar?: string;
+  native?: string;
+  gaId?: string;
+};
 
 export default function AdsEditor() {
   const [snippets, setSnippets] = useState<Record<string, string>>({});
   const [adsterra, setAdsterra] = useState<AdsterraView>({});
+  // Shown as the saved script address; paste a whole code over it to replace
+  // it, or clear the box to turn that format off.
+  const [socialBarCode, setSocialBarCode] = useState("");
+  const [nativeCode, setNativeCode] = useState("");
+  const [saved, setSaved] = useState({ socialBar: "", native: "" });
   const [gaId, setGaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -31,9 +43,12 @@ export default function AdsEditor() {
   useEffect(() => {
     fetch("/api/admin/ads")
       .then((r) => (r.ok ? r.json() : {}))
-      .then((d: { snippets?: Record<string, string>; adsterra?: AdsterraView; gaId?: string }) => {
+      .then((d: SettingsView) => {
         setSnippets(d.snippets ?? {});
         setAdsterra(d.adsterra ?? {});
+        setSocialBarCode(d.socialBar ?? "");
+        setNativeCode(d.native ?? "");
+        setSaved({ socialBar: d.socialBar ?? "", native: d.native ?? "" });
         setGaId(d.gaId ?? "");
       })
       .catch(() => setMessage({ ok: false, text: "Couldn't load the current settings." }))
@@ -44,11 +59,11 @@ export default function AdsEditor() {
     setSaving(true);
     setMessage(null);
     try {
-      // The Adsterra codes are not sent, so saving here never touches them.
+      // The banner codes are not sent, so saving here never touches them.
       const res = await fetch("/api/admin/ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snippets, gaId }),
+        body: JSON.stringify({ snippets, gaId, socialBarCode, nativeCode }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -57,6 +72,9 @@ export default function AdsEditor() {
       }
       setSnippets(data.snippets ?? snippets);
       setAdsterra(data.adsterra ?? adsterra);
+      setSocialBarCode(data.socialBar ?? "");
+      setNativeCode(data.native ?? "");
+      setSaved({ socialBar: data.socialBar ?? "", native: data.native ?? "" });
       setGaId(data.gaId ?? gaId);
       setMessage({
         ok: true,
@@ -108,6 +126,60 @@ export default function AdsEditor() {
           {message.text}
         </p>
       )}
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {[
+          {
+            id: "social-bar",
+            title: "Social Bar",
+            value: socialBarCode,
+            set: setSocialBarCode,
+            live: saved.socialBar,
+            text:
+              "Small notice style ads at the edge of the screen, on every public page. Loads after the page has finished loading, never in the admin area and never for a signed in admin.",
+          },
+          {
+            id: "native-banner",
+            title: "Native Banner",
+            value: nativeCode,
+            set: setNativeCode,
+            live: saved.native,
+            text:
+              "A row of small picture ads that sits in the page: home page above the questions, tool pages after the questions, and the end of every blog post.",
+          },
+        ].map((f) => (
+          <div
+            key={f.id}
+            className="rounded-xl border border-black/5 bg-white/40 p-4 dark:border-white/10 dark:bg-black/20"
+          >
+            <div className="flex items-baseline justify-between gap-3">
+              <label htmlFor={f.id} className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                Adsterra {f.title} code
+              </label>
+              <span
+                className={`text-xs font-semibold ${
+                  f.live ? "text-emerald-700 dark:text-emerald-300" : "text-neutral-500 dark:text-neutral-400"
+                }`}
+              >
+                {f.live ? "live" : "off"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{f.text}</p>
+            <textarea
+              id={f.id}
+              value={f.value}
+              onChange={(e) => f.set(e.target.value)}
+              rows={3}
+              spellCheck={false}
+              placeholder={`Paste the whole ${f.title} code from Adsterra here`}
+              className="mt-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-1.5 font-mono text-[11px] outline-none focus:border-violet-500 dark:border-white/10 dark:bg-black/30 dark:text-white"
+            />
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              Clear the box and save to turn it off.
+            </p>
+          </div>
+        ))}
+      </div>
 
       <div className="mt-4 rounded-xl border border-black/5 bg-white/40 p-4 dark:border-white/10 dark:bg-black/20">
         <label

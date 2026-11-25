@@ -159,9 +159,11 @@ export default function PrivacyPage() {
             We use Google Analytics to understand which pages are visited and
             roughly where visitors come from. It sets its own cookies and
             processes data under Google&apos;s privacy policy. The site also
-            displays advertising from Adsterra, served in a frame that has no
-            access to this site&apos;s pages or your downloads. Adsterra may set
-            its own cookies and processes data under{" "}
+            displays advertising from Adsterra. Banners and native ads load in
+            frames that cannot read this site&apos;s pages or your downloads. The
+            Social Bar, small ads that float at the edge of the screen, runs on
+            the page itself. Adsterra may set its own cookies and processes data
+            under{" "}
             <a
               href="https://adsterra.com/privacy-policy/"
               target="_blank"

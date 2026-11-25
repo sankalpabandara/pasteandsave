@@ -1,13 +1,13 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { AD_SLOTS, ADSTERRA_SIZES, type AdSlotKey, type AdsterraSize } from "./ads";
+import { adsterraKey, scriptHost } from "./adsterra-code";
 
 // Settings that an operator changes without touching code: the Adsterra codes,
 // any other network's embed per slot, and the Google Analytics measurement id.
 // They used to be compile-time values, which meant a code edit and a deploy to
 // change an ad or switch analytics on. They live here instead and are read at
-// runtime, so a change takes effect on the next page load while every page
-// stays statically prerendered.
+// runtime, so a change takes effect on the next page load.
 //
 // Files written before 2026-11-25 also hold a "units" table of A-ADS ids. A-ADS
 // is no longer used, so that table is ignored on read and dropped on the next
@@ -45,6 +45,10 @@ export type SiteSettings = {
    * own little document instead, so there is one global per banner.
    */
   adsterra: AdsterraUnits;
+  /** Script address of the Adsterra Social Bar, or "" when it is off. */
+  socialBar: string;
+  /** Script address of the Adsterra Native Banner, or "" when it is off. */
+  native: string;
   /** GA4 measurement id, the "G-XXXXXXX" one. Public by design. */
   gaId: string;
 };
@@ -62,29 +66,13 @@ export function isValidGaId(value: string): boolean {
 const ADSTERRA_KEY_RE = /^[a-f0-9]{16,64}$/i;
 
 /**
- * The hosts the page's own policy already allows scripts from, from the same
- * environment variable the policy is built out of. An Adsterra script URL is
- * only accepted if it points at one of them: a URL the policy would block
- * renders an empty slot that looks exactly like a network not filling, and
- * one it allows is a host the operator has already vouched for.
+ * An https address with a plain host name. The host no longer has to be listed
+ * in AD_NETWORK_DOMAINS first: the content policy now adds the host of every
+ * saved code itself (src/lib/ad-policy.ts), so a new Adsterra domain works the
+ * moment its code is saved, instead of loading into a slot the browser blocks.
  */
-function allowedScriptHosts(): string[] {
-  return (process.env.AD_NETWORK_DOMAINS || "")
-    .split(/[\s,]+/)
-    .map((d) => d.trim().replace(/^https:\/\//, "").replace(/^\*\./, "").toLowerCase())
-    .filter(Boolean);
-}
-
 export function isValidAdsterraSrc(value: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== "https:") return false;
-  const host = url.hostname.toLowerCase();
-  return allowedScriptHosts().some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  return scriptHost(value) !== null;
 }
 
 export function isValidAdsterraUnit(unit: unknown): unit is AdsterraUnit {
@@ -96,6 +84,17 @@ export function isValidAdsterraUnit(unit: unknown): unit is AdsterraUnit {
     typeof src === "string" &&
     isValidAdsterraSrc(src.trim())
   );
+}
+
+/** A Social Bar address worth saving, or "". */
+export function cleanSocialBar(value: unknown): string {
+  return typeof value === "string" && isValidAdsterraSrc(value.trim()) ? value.trim() : "";
+}
+
+/** A Native Banner address worth saving, or "": it also needs the key that names its container. */
+export function cleanNative(value: unknown): string {
+  const src = cleanSocialBar(value);
+  return src && adsterraKey(src) ? src : "";
 }
 
 /** Keeps only the sizes this build knows about, with a valid key and URL. */
@@ -125,16 +124,20 @@ export async function readSettings(): Promise<SiteSettings> {
     return {
       snippets,
       adsterra: cleanAdsterra(saved.adsterra),
+      socialBar: cleanSocialBar(saved.socialBar),
+      native: cleanNative(saved.native),
       gaId: isValidGaId(savedGa) && savedGa ? savedGa : envGa,
     };
   } catch {
-    return { snippets: {}, adsterra: {}, gaId: envGa };
+    return { snippets: {}, adsterra: {}, socialBar: "", native: "", gaId: envGa };
   }
 }
 
 export async function writeSettings(input: {
   snippets?: AdSnippets;
   adsterra?: AdsterraUnits;
+  socialBar?: string;
+  native?: string;
   gaId?: string;
 }): Promise<void> {
   const snippets: AdSnippets = {};
@@ -148,17 +151,19 @@ export async function writeSettings(input: {
   const gaRaw = (input.gaId ?? "").trim().toUpperCase();
   const gaId = isValidGaId(gaRaw) ? gaRaw : "";
 
-  // Left alone unless the caller sends its own. The admin panel posts snippets
-  // and the analytics id, and writing the whole file from that would silently
-  // delete the Adsterra keys the moment anyone pressed Save.
-  const adsterra = input.adsterra
-    ? cleanAdsterra(input.adsterra)
-    : (await readSettings()).adsterra;
+  // Each Adsterra code is left alone unless the caller sends its own. The
+  // admin panel does not always post every one, and writing the whole file from
+  // what it did send would silently delete the rest the moment anyone pressed
+  // Save.
+  const current = await readSettings();
+  const adsterra = input.adsterra ? cleanAdsterra(input.adsterra) : current.adsterra;
+  const socialBar = input.socialBar === undefined ? current.socialBar : cleanSocialBar(input.socialBar);
+  const native = input.native === undefined ? current.native : cleanNative(input.native);
 
   await fsp.mkdir(DATA_DIR, { recursive: true });
   await fsp.writeFile(
     FILE,
-    JSON.stringify({ snippets, adsterra, gaId }, null, 2),
+    JSON.stringify({ snippets, adsterra, socialBar, native, gaId }, null, 2),
     "utf8",
   );
 }

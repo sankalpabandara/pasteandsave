@@ -1,6 +1,7 @@
 ﻿import type { NextRequest } from "next/server";
-import { AD_SLOTS, adsterraDimensions, isAdsterraSize } from "@/lib/ads";
+import { AD_SLOTS, adsterraDimensions, isAdsterraSize, isNativeSlot } from "@/lib/ads";
 import { readSettings } from "@/lib/ads-store";
+import { adsterraKey } from "@/lib/adsterra-code";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,13 +38,19 @@ function attr(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
-function htmlDocument(body: string, nonce: string): Response {
+// A banner is centred in a box of its own size. A native widget is a grid that
+// sets its own height, so its document flows normally and reports that height.
+const BANNER_CSS = "body{display:flex;align-items:center;justify-content:center;height:100vh}";
+const NATIVE_CSS = "body{padding:8px 0}";
+
+function htmlDocument(body: string, nonce: string, layout = BANNER_CSS): Response {
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="robots" content="noindex">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style nonce="${attr(nonce)}">
 html,body{margin:0;padding:0;background:transparent;overflow:hidden}
-body{display:flex;align-items:center;justify-content:center;height:100vh}
+${layout}
 iframe,img{border:0;display:block;max-width:100%}
 </style></head><body>${body}</body></html>`;
   return new Response(html, {
@@ -65,6 +72,10 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const slot = params.get("slot") ?? "";
   const size = params.get("size") ?? "";
+
+  if (params.get("kind") === "native") {
+    return nativeDocument(slot, nonce);
+  }
 
   // The slot name is only checked, never used: the size alone picks the code.
   // Checking it still keeps a stray URL from serving banners.
@@ -92,4 +103,38 @@ atOptions = { key: ${jsString(unit.key)}, format: "iframe", height: ${height}, w
 <script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>`;
 
   return htmlDocument(body, nonce);
+}
+
+// The Adsterra Native Banner: a script and the div it fills, named after the
+// unit's key. Then a small script that tells the page how tall the widget came
+// out, so the box around the frame can grow to fit instead of cutting it off.
+// The frame has no origin of its own to check, so the page only accepts the
+// message from this frame's own window (see NativeSlot).
+async function nativeDocument(slot: string, nonce: string): Promise<Response> {
+  if (!isNativeSlot(slot)) return htmlDocument("", nonce, NATIVE_CSS);
+  const { native } = await readSettings();
+  const key = native ? adsterraKey(native) : null;
+  if (!native || !key) return htmlDocument("", nonce, NATIVE_CSS);
+
+  const body = `
+<script nonce="${attr(nonce)}" async data-cfasync="false" src="${attr(native)}"></script>
+<div id="container-${attr(key)}"></div>
+<script nonce="${attr(nonce)}">
+(function () {
+  // Only once the widget has drawn something: reporting the empty document
+  // would shrink the box first and grow it again a moment later.
+  var box = document.getElementById(${jsString(`container-${key}`)});
+  var last = 0;
+  function send() {
+    var drawn = box ? box.offsetHeight : 0;
+    if (!drawn) return;
+    var h = Math.ceil(document.body.scrollHeight);
+    if (h !== last) { last = h; parent.postMessage({ type: "pas-ad-height", h: h }, "*"); }
+  }
+  if (window.ResizeObserver && box) new ResizeObserver(send).observe(box);
+  var n = 0, t = setInterval(function () { send(); if (++n > 40) clearInterval(t); }, 500);
+})();
+</script>`;
+
+  return htmlDocument(body, nonce, NATIVE_CSS);
 }

@@ -8,6 +8,7 @@ import {
   createSession,
 } from "@/lib/auth";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
+import { ADMIN_MARKER_COOKIE } from "@/lib/ads";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,16 @@ export async function POST(request: NextRequest) {
   const store = await cookies();
   store.set(SESSION_COOKIE, createSession(), {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+  });
+  // Readable by page scripts on purpose: pages skip the Social Bar while it is
+  // there, so an ad script never runs next to a signed in admin session. It
+  // grants nothing; the server only trusts the session cookie above.
+  store.set(ADMIN_MARKER_COOKIE, "1", {
+    httpOnly: false,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",

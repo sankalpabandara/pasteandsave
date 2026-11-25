@@ -4,6 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import AdSlot from "@/components/ads/AdSlot";
+import NativeSlot from "@/components/ads/NativeSlot";
 import BlogTeaser from "@/components/BlogTeaser";
 import { getPost, postsForTool } from "@/lib/blog";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -156,6 +157,8 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
             ))}
           </div>
         </section>
+
+        <NativeSlot slot="toolNative" className="px-4 pb-8" />
 
         {/* Guides written for this downloader, or general ones where there
             are none yet, so every downloader page links into the blog. */}

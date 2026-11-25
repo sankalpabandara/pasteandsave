@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { adPolicy } from "@/lib/ad-policy";
 
 // Issues a fresh nonce per request and builds the Content-Security-Policy
 // around it, so script-src no longer needs 'unsafe-inline'.
@@ -22,12 +23,25 @@ const AD_DOMAINS = (process.env.AD_NETWORK_DOMAINS || "")
   .split(/[\s,]+/)
   .map((d) => d.trim())
   .filter(Boolean);
-const adHosts = AD_DOMAINS.length > 0 ? " " + AD_DOMAINS.join(" ") : "";
 
 const isDev = process.env.NODE_ENV !== "production";
 
 export function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID().replace(/-/g, "");
+  const path = request.nextUrl.pathname;
+
+  // The hosts in AD_NETWORK_DOMAINS, plus the host of every Adsterra code
+  // saved in the admin panel, so a code with a new domain is not blocked.
+  const ads = adPolicy();
+  const adList = [...new Set([...AD_DOMAINS, ...ads.hosts])];
+  const adHosts = adList.length > 0 ? " " + adList.join(" ") : "";
+
+  // The Social Bar is the one ad that runs in the page itself rather than in a
+  // sealed frame, and Adsterra's scripts evaluate strings. So public pages
+  // allow eval while a Social Bar code is saved. The admin area and the API
+  // never do, and the Social Bar never loads there.
+  const publicPage = !path.startsWith("/admin") && !path.startsWith("/api");
+  const pageEval = ads.socialBar && publicPage;
 
   // React's development build uses eval to rebuild stack traces across the
   // server/client boundary, and refuses to start without it. Production never
@@ -38,13 +52,13 @@ export function proxy(request: NextRequest) {
   //
   // Ad networks build their banner by evaluating strings, so their script
   // dies on this policy with an EvalError and the slot stays empty. Allowing
-  // eval across the site would give up most of what the policy is for, so it
-  // is allowed only in here, where there is no site code and no site data to
+  // eval across the site would give up most of what the policy is for, so for
+  // banners it is allowed only in here, where there is no site code and no site data to
   // reach: the page frames this sandboxed, without allow-same-origin, so the
   // document runs in an origin of its own with no cookies, no storage and no
   // credentialed path to the admin API.
-  const isAdFrame = request.nextUrl.pathname === "/ads/frame";
-  const adEval = isAdFrame ? " 'unsafe-eval'" : "";
+  const isAdFrame = path === "/ads/frame";
+  const adEval = isAdFrame || pageEval ? " 'unsafe-eval'" : "";
 
   const csp = [
     "default-src 'self'",
@@ -59,8 +73,8 @@ export function proxy(request: NextRequest) {
     "font-src 'self' data:",
     "connect-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com" +
       adHosts,
-    // Banners live in /ads/frame ('self'); the network frames inside them come
-    // from the hosts in AD_NETWORK_DOMAINS. A-ADS was dropped on 2026-11-25.
+    // Banners and native ads live in /ads/frame ('self'); the network frames
+    // inside them come from the ad hosts above. A-ADS was dropped on 2026-11-25.
     "frame-src 'self'" + adHosts,
     "object-src 'none'",
     "base-uri 'self'",

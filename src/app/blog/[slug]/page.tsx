@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JsonLd from "@/components/JsonLd";
 import AdSlot from "@/components/ads/AdSlot";
+import NativeSlot from "@/components/ads/NativeSlot";
 import BlogCover from "@/components/BlogCover";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import {
@@ -253,6 +254,8 @@ export default async function BlogPostPage({
                 ))}
               </div>
             </section>
+
+            <NativeSlot slot="blogNative" className="pt-10" />
 
             {(prev || next) && (
               <nav aria-label="Lessons" className="mt-10 grid gap-3 sm:grid-cols-2">
