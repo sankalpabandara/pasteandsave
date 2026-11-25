@@ -46,9 +46,14 @@ for (const arg of args) {
     console.error(`${size}: must be https`);
     process.exit(1);
   }
-  // The key is the last path segment of the invoke URL, and the same value
-  // the embed assigns to atOptions.key.
-  const key = url.pathname.split("/").filter(Boolean).pop() ?? "";
+  // The key is the same value the embed assigns to atOptions.key. Anti adblock
+  // codes end in it (https://host/22/<key>); plain codes put it before
+  // invoke.js (https://host/<key>/invoke.js). So take the last hex segment.
+  const key =
+    url.pathname
+      .split("/")
+      .filter((part) => /^[a-f0-9]{16,64}$/i.test(part))
+      .pop() ?? "";
   if (!/^[a-f0-9]{16,64}$/i.test(key)) {
     console.error(`${size}: no key found at the end of ${src}`);
     process.exit(1);

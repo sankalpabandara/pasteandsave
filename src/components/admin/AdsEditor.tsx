@@ -204,8 +204,10 @@ export default function AdsEditor() {
             unit for each size: 728x90, 300x250 and 320x50.
           </li>
           <li>
-            In each code, copy the script address that ends in
-            <span className="font-mono"> /invoke.js</span>.
+            In each code, copy the address in the second script tag, the one after
+            <span className="font-mono"> src=</span>. It ends in the unit&apos;s key, or
+            in <span className="font-mono">/invoke.js</span> for codes without anti
+            adblock.
           </li>
           <li>
             On the server, in <span className="font-mono">/opt/pasteandsave</span>, run
