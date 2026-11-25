@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AD_SLOTS,
   ADS_ENABLED,
@@ -26,14 +26,37 @@ import { useAdConfig } from "@/components/ads/AdProvider";
 export default function AdSlot({
   slot,
   className = "",
+  label = "Advertisement",
 }: {
   slot: AdSlotKey;
   className?: string;
+  /** "Advertisement" in the page's language. */
+  label?: string;
 }) {
   // Typed as the shared shape: `satisfies` narrows each entry to its own
   // literal type, so optional fields are absent from slots that omit them.
   const cfg: AdPlacement = AD_SLOTS[slot];
-  const { units, snippets } = useAdConfig();
+  const { units, snippets, adsterraSizes } = useAdConfig();
+
+  // Which Adsterra banner this slot should ask for, decided once after mount.
+  //
+  // It cannot be decided on the server, because the page is prerendered and
+  // one HTML file is served to phones and desktops alike. It is deliberately
+  // not updated on resize either: changing the size reloads the banner, and a
+  // banner reloaded because someone turned their phone sideways is a second
+  // impression for an advertiser who was only seen once.
+  const [bannerSize, setBannerSize] = useState<string | null>(null);
+  useEffect(() => {
+    const narrow = window.matchMedia("(max-width: 767px)").matches;
+    const wanted = narrow ? (cfg.bannerMobile ?? cfg.banner) : cfg.banner;
+    setBannerSize(wanted ?? null);
+  }, [cfg.banner, cfg.bannerMobile]);
+
+  // Only once a unit of that size actually exists. A 728x90 leaderboard has
+  // essentially no mobile demand, which is why the narrow screens ask for a
+  // 320x50 instead of letting the wide one go unfilled.
+  const adsterraSize =
+    bannerSize && adsterraSizes.includes(bannerSize) ? bannerSize : null;
 
   // Configured in the admin panel; the compiled value is only a fallback.
   // A slot with nothing of its own borrows from the slot named in shareWith,
@@ -71,13 +94,18 @@ export default function AdSlot({
   // sit on a wrapper in the page, so a slot with nothing to show still left a
   // band of empty page behind it, several of them, once the placements that
   // A-ADS will not serve stopped rendering.
+  // True as soon as the server-rendered config says a unit of this slot's
+  // normal size exists, so the decision does not wait for the viewport check
+  // and the box is never given to A-ADS and then taken away again.
+  const usesAdsterra = Boolean(cfg.banner && adsterraSizes.includes(cfg.banner));
+
   if (!ADS_ENABLED) return null;
-  if (!hasUnit && !snippet && !SHOW_AD_PLACEHOLDERS) return null;
+  if (!hasUnit && !snippet && !usesAdsterra && !SHOW_AD_PLACEHOLDERS) return null;
 
   return (
     <div className={`w-full ${className}`}>
       <p className="mb-1 text-center text-[10px] font-medium uppercase tracking-widest text-neutral-400 dark:text-neutral-500">
-        Advertisement
+        {label}
       </p>
       {/* minHeight rather than height, and nothing clipped: the box reserves
           space so the page does not jump, but a banner taller than the
@@ -95,10 +123,31 @@ export default function AdSlot({
         {snippet ? (
           // A network other than A-ADS is configured for this slot.
           <div ref={mountSnippet} style={{ width: "100%", height: "100%" }} />
+        ) : usesAdsterra ? (
+          // Rendered only once the viewport has been measured, so the banner
+          // is requested at the right size the first time. Setting a src now
+          // and correcting it afterwards would fetch two banners and show
+          // one, which bills an advertiser for a view nobody got.
+          adsterraSize ? (
+            <iframe
+              key={adsterraSize}
+              title={label}
+              src={`/ads/frame?slot=${encodeURIComponent(slot)}&size=${encodeURIComponent(adsterraSize)}`}
+              scrolling="no"
+              loading="lazy"
+              style={{
+                border: 0,
+                display: "block",
+                width: "100%",
+                height: cfg.height,
+                backgroundColor: "transparent",
+              }}
+            />
+          ) : null
         ) : hasUnit ? (
           <iframe
             key={unitId}
-            title="Advertisement"
+            title={label}
             data-aa={unitId}
             // Kept in the network's documented shape, trailing slash and
             // size=Adaptive. Their verifier matches against the embed they

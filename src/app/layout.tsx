@@ -75,7 +75,7 @@ export default async function RootLayout({
   // looking for its data-aa attribute without running any JavaScript, so
   // configuration that only arrived via a client fetch left it finding
   // nothing, and an unverified unit earns nothing.
-  const { units, snippets } = await readSettings();
+  const { units, snippets, adsterra } = await readSettings();
 
   return (
     <html
@@ -85,7 +85,11 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ThemeScript />
-        <AdProvider initialUnits={units} initialSnippets={snippets}>
+        <AdProvider
+          initialUnits={units}
+          initialSnippets={snippets}
+          initialAdsterraSizes={Object.keys(adsterra)}
+        >
           {children}
         </AdProvider>
         <Analytics />

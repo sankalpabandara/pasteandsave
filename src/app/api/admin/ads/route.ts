@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { isAdmin } from "@/lib/admin-guard";
 import { AD_SLOTS, type AdSlotKey } from "@/lib/ads";
 import {
+  cleanAdsterra,
   isValidGaId,
   isValidUnitId,
   readSettings,
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
   let body: {
     units?: Record<string, unknown>;
     snippets?: Record<string, unknown>;
+    adsterra?: unknown;
     gaId?: unknown;
   };
   try {
@@ -75,8 +77,13 @@ export async function POST(request: NextRequest) {
     if (typeof raw === "string" && raw.trim()) snippets[key] = raw.trim();
   }
 
+  // Omitted entirely when the panel did not send it, so writeSettings keeps
+  // what is already on disk. An empty object would mean "remove them all".
+  const adsterra =
+    body.adsterra === undefined ? undefined : cleanAdsterra(body.adsterra);
+
   try {
-    await writeSettings({ units, snippets, gaId });
+    await writeSettings({ units, snippets, adsterra, gaId });
   } catch {
     return Response.json({ error: "Couldn't save. Check disk permissions." }, { status: 500 });
   }

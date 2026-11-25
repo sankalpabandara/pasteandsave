@@ -22,12 +22,15 @@ type AdContextValue = {
   units: Record<string, string>;
   /** Raw embed code per slot, for networks other than A-ADS. */
   snippets: Record<string, string>;
+  /** Which Adsterra banner sizes have a unit, so a slot knows whether to ask for one. */
+  adsterraSizes: string[];
 };
 
 const AdContext = createContext<AdContextValue>({
   gate: async () => {},
   units: {},
   snippets: {},
+  adsterraSizes: [],
 });
 export const useAdGate = () => useContext(AdContext);
 export const useAdConfig = () => useContext(AdContext);
@@ -36,6 +39,7 @@ export function AdProvider({
   children,
   initialUnits = {},
   initialSnippets = {},
+  initialAdsterraSizes = [],
 }: {
   children: ReactNode;
   /**
@@ -47,9 +51,11 @@ export function AdProvider({
    */
   initialUnits?: Record<string, string>;
   initialSnippets?: Record<string, string>;
+  initialAdsterraSizes?: string[];
 }) {
   const [units, setUnits] = useState<Record<string, string>>(initialUnits);
   const [snippets, setSnippets] = useState<Record<string, string>>(initialSnippets);
+  const [adsterraSizes, setAdsterraSizes] = useState<string[]>(initialAdsterraSizes);
   const unitsRef = useRef<Record<string, string>>(initialUnits);
 
   // The server value above is what the page ships with. This refresh is what
@@ -67,6 +73,7 @@ export function AdProvider({
           setUnits(data.units);
         }
         if (data.snippets) setSnippets(data.snippets);
+        if (Array.isArray(data.adsterraSizes)) setAdsterraSizes(data.adsterraSizes);
       })
       .catch(() => {
         // Ads are never worth breaking a page over.
@@ -84,7 +91,7 @@ export function AdProvider({
   const gate = useCallback(() => Promise.resolve(), []);
 
   return (
-    <AdContext.Provider value={{ gate, units, snippets }}>
+    <AdContext.Provider value={{ gate, units, snippets, adsterraSizes }}>
       {children}
     </AdContext.Provider>
   );

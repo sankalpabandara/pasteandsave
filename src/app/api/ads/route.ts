@@ -8,7 +8,11 @@ export const dynamic = "force-dynamic";
 // here keeps the pages themselves static and fast while still letting the
 // admin panel change either one without a rebuild.
 export async function GET() {
-  const { units, snippets, gaId } = await readSettings();
+  const { units, snippets, adsterra, gaId } = await readSettings();
+  // Only which sizes exist, never the keys. A slot needs to know whether a
+  // banner of its size can be asked for; the key itself belongs in the frame
+  // route, which is the only place that turns it into a script tag.
+  const adsterraSizes = Object.keys(adsterra);
   // Deliberately uncached. This was served with max-age and
   // stale-while-revalidate, which meant a browser kept handing back the
   // previous answer for several minutes: save an ad in the admin panel, load
@@ -16,7 +20,7 @@ export async function GET() {
   // The payload is a couple of hundred bytes once per page load, so freshness
   // is worth far more than the saving.
   return Response.json(
-    { units, snippets, gaId },
+    { units, snippets, adsterraSizes, gaId },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

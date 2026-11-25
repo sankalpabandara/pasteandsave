@@ -52,7 +52,10 @@ export function proxy(request: NextRequest) {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    // 'self', not 'none': each ad is rendered in a small same-origin document
+    // framed by the page it belongs to, so 'none' blocked the site's own
+    // banners. Another site still cannot frame anything here.
+    "frame-ancestors 'self'",
   ].join("; ");
 
   // Passed on the request so the layout can read it and hand it to our own
