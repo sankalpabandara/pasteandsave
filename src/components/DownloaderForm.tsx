@@ -225,7 +225,9 @@ export default function DownloaderForm({
   const [playlist, setPlaylist] = useState<PlaylistInfo | null>(null);
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Record<string, JobState>>({});
-  const [tab, setTab] = useState<"video" | "audio">("video");
+  // "photos" is for posts that are photos and no video, such as a TikTok
+  // slideshow, whose soundtrack sits under Audio next to it.
+  const [tab, setTab] = useState<"video" | "audio" | "photos">("video");
   // The Trustpilot prompt, after this browser's first download and, if it
   // was closed without a review, its next one.
   const [askReview, setAskReview] = useState(false);
@@ -263,7 +265,16 @@ export default function DownloaderForm({
         // arrived from the extension's MP3 shortcut.
         const preferAudio =
           mp3PrefRef.current || (data.video?.length ?? 0) === 0;
-        setTab(preferAudio && (data.audio?.length ?? 0) > 0 ? "audio" : "video");
+        const photosOnly = (data.video?.length ?? 0) === 0 && (data.images?.length ?? 0) > 0;
+        setTab(
+          mp3PrefRef.current && (data.audio?.length ?? 0) > 0
+            ? "audio"
+            : photosOnly
+              ? "photos"
+              : preferAudio && (data.audio?.length ?? 0) > 0
+                ? "audio"
+                : "video",
+        );
       } catch (err) {
         setError(networkErrorMessage(err));
       } finally {
@@ -647,8 +658,21 @@ export default function DownloaderForm({
           </div>
 
 
-          {(result.video.length > 0 || result.audio.length > 0) && (
+          {(result.video.length > 0 || result.audio.length > 0 || result.images.length > 0) && (
             <div className="flex gap-2 border-t border-black/5 px-4 pt-3 dark:border-white/10">
+              {result.video.length === 0 && result.images.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setTab("photos")}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                    tab === "photos"
+                      ? "bg-violet-600 text-white"
+                      : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/5"
+                  }`}
+                >
+                  Photos
+                </button>
+              )}
               {result.video.length > 0 && (
                 <button
                   type="button"
@@ -700,7 +724,7 @@ export default function DownloaderForm({
                   onClick={() => downloadAudio(a)}
                 />
               ))}
-            {tab === "video" &&
+            {(tab === "video" || tab === "photos") &&
               result.images.map((img) => (
                 <DownloadRow
                   key={img.formatId}

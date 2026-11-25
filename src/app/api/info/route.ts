@@ -23,17 +23,16 @@ import {
 import { fetchTikTokPhotos, tiktokPhotoPost } from "@/lib/tiktok-photos";
 
 /**
- * The quality list for a TikTok photo post: every slide. The soundtrack is
- * not offered yet: the form shows photos under the Video tab, which only
- * appears when there is video, so adding audio here hid the photos (seen in
- * the browser on 2026-11-25). The download side already reads a slideshow's
- * audio from its /video/ address for when the form lists photos on their own.
+ * The quality list for a TikTok photo post: every slide under the form's
+ * Photos tab, and the soundtrack under Audio, which the download reads from
+ * the post's /video/ address (see api/jobs).
  */
 function tiktokPhotoPayload(photos: XPhoto[], title: string | null) {
   return {
     ...xPhotoPayload(photos),
     title: title ?? (photos.length === 1 ? "Photo from TikTok" : "Photos from TikTok"),
     site: "TikTok",
+    audio: AUDIO_OPTIONS,
   };
 }
 
