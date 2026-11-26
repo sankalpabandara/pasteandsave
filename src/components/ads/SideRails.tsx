@@ -17,6 +17,11 @@ import { useAdConfig } from "@/components/ads/AdProvider";
 // gap each side is 1392, and a rail that overlaps the page is worse than no
 // rail. A 1366px laptop therefore sees none of this, which is deliberate.
 const MIN_WIDTH = 1440;
+// A 600px banner plus its label needs the window to be tall enough to hold it.
+// An iframe clips whatever does not fit, and a banner the network sees as part
+// hidden is one it stops serving into, so a short window gets no rail rather
+// than half a rail.
+const MIN_HEIGHT = 700;
 const SIZE = "160x600";
 const RAILS = ["railLeft", "railRight"] as const;
 
@@ -31,7 +36,8 @@ export default function SideRails() {
   // The page is prerendered, so this cannot be decided on the server either:
   // one HTML file is served to every screen.
   useEffect(() => {
-    const check = () => setWide(window.innerWidth >= MIN_WIDTH);
+    const check = () =>
+      setWide(window.innerWidth >= MIN_WIDTH && window.innerHeight >= MIN_HEIGHT);
     const first = window.setTimeout(check, 0);
     return () => window.clearTimeout(first);
   }, []);

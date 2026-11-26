@@ -110,6 +110,11 @@ test("the side rails fit the empty margin they are meant to sit in", () => {
   // And the component has to be asking for that same width.
   const source = fs.readFileSync("src/components/ads/SideRails.tsx", "utf8");
   assert.match(source, new RegExp(`MIN_WIDTH = ${MIN_WIDTH};`));
+  // It also has to refuse a window too short to show a 600px banner whole,
+  // because an iframe clips what does not fit and the network stops serving
+  // into a unit it sees as part hidden.
+  const minHeight = Number(source.match(/MIN_HEIGHT = (\d+);/)?.[1]);
+  assert.ok(minHeight >= AD_SLOTS.railLeft.height, `${minHeight} is shorter than the rail`);
 });
 
 test("native places reserve a sensible box", () => {
