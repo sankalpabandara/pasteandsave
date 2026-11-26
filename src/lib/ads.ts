@@ -51,6 +51,13 @@ export type AdPlacement = {
    * site's traffic, so the wide slots ask for a 320x50 there instead.
    */
   bannerMobile?: AdsterraSize;
+  /**
+   * A box pinned to an edge of the screen at exactly the banner's size, which
+   * a stand in must not be put into: anything taller is clipped, and a unit
+   * the network sees as part hidden is one it stops serving into. The slots
+   * that sit in the page can grow, so they are allowed one.
+   */
+  fixedBox?: boolean;
 };
 
 // Heights allow for the tallest standard creative the network may serve into
@@ -83,15 +90,15 @@ export const AD_SLOTS = {
   // Anchored to the bottom edge of the screen on phones. Not a page position
   // like the others: it follows the visitor down the page, so it is seen on
   // every screen rather than on the one it happens to sit in.
-  stickyBottom: { height: 50, maxWidth: 320, banner: "320x50" },
+  stickyBottom: { height: 50, maxWidth: 320, banner: "320x50", fixedBox: true },
 
   // The two skyscrapers beside the page on a wide screen. The page itself is
   // 1024px of content in the middle, so on anything from 1440px up there is
   // empty margin on both sides doing nothing. These sit in it: they cover no
   // text, need no close button, and follow the visitor down like the phone
   // bar does. Below 1440px they are not rendered at all.
-  railLeft: { height: 600, maxWidth: 160, banner: "160x600" },
-  railRight: { height: 600, maxWidth: 160, banner: "160x600" },
+  railLeft: { height: 600, maxWidth: 160, banner: "160x600", fixedBox: true },
+  railRight: { height: 600, maxWidth: 160, banner: "160x600", fixedBox: true },
 
 } satisfies Record<string, AdPlacement>;
 

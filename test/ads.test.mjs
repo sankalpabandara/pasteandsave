@@ -117,6 +117,24 @@ test("the side rails fit the empty margin they are meant to sit in", () => {
   assert.ok(minHeight >= AD_SLOTS.railLeft.height, `${minHeight} is shorter than the rail`);
 });
 
+test("only a box that can grow is offered a stand in", () => {
+  // Adsterra served a banner into 9 of 234 banner frames over two days, while
+  // the Native Banner filled nearly every time. So a page slot whose banner
+  // does not arrive asks for native instead, and the box grows to fit it.
+  // The bar pinned to the bottom of a phone and the two side rails are
+  // exactly the banner's size, so a grid put in one would be clipped, and a
+  // unit the network sees as part hidden is one it stops serving into.
+  for (const slot of ["stickyBottom", "railLeft", "railRight"]) {
+    assert.equal(AD_SLOTS[slot].fixedBox, true, `${slot} must refuse a stand in`);
+  }
+  for (const slot of ["homeTop", "homeMid", "toolTop", "toolMid", "downloadWait"]) {
+    assert.ok(!AD_SLOTS[slot].fixedBox, `${slot} is in the page and can grow`);
+  }
+  // And the frame route has to be the thing honouring it.
+  const route = fs.readFileSync("src/app/ads/frame/route.ts", "utf8");
+  assert.match(route, /placement\.fixedBox \? "" : settings\.native/);
+});
+
 test("native places reserve a sensible box", () => {
   for (const [key, cfg] of Object.entries(NATIVE_SLOTS)) {
     assert.ok(cfg.height >= 120 && cfg.height <= 600, `${key}: ${cfg.height}`);

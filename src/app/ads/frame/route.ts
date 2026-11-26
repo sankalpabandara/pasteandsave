@@ -1,5 +1,12 @@
 ﻿import type { NextRequest } from "next/server";
-import { AD_SLOTS, adsterraDimensions, isAdsterraSize, isNativeSlot } from "@/lib/ads";
+import {
+  AD_SLOTS,
+  adsterraDimensions,
+  isAdsterraSize,
+  isNativeSlot,
+  type AdPlacement,
+  type AdSlotKey,
+} from "@/lib/ads";
 import { readSettings } from "@/lib/ads-store";
 import { adsterraKey } from "@/lib/adsterra-code";
 
@@ -101,6 +108,29 @@ iframe,img{border:0;display:block;max-width:100%}
   });
 }
 
+/**
+ * Tells the page how tall this frame's contents came out, so the box around it
+ * can grow to fit instead of cutting the ad off. Only once something has been
+ * drawn: reporting the empty document would shrink the box and grow it again a
+ * moment later. The frame has no origin of its own to check, so the page
+ * accepts the message only from this frame's own window (see AdSlot).
+ */
+function heightReporter(containerId: string): string {
+  return `
+(function () {
+  var box = document.getElementById(${jsString(containerId)});
+  var last = 0;
+  function send() {
+    var drawn = box ? box.offsetHeight : 0;
+    if (!drawn) return;
+    var h = Math.ceil(document.body.scrollHeight);
+    if (h !== last) { last = h; parent.postMessage({ type: "pas-ad-height", h: h }, "*"); }
+  }
+  if (window.ResizeObserver && box) new ResizeObserver(send).observe(box);
+  var n = 0, t = setInterval(function () { send(); if (++n > 40) clearInterval(t); }, 500);
+})();`;
+}
+
 export async function GET(request: NextRequest) {
   // Set on the request by proxy.ts, which also sets the policy that enforces
   // it. Without the nonce the scripts below are blocked and the slot is blank.
@@ -122,6 +152,24 @@ export async function GET(request: NextRequest) {
 
   const settings = await readSettings();
   const unit = settings.adsterra[size];
+  // The Native Banner, as a stand in for a banner that does not fill.
+  //
+  // Measured over two days: 234 banner frames were loaded and Adsterra served
+  // a banner into 9 of them. The Native Banner filled nearly every time it was
+  // asked. So a box that would otherwise sit empty asks for native instead,
+  // which is the difference between an impression and nothing at all.
+  //
+  // This is not the old A-ADS stand in, which could leave two banners in one
+  // slot when the network answered after the timer had given up. Nothing is
+  // added here until the network has had its chance and drawn nothing, and
+  // once the native code is in, the banner has already lost its turn.
+  //
+  // Not in a box that cannot grow: the phone bar and the side rails are
+  // pinned to an edge at exactly the banner's size, so a native grid in a
+  // 50px bar would be clipped to a sliver.
+  const placement: AdPlacement = AD_SLOTS[slot as AdSlotKey];
+  const nativeSrc = placement.fixedBox ? "" : settings.native;
+  const nativeKey = nativeSrc ? adsterraKey(nativeSrc) : null;
 
   // No code of this size: an empty document. There used to be an A-ADS banner
   // here as a stand in, and a timer that swapped it in when Adsterra was slow.
@@ -133,11 +181,45 @@ export async function GET(request: NextRequest) {
 
   const { width, height } = adsterraDimensions(size);
 
+  const fallback =
+    nativeSrc && nativeKey
+      ? `
+<script nonce="${attr(nonce)}">
+(function () {
+  var waited = 0;
+  // What the network draws when it has something: an iframe, a picture, or
+  // the <ins> its own widgets use. The script tag itself proves nothing.
+  function drawn() { return !!document.querySelector("iframe, img, ins"); }
+  var timer = setInterval(function () {
+    waited += 250;
+    if (drawn()) { clearInterval(timer); return; }
+    if (waited < 2500) return;
+    clearInterval(timer);
+    // Nothing came. Ask for the native widget in the same box.
+    var box = document.createElement("div");
+    box.id = ${jsString(`container-${nativeKey}`)};
+    document.body.appendChild(box);
+    // Built as an element, not written as markup: a script assigned through
+    // innerHTML is parsed but never run. This one carries no nonce and does
+    // not need one, because a script added by a script the nonce vouched for
+    // is already trusted under strict-dynamic.
+    var script = document.createElement("script");
+    script.async = true;
+    script.setAttribute("data-cfasync", "false");
+    script.src = ${jsString(nativeSrc)};
+    document.body.appendChild(script);
+    document.body.style.display = "block";
+    ${heightReporter(`container-${nativeKey}`)}
+  }, 250);
+})();
+</script>`
+      : "";
+
   const body = `
 <script nonce="${attr(nonce)}">
 atOptions = { key: ${jsString(unit.key)}, format: "iframe", height: ${height}, width: ${width}, params: {} };
 </script>
-<script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>`;
+<script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>${fallback}`;
 
   return htmlDocument(body, nonce);
 }
@@ -156,22 +238,7 @@ async function nativeDocument(slot: string, nonce: string): Promise<Response> {
   const body = `
 <script nonce="${attr(nonce)}" async data-cfasync="false" src="${attr(native)}"></script>
 <div id="container-${attr(key)}"></div>
-<script nonce="${attr(nonce)}">
-(function () {
-  // Only once the widget has drawn something: reporting the empty document
-  // would shrink the box first and grow it again a moment later.
-  var box = document.getElementById(${jsString(`container-${key}`)});
-  var last = 0;
-  function send() {
-    var drawn = box ? box.offsetHeight : 0;
-    if (!drawn) return;
-    var h = Math.ceil(document.body.scrollHeight);
-    if (h !== last) { last = h; parent.postMessage({ type: "pas-ad-height", h: h }, "*"); }
-  }
-  if (window.ResizeObserver && box) new ResizeObserver(send).observe(box);
-  var n = 0, t = setInterval(function () { send(); if (++n > 40) clearInterval(t); }, 500);
-})();
-</script>`;
+<script nonce="${attr(nonce)}">${heightReporter(`container-${key}`)}</script>`;
 
   return htmlDocument(body, nonce, NATIVE_CSS);
 }

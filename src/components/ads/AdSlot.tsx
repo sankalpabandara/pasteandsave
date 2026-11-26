@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
   AD_SLOTS,
   ADS_ENABLED,
@@ -66,6 +66,29 @@ export default function AdSlot({
 
   const snippet = (snippets[slot] ?? "").trim();
 
+  // How tall the frame says its contents came out.
+  //
+  // A banner is the size it asked for, so this stays null for one. It matters
+  // when the frame gives up on the banner and puts the Native Banner in its
+  // place instead: that widget is a grid whose height depends on the width it
+  // got, and a 320px grid in the 100px a leaderboard reserved would be cut
+  // down to a strip. The frame measures itself and the box follows.
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [grown, setGrown] = useState<number | null>(null);
+  useEffect(() => {
+    // The frame is sandboxed without allow-same-origin, so it has no origin to
+    // check the message against. It is trusted only as coming from this
+    // frame's own window, and only as a number inside a sane range.
+    const onMessage = (event: MessageEvent) => {
+      if (!frame.current || event.source !== frame.current.contentWindow) return;
+      const data = event.data as { type?: unknown; h?: unknown } | null;
+      if (!data || data.type !== "pas-ad-height" || typeof data.h !== "number") return;
+      setGrown(Math.min(1400, Math.max(cfg.height, Math.round(data.h))));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [cfg.height]);
+
   // A network's embed usually includes a <script>. Assigning it through
   // innerHTML puts the tag in the document but the browser will not run it,
   // so each script is rebuilt as a fresh element. Without this a pasted embed
@@ -112,8 +135,10 @@ export default function AdSlot({
       <div
         className="mx-auto rounded-xl border border-black/5 bg-neutral-50 dark:border-white/10 dark:bg-neutral-900/40"
         style={{
-          minHeight: cfg.height,
-          maxWidth: cfg.maxWidth,
+          minHeight: grown ?? cfg.height,
+          // A stand in is a different shape from the banner it replaced, so
+          // the box widens for it rather than squeezing a grid into 336px.
+          maxWidth: grown ? Math.max(cfg.maxWidth, 728) : cfg.maxWidth,
           width: "100%",
         }}
       >
@@ -128,6 +153,7 @@ export default function AdSlot({
           adsterraSize ? (
             <iframe
               key={adsterraSize}
+              ref={frame}
               title={label}
               src={`/ads/frame?slot=${encodeURIComponent(slot)}&size=${encodeURIComponent(adsterraSize)}`}
               // allow-same-origin is deliberately absent. The frame is served
@@ -145,7 +171,7 @@ export default function AdSlot({
                 border: 0,
                 display: "block",
                 width: "100%",
-                height: cfg.height,
+                height: grown ?? cfg.height,
                 backgroundColor: "transparent",
               }}
             />
