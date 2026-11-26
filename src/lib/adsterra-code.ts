@@ -43,21 +43,37 @@ export function scriptHost(src: string | undefined | null): string | null {
   }
 }
 
+/**
+ * Adsterra formats that cannot live in a sealed frame, because each one puts
+ * itself over or around the whole page: the Social Bar's floating notices, the
+ * Popunder's new tab, the Interstitial's full screen panel, the In-Page Push
+ * cards. Their scripts run in the page, so the page's own policy has to allow
+ * them, and the page has to keep them away from the admin session.
+ */
+export const PAGE_SCRIPTS = ["socialBar", "popunder", "interstitial", "inPagePush"] as const;
+export type PageScriptKind = (typeof PAGE_SCRIPTS)[number];
+
 export type AdPolicy = {
   /** "https://host" and "https://*.host" for every saved Adsterra script. */
   hosts: string[];
   /** The Social Bar runs in the page itself, so the page policy has to make room for it. */
   socialBar: boolean;
+  /**
+   * Whether any format that runs in the page is switched on. The relaxation
+   * the policy needs is the same for all of them, so one flag decides it; the
+   * Social Bar keeps its own above only because it was the first.
+   */
+  pageScripts: boolean;
 };
 
 /** What the content policy needs from a parsed data/site-settings.json. */
 export function policyFromSettings(saved: unknown): AdPolicy {
-  if (!saved || typeof saved !== "object") return { hosts: [], socialBar: false };
+  if (!saved || typeof saved !== "object") return { hosts: [], socialBar: false, pageScripts: false };
   const s = saved as Record<string, unknown>;
   const banners = s.adsterra && typeof s.adsterra === "object" ? Object.values(s.adsterra as object) : [];
   const sources = [
     ...banners.map((u) => (u && typeof u === "object" ? (u as Record<string, unknown>).src : undefined)),
-    s.socialBar,
+    ...PAGE_SCRIPTS.map((kind) => s[kind]),
     s.native,
   ];
   const hosts = new Set<string>();
@@ -67,9 +83,11 @@ export function policyFromSettings(saved: unknown): AdPolicy {
     hosts.add(`https://${host}`);
     hosts.add(`https://*.${host}`);
   }
+  const on = (kind: PageScriptKind) => typeof s[kind] === "string" && scriptHost(s[kind] as string) !== null;
   return {
     hosts: [...hosts],
-    socialBar: typeof s.socialBar === "string" && scriptHost(s.socialBar) !== null,
+    socialBar: on("socialBar"),
+    pageScripts: PAGE_SCRIPTS.some(on),
   };
 }
 

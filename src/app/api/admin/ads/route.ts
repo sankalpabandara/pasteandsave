@@ -26,8 +26,17 @@ export async function GET() {
   return Response.json(await readSettings());
 }
 
+/** The formats that are one pasted code each. */
+const CODES = [
+  { key: "socialBar", title: "Social Bar", needsKey: false },
+  { key: "native", title: "Native Banner", needsKey: true },
+  { key: "popunder", title: "Popunder", needsKey: false },
+  { key: "interstitial", title: "Interstitial", needsKey: false },
+  { key: "inPagePush", title: "In-Page Push", needsKey: false },
+] as const;
+
 /**
- * A pasted Social Bar or Native Banner code. Undefined leaves the saved one
+ * A pasted code for one of those formats. Undefined leaves the saved one
  * alone, an empty string turns it off, anything else must hold a script
  * address (and, for the Native Banner, the key that names its container).
  */
@@ -52,8 +61,7 @@ export async function POST(request: NextRequest) {
   let body: {
     snippets?: Record<string, unknown>;
     adsterra?: unknown;
-    socialBarCode?: unknown;
-    nativeCode?: unknown;
+    codes?: Record<string, unknown>;
     gaId?: unknown;
   };
   try {
@@ -70,13 +78,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const social = readCode(body.socialBarCode, false);
-  if (social.error) {
-    return Response.json({ error: `Social Bar code: ${social.error}.` }, { status: 400 });
-  }
-  const native = readCode(body.nativeCode, true);
-  if (native.error) {
-    return Response.json({ error: `Native Banner code: ${native.error}.` }, { status: 400 });
+  // Each format's code is read on its own, and a bad one stops the save
+  // rather than being quietly dropped: a code that was pasted and then
+  // ignored looks exactly like a format that is not filling.
+  const codes: Partial<Record<(typeof CODES)[number]["key"], string>> = {};
+  for (const { key, title, needsKey } of CODES) {
+    const read = readCode(body.codes?.[key], needsKey);
+    if (read.error) {
+      return Response.json({ error: `${title} code: ${read.error}.` }, { status: 400 });
+    }
+    if (read.value !== undefined) codes[key] = read.value;
   }
 
   // Snippets are taken as written. Every network formats its embed
@@ -94,7 +105,7 @@ export async function POST(request: NextRequest) {
     body.adsterra === undefined ? undefined : cleanAdsterra(body.adsterra);
 
   try {
-    await writeSettings({ snippets, adsterra, socialBar: social.value, native: native.value, gaId });
+    await writeSettings({ snippets, adsterra, ...codes, gaId });
   } catch {
     return Response.json({ error: "Couldn't save. Check disk permissions." }, { status: 500 });
   }

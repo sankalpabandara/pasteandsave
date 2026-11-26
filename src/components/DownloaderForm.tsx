@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { detectPlatform } from "@/lib/platforms";
 import { useAdGate } from "@/components/ads/AdProvider";
+import DownloadWait from "@/components/ads/DownloadWait";
 import ReviewPrompt from "@/components/ReviewPrompt";
 import { browserStore, takeReviewTurn } from "@/lib/review";
 
@@ -233,9 +234,14 @@ export default function DownloaderForm({
   const [askReview, setAskReview] = useState(false);
   const closeReview = useCallback(() => setAskReview(false), []);
   const sourcesRef = useRef<Record<string, EventSource>>({});
+  // True while the server is making a file for any of the rows: started, being
+  // downloaded, or being converted. An error or a finished job is not a wait.
+  const busy = Object.values(jobs).some(
+    (job) => job.status !== "idle" && job.status !== "error",
+  );
   const autoRanRef = useRef(false);
   const mp3PrefRef = useRef(false);
-  const { gate } = useAdGate();
+  const { gate, armDownload } = useAdGate();
 
   // Look up one video and show its download options. Used both for the search
   // box and when a playlist item is clicked (which leaves the list in place).
@@ -260,6 +266,9 @@ export default function DownloaderForm({
           return;
         }
         setResult(data);
+        // From here the next click is almost always Save, which is the click
+        // the Popunder should answer. See AdProvider.armDownload.
+        armDownload();
         // Open on the tab that actually has something in it, photo posts and
         // music links have no video ladder, or on Audio when the visitor
         // arrived from the extension's MP3 shortcut.
@@ -281,7 +290,7 @@ export default function DownloaderForm({
         setLoading(false);
       }
     },
-    [gate],
+    [gate, armDownload],
   );
 
   const lookupPlaylist = useCallback(
@@ -754,6 +763,9 @@ export default function DownloaderForm({
           </div>
         </div>
       )}
+
+      {/* Fills the wait while the server makes the file, and only then. */}
+      <DownloadWait active={busy} />
 
       {askReview && <ReviewPrompt onClose={closeReview} />}
     </div>

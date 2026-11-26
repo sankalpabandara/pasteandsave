@@ -12,8 +12,9 @@ import { ADS_ENABLED } from "@/lib/ads";
 
 type AdContextValue = {
   /**
-   * Kept so the download flow can await it. It resolves immediately: there is
-   * no interstitial before a download.
+   * Kept so the download flow can await it. It resolves immediately: nothing
+   * is held back from a visitor who has pressed Save. The ads around that
+   * moment fill a wait the server was going to make them sit through anyway.
    */
   gate: () => Promise<void>;
   /** Another network's embed per slot, pasted into the admin panel. */
@@ -22,8 +23,23 @@ type AdContextValue = {
   adsterraSizes: string[];
   /** Script address of the Adsterra Social Bar, or "" when it is off. */
   socialBar: string;
+  /** Script address of the Adsterra Interstitial, or "" when it is off. */
+  interstitial: string;
+  /** Script address of the Adsterra In-Page Push, or "" when it is off. */
+  inPagePush: string;
+  /** Script address of the Adsterra Popunder, or "" when it is off. */
+  popunder: string;
   /** Whether an Adsterra Native Banner code is saved. */
   native: boolean;
+  /**
+   * Called once a visitor has a list of formats in front of them. The Popunder
+   * answers the next click anywhere on the page, so loading it on arrival
+   * would spend it on a click on the paste box, or on a visitor who never
+   * downloads anything. Armed here, the click it answers is the one on Save.
+   */
+  armDownload: () => void;
+  /** Whether armDownload has been called in this page's life. */
+  downloadArmed: boolean;
 };
 
 const AdContext = createContext<AdContextValue>({
@@ -31,7 +47,12 @@ const AdContext = createContext<AdContextValue>({
   snippets: {},
   adsterraSizes: [],
   socialBar: "",
+  interstitial: "",
+  inPagePush: "",
+  popunder: "",
   native: false,
+  armDownload: () => {},
+  downloadArmed: false,
 });
 export const useAdGate = () => useContext(AdContext);
 export const useAdConfig = () => useContext(AdContext);
@@ -41,6 +62,9 @@ export function AdProvider({
   initialSnippets = {},
   initialAdsterraSizes = [],
   initialSocialBar = "",
+  initialInterstitial = "",
+  initialInPagePush = "",
+  initialPopunder = "",
   initialNative = false,
 }: {
   children: ReactNode;
@@ -52,12 +76,19 @@ export function AdProvider({
   initialSnippets?: Record<string, string>;
   initialAdsterraSizes?: string[];
   initialSocialBar?: string;
+  initialInterstitial?: string;
+  initialInPagePush?: string;
+  initialPopunder?: string;
   initialNative?: boolean;
 }) {
   const [snippets, setSnippets] = useState<Record<string, string>>(initialSnippets);
   const [adsterraSizes, setAdsterraSizes] = useState<string[]>(initialAdsterraSizes);
   const [socialBar, setSocialBar] = useState(initialSocialBar);
+  const [interstitial, setInterstitial] = useState(initialInterstitial);
+  const [inPagePush, setInPagePush] = useState(initialInPagePush);
+  const [popunder, setPopunder] = useState(initialPopunder);
   const [native, setNative] = useState(initialNative);
+  const [downloadArmed, setDownloadArmed] = useState(false);
 
   // The server value above is what the page ships with. This refresh is what
   // lets a change on the server show without waiting for a rebuild, because
@@ -72,6 +103,9 @@ export function AdProvider({
         if (data.snippets) setSnippets(data.snippets);
         if (Array.isArray(data.adsterraSizes)) setAdsterraSizes(data.adsterraSizes);
         if (typeof data.socialBar === "string") setSocialBar(data.socialBar);
+        if (typeof data.interstitial === "string") setInterstitial(data.interstitial);
+        if (typeof data.inPagePush === "string") setInPagePush(data.inPagePush);
+        if (typeof data.popunder === "string") setPopunder(data.popunder);
         if (typeof data.native === "boolean") setNative(data.native);
       })
       .catch(() => {
@@ -82,12 +116,26 @@ export function AdProvider({
     };
   }, []);
 
-  // No interstitial before a download. Kept as a resolved promise so the
-  // download flow that awaits it needs no change.
+  // Nothing is held back from a visitor who pressed Save. Kept as a resolved
+  // promise so the download flow that awaits it needs no change.
   const gate = useCallback(() => Promise.resolve(), []);
+  const armDownload = useCallback(() => setDownloadArmed(true), []);
 
   return (
-    <AdContext.Provider value={{ gate, snippets, adsterraSizes, socialBar, native }}>
+    <AdContext.Provider
+      value={{
+        gate,
+        snippets,
+        adsterraSizes,
+        socialBar,
+        interstitial,
+        inPagePush,
+        popunder,
+        native,
+        armDownload,
+        downloadArmed,
+      }}
+    >
       {children}
     </AdContext.Provider>
   );

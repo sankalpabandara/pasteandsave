@@ -57,10 +57,40 @@ test("the content policy gets every saved ad host and knows when the Social Bar 
     "https://pl2.nativehost.com",
   ]);
   assert.equal(policy.socialBar, true);
+  assert.equal(policy.pageScripts, true);
   assert.equal(policyFromSettings({ socialBar: "" }).socialBar, false);
-  assert.deepEqual(policyFromSettings(null), { hosts: [], socialBar: false });
+  assert.deepEqual(policyFromSettings(null), { hosts: [], socialBar: false, pageScripts: false });
   // A broken entry can never smuggle anything into the policy header.
   assert.deepEqual(policyFromSettings({ socialBar: "https://a.com; script-src *" }).hosts, []);
+});
+
+test("every format that runs in the page opens the policy, and its host is allowed", () => {
+  // The Popunder, Interstitial and In-Page Push scripts run in the page like
+  // the Social Bar, so each on its own has to set pageScripts: without it the
+  // page refuses the eval their scripts need and the format silently earns
+  // nothing, which looks exactly like a network that is not filling.
+  for (const kind of ["socialBar", "popunder", "interstitial", "inPagePush"]) {
+    const policy = policyFromSettings({ [kind]: "https://pl9.adhost.com/a/b.js" });
+    assert.equal(policy.pageScripts, true, `${kind}: did not open the page policy`);
+    assert.deepEqual(policy.hosts.sort(), ["https://*.pl9.adhost.com", "https://pl9.adhost.com"]);
+  }
+  // The banners sit in a sealed frame and need none of it.
+  const banners = policyFromSettings({
+    adsterra: { "320x50": { key: KEY, src: `https://bellnewyork.org/22/${KEY}` } },
+  });
+  assert.equal(banners.pageScripts, false);
+  assert.equal(policyFromSettings({ popunder: "not a url" }).pageScripts, false);
+});
+
+test("the wait beside the Save buttons and the sticky bar are real places", () => {
+  // The download wait is the attentive minute on this site: a visitor cannot
+  // leave the page without losing the file. It carries a banner and a native
+  // row, and the frame route only serves a slot that exists here.
+  assert.equal(AD_SLOTS.downloadWait.banner, "300x250");
+  assert.ok(NATIVE_SLOTS.waitNative);
+  // The sticky bar is a phone banner, so it asks for the phone size.
+  assert.equal(AD_SLOTS.stickyBottom.banner, "320x50");
+  assert.equal(AD_SLOTS.stickyBottom.bannerMobile, undefined);
 });
 
 test("native places reserve a sensible box", () => {

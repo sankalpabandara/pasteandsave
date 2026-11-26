@@ -47,6 +47,18 @@ export type SiteSettings = {
   adsterra: AdsterraUnits;
   /** Script address of the Adsterra Social Bar, or "" when it is off. */
   socialBar: string;
+  /**
+   * Script address of the Adsterra Popunder, or "" when it is off. It opens
+   * the advertiser in a background tab on a click, and only a real click will
+   * do: a browser refuses a window that no gesture asked for. The site arms it
+   * once a visitor has a list of formats in front of them, so the click it
+   * answers is the one on Save rather than one on the way in.
+   */
+  popunder: string;
+  /** Script address of the Adsterra Interstitial, or "" when it is off. */
+  interstitial: string;
+  /** Script address of the Adsterra In-Page Push, or "" when it is off. */
+  inPagePush: string;
   /** Script address of the Adsterra Native Banner, or "" when it is off. */
   native: string;
   /** GA4 measurement id, the "G-XXXXXXX" one. Public by design. */
@@ -86,10 +98,16 @@ export function isValidAdsterraUnit(unit: unknown): unit is AdsterraUnit {
   );
 }
 
-/** A Social Bar address worth saving, or "". */
-export function cleanSocialBar(value: unknown): string {
+/**
+ * The address of a script the page itself loads, or "". Used for every format
+ * that runs in the page: Social Bar, Popunder, Interstitial, In-Page Push.
+ */
+export function cleanPageScript(value: unknown): string {
   return typeof value === "string" && isValidAdsterraSrc(value.trim()) ? value.trim() : "";
 }
+
+/** Named for the first format that needed it, and kept as its own name. */
+export const cleanSocialBar = cleanPageScript;
 
 /** A Native Banner address worth saving, or "": it also needs the key that names its container. */
 export function cleanNative(value: unknown): string {
@@ -124,12 +142,24 @@ export async function readSettings(): Promise<SiteSettings> {
     return {
       snippets,
       adsterra: cleanAdsterra(saved.adsterra),
-      socialBar: cleanSocialBar(saved.socialBar),
+      socialBar: cleanPageScript(saved.socialBar),
+      popunder: cleanPageScript(saved.popunder),
+      interstitial: cleanPageScript(saved.interstitial),
+      inPagePush: cleanPageScript(saved.inPagePush),
       native: cleanNative(saved.native),
       gaId: isValidGaId(savedGa) && savedGa ? savedGa : envGa,
     };
   } catch {
-    return { snippets: {}, adsterra: {}, socialBar: "", native: "", gaId: envGa };
+    return {
+      snippets: {},
+      adsterra: {},
+      socialBar: "",
+      popunder: "",
+      interstitial: "",
+      inPagePush: "",
+      native: "",
+      gaId: envGa,
+    };
   }
 }
 
@@ -137,6 +167,9 @@ export async function writeSettings(input: {
   snippets?: AdSnippets;
   adsterra?: AdsterraUnits;
   socialBar?: string;
+  popunder?: string;
+  interstitial?: string;
+  inPagePush?: string;
   native?: string;
   gaId?: string;
 }): Promise<void> {
@@ -157,13 +190,22 @@ export async function writeSettings(input: {
   // Save.
   const current = await readSettings();
   const adsterra = input.adsterra ? cleanAdsterra(input.adsterra) : current.adsterra;
-  const socialBar = input.socialBar === undefined ? current.socialBar : cleanSocialBar(input.socialBar);
+  const page = (kind: "socialBar" | "popunder" | "interstitial" | "inPagePush") =>
+    input[kind] === undefined ? current[kind] : cleanPageScript(input[kind]);
+  const socialBar = page("socialBar");
+  const popunder = page("popunder");
+  const interstitial = page("interstitial");
+  const inPagePush = page("inPagePush");
   const native = input.native === undefined ? current.native : cleanNative(input.native);
 
   await fsp.mkdir(DATA_DIR, { recursive: true });
   await fsp.writeFile(
     FILE,
-    JSON.stringify({ snippets, adsterra, socialBar, native, gaId }, null, 2),
+    JSON.stringify(
+      { snippets, adsterra, socialBar, popunder, interstitial, inPagePush, native, gaId },
+      null,
+      2,
+    ),
     "utf8",
   );
 }

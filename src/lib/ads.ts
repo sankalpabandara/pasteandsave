@@ -74,6 +74,17 @@ export const AD_SLOTS = {
   extensionTop: { height: 100, maxWidth: 728, banner: "728x90", bannerMobile: "320x50" },
   extensionBottom: { height: 280, maxWidth: 336, banner: "300x250" },
 
+  // The wait while the server makes the file. A visitor who pressed Save has
+  // asked for something that takes up to a minute and a half, and they stay on
+  // the page for all of it, because leaving cancels their download. It is the
+  // most attentive minute this site gets, and it used to carry nothing.
+  downloadWait: { height: 280, maxWidth: 336, banner: "300x250" },
+
+  // Anchored to the bottom edge of the screen on phones. Not a page position
+  // like the others: it follows the visitor down the page, so it is seen on
+  // every screen rather than on the one it happens to sit in.
+  stickyBottom: { height: 50, maxWidth: 320, banner: "320x50" },
+
 } satisfies Record<string, AdPlacement>;
 
 export type AdSlotKey = keyof typeof AD_SLOTS;
@@ -98,6 +109,7 @@ export const NATIVE_SLOTS = {
   homeNative: { height: 320, label: "Home: above the questions" },
   toolNative: { height: 320, label: "Tool pages: after the questions" },
   blogNative: { height: 320, label: "Blog posts: after the questions" },
+  waitNative: { height: 320, label: "While a file is being prepared" },
 } as const;
 
 export type NativeSlotKey = keyof typeof NATIVE_SLOTS;

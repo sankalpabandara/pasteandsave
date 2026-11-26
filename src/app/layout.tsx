@@ -3,7 +3,8 @@ import { Geist, Space_Grotesk } from "next/font/google";
 import ThemeScript from "@/components/ThemeScript";
 import Analytics from "@/components/Analytics";
 import { AdProvider } from "@/components/ads/AdProvider";
-import SocialBar from "@/components/ads/SocialBar";
+import PageScripts from "@/components/ads/PageScripts";
+import StickyBanner from "@/components/ads/StickyBanner";
 import { readSettings } from "@/lib/ads-store";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -74,7 +75,8 @@ export default async function RootLayout({
   // Read here rather than in the browser so the first HTML already reserves a
   // box for every slot that will carry a banner, and nothing moves when the
   // banners arrive.
-  const { snippets, adsterra, socialBar, native } = await readSettings();
+  const { snippets, adsterra, socialBar, popunder, interstitial, inPagePush, native } =
+    await readSettings();
 
   return (
     <html
@@ -88,10 +90,14 @@ export default async function RootLayout({
           initialSnippets={snippets}
           initialAdsterraSizes={Object.keys(adsterra)}
           initialSocialBar={socialBar}
+          initialPopunder={popunder}
+          initialInterstitial={interstitial}
+          initialInPagePush={inPagePush}
           initialNative={Boolean(native)}
         >
           {children}
-          <SocialBar />
+          <PageScripts />
+          <StickyBanner />
         </AdProvider>
         <Analytics />
       </body>

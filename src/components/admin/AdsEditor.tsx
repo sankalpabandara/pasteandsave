@@ -14,6 +14,14 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
   toolBottom: { label: "Tool page: bottom", where: "All platform pages, above the footer" },
   extensionTop: { label: "Extension page: top", where: "The /extension page, under the hero" },
   extensionBottom: { label: "Extension page: bottom", where: "The /extension page, above the footer" },
+  downloadWait: {
+    label: "While a file is being prepared",
+    where: "Next to the Save buttons, for as long as the server is working",
+  },
+  stickyBottom: {
+    label: "Bottom edge on phones",
+    where: "Follows the visitor down every public page, with a close button",
+  },
 };
 
 const ORDER = Object.keys(SLOT_INFO) as AdSlotKey[];
@@ -23,18 +31,76 @@ type SettingsView = {
   snippets?: Record<string, string>;
   adsterra?: AdsterraView;
   socialBar?: string;
+  popunder?: string;
+  interstitial?: string;
+  inPagePush?: string;
   native?: string;
   gaId?: string;
 };
+
+/** The formats that are one pasted code each, in the order they are shown. */
+const CODE_FIELDS = [
+  {
+    key: "socialBar",
+    id: "social-bar",
+    title: "Social Bar",
+    needsKey: false,
+    text: "Small notice style ads at the edge of the screen, on every public page. Loads after the page has finished loading, never in the admin area and never for a signed in admin.",
+  },
+  {
+    key: "native",
+    id: "native-banner",
+    title: "Native Banner",
+    needsKey: true,
+    text: "A row of small picture ads that sits in the page: home page above the questions, tool pages after the questions, the end of every blog post, and beside the Save buttons while a file is being made.",
+  },
+  {
+    key: "popunder",
+    id: "popunder",
+    title: "Popunder",
+    needsKey: false,
+    text: "Opens the advertiser in a background tab. Loaded only once a visitor has formats in front of them, so it answers the click on Save rather than a click on the way in. Adsterra decides how often one visitor sees it.",
+  },
+  {
+    key: "interstitial",
+    id: "interstitial",
+    title: "Interstitial",
+    needsKey: false,
+    text: "A full screen ad the visitor dismisses, on public pages. The highest paying format that still leaves the page reachable.",
+  },
+  {
+    key: "inPagePush",
+    id: "in-page-push",
+    title: "In-Page Push",
+    needsKey: false,
+    text: "Notification style cards drawn inside the page. Needs no permission from the browser, unlike real push.",
+  },
+] as const;
+
+type CodeKey = (typeof CODE_FIELDS)[number]["key"];
+const EMPTY_CODES: Record<CodeKey, string> = {
+  socialBar: "",
+  native: "",
+  popunder: "",
+  interstitial: "",
+  inPagePush: "",
+};
+
+function codesFrom(d: SettingsView): Record<CodeKey, string> {
+  const out = { ...EMPTY_CODES };
+  for (const { key } of CODE_FIELDS) out[key] = d[key] ?? "";
+  return out;
+}
 
 export default function AdsEditor() {
   const [snippets, setSnippets] = useState<Record<string, string>>({});
   const [adsterra, setAdsterra] = useState<AdsterraView>({});
   // Shown as the saved script address; paste a whole code over it to replace
   // it, or clear the box to turn that format off.
-  const [socialBarCode, setSocialBarCode] = useState("");
-  const [nativeCode, setNativeCode] = useState("");
-  const [saved, setSaved] = useState({ socialBar: "", native: "" });
+  const [codes, setCodes] = useState<Record<CodeKey, string>>(EMPTY_CODES);
+  const [saved, setSaved] = useState<Record<CodeKey, string>>(EMPTY_CODES);
+  const setCode = (key: CodeKey, value: string) =>
+    setCodes((prev) => ({ ...prev, [key]: value }));
   const [gaId, setGaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,9 +112,8 @@ export default function AdsEditor() {
       .then((d: SettingsView) => {
         setSnippets(d.snippets ?? {});
         setAdsterra(d.adsterra ?? {});
-        setSocialBarCode(d.socialBar ?? "");
-        setNativeCode(d.native ?? "");
-        setSaved({ socialBar: d.socialBar ?? "", native: d.native ?? "" });
+        setCodes(codesFrom(d));
+        setSaved(codesFrom(d));
         setGaId(d.gaId ?? "");
       })
       .catch(() => setMessage({ ok: false, text: "Couldn't load the current settings." }))
@@ -63,7 +128,7 @@ export default function AdsEditor() {
       const res = await fetch("/api/admin/ads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snippets, gaId, socialBarCode, nativeCode }),
+        body: JSON.stringify({ snippets, gaId, codes }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -72,9 +137,8 @@ export default function AdsEditor() {
       }
       setSnippets(data.snippets ?? snippets);
       setAdsterra(data.adsterra ?? adsterra);
-      setSocialBarCode(data.socialBar ?? "");
-      setNativeCode(data.native ?? "");
-      setSaved({ socialBar: data.socialBar ?? "", native: data.native ?? "" });
+      setCodes(codesFrom(data));
+      setSaved(codesFrom(data));
       setGaId(data.gaId ?? gaId);
       setMessage({
         ok: true,
@@ -128,26 +192,7 @@ export default function AdsEditor() {
       )}
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        {[
-          {
-            id: "social-bar",
-            title: "Social Bar",
-            value: socialBarCode,
-            set: setSocialBarCode,
-            live: saved.socialBar,
-            text:
-              "Small notice style ads at the edge of the screen, on every public page. Loads after the page has finished loading, never in the admin area and never for a signed in admin.",
-          },
-          {
-            id: "native-banner",
-            title: "Native Banner",
-            value: nativeCode,
-            set: setNativeCode,
-            live: saved.native,
-            text:
-              "A row of small picture ads that sits in the page: home page above the questions, tool pages after the questions, and the end of every blog post.",
-          },
-        ].map((f) => (
+        {CODE_FIELDS.map((f) => (
           <div
             key={f.id}
             className="rounded-xl border border-black/5 bg-white/40 p-4 dark:border-white/10 dark:bg-black/20"
@@ -158,17 +203,19 @@ export default function AdsEditor() {
               </label>
               <span
                 className={`text-xs font-semibold ${
-                  f.live ? "text-emerald-700 dark:text-emerald-300" : "text-neutral-500 dark:text-neutral-400"
+                  saved[f.key]
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-neutral-500 dark:text-neutral-400"
                 }`}
               >
-                {f.live ? "live" : "off"}
+                {saved[f.key] ? "live" : "off"}
               </span>
             </div>
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{f.text}</p>
             <textarea
               id={f.id}
-              value={f.value}
-              onChange={(e) => f.set(e.target.value)}
+              value={codes[f.key]}
+              onChange={(e) => setCode(f.key, e.target.value)}
               rows={3}
               spellCheck={false}
               placeholder={`Paste the whole ${f.title} code from Adsterra here`}

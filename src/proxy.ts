@@ -36,12 +36,14 @@ export function proxy(request: NextRequest) {
   const adList = [...new Set([...AD_DOMAINS, ...ads.hosts])];
   const adHosts = adList.length > 0 ? " " + adList.join(" ") : "";
 
-  // The Social Bar is the one ad that runs in the page itself rather than in a
-  // sealed frame, and Adsterra's scripts evaluate strings. So public pages
-  // allow eval while a Social Bar code is saved. The admin area and the API
-  // never do, and the Social Bar never loads there.
+  // Some Adsterra formats cannot sit in a sealed frame, because each one puts
+  // itself over or around the whole page: the Social Bar, the Popunder, the
+  // Interstitial and the In-Page Push cards. Their scripts run in the page and
+  // Adsterra's scripts evaluate strings, so public pages allow eval while any
+  // of those codes is saved. The admin area and the API never do, and none of
+  // those scripts ever loads there.
   const publicPage = !path.startsWith("/admin") && !path.startsWith("/api");
-  const pageEval = ads.socialBar && publicPage;
+  const pageEval = ads.pageScripts && publicPage;
 
   // React's development build uses eval to rebuild stack traces across the
   // server/client boundary, and refuses to start without it. Production never

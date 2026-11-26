@@ -19,7 +19,7 @@ let cached: { at: number; value: AdPolicy } | null = null;
 
 export function adPolicy(now = Date.now()): AdPolicy {
   if (cached && now - cached.at < TTL_MS) return cached.value;
-  let value: AdPolicy = { hosts: [], socialBar: false };
+  let value: AdPolicy = { hosts: [], socialBar: false, pageScripts: false };
   try {
     value = policyFromSettings(JSON.parse(fs.readFileSync(FILE, "utf8")));
   } catch {
