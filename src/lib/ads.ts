@@ -21,7 +21,7 @@ export const SHOW_AD_PLACEHOLDERS = process.env.NODE_ENV !== "production";
  * than taken from a request: the frame route turns one of these into a script
  * tag, so the set it will accept is written down in the code.
  */
-export const ADSTERRA_SIZES = ["728x90", "300x250", "320x50"] as const;
+export const ADSTERRA_SIZES = ["728x90", "300x250", "320x50", "160x600"] as const;
 export type AdsterraSize = (typeof ADSTERRA_SIZES)[number];
 
 export function isAdsterraSize(value: string): value is AdsterraSize {
@@ -84,6 +84,14 @@ export const AD_SLOTS = {
   // like the others: it follows the visitor down the page, so it is seen on
   // every screen rather than on the one it happens to sit in.
   stickyBottom: { height: 50, maxWidth: 320, banner: "320x50" },
+
+  // The two skyscrapers beside the page on a wide screen. The page itself is
+  // 1024px of content in the middle, so on anything from 1440px up there is
+  // empty margin on both sides doing nothing. These sit in it: they cover no
+  // text, need no close button, and follow the visitor down like the phone
+  // bar does. Below 1440px they are not rendered at all.
+  railLeft: { height: 600, maxWidth: 160, banner: "160x600" },
+  railRight: { height: 600, maxWidth: 160, banner: "160x600" },
 
 } satisfies Record<string, AdPlacement>;
 

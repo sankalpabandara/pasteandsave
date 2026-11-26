@@ -24,7 +24,7 @@ import path from "node:path";
 const ROOT = process.env.SITE_ROOT || "/opt/pasteandsave";
 const SETTINGS = path.join(ROOT, "data", "site-settings.json");
 const ENV = path.join(ROOT, ".env.local");
-const SIZES = ["728x90", "300x250", "320x50"];
+const SIZES = ["728x90", "300x250", "320x50", "160x600"];
 // Formats stored as a plain script address rather than a banner unit.
 const FORMATS = { socialbar: "socialBar", native: "native" };
 

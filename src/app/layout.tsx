@@ -5,6 +5,7 @@ import Analytics from "@/components/Analytics";
 import { AdProvider } from "@/components/ads/AdProvider";
 import PageScripts from "@/components/ads/PageScripts";
 import StickyBanner from "@/components/ads/StickyBanner";
+import SideRails from "@/components/ads/SideRails";
 import { readSettings } from "@/lib/ads-store";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -98,6 +99,7 @@ export default async function RootLayout({
           {children}
           <PageScripts />
           <StickyBanner />
+          <SideRails />
         </AdProvider>
         <Analytics />
       </body>

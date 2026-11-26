@@ -22,6 +22,14 @@ const SLOT_INFO: Record<AdSlotKey, { label: string; where: string }> = {
     label: "Bottom edge on phones",
     where: "Follows the visitor down every public page, with a close button",
   },
+  railLeft: {
+    label: "Left side rail",
+    where: "In the empty margin on screens 1440px and wider",
+  },
+  railRight: {
+    label: "Right side rail",
+    where: "In the empty margin on screens 1440px and wider",
+  },
 };
 
 const ORDER = Object.keys(SLOT_INFO) as AdSlotKey[];

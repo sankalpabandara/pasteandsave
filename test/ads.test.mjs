@@ -93,6 +93,25 @@ test("the wait beside the Save buttons and the sticky bar are real places", () =
   assert.equal(AD_SLOTS.stickyBottom.bannerMobile, undefined);
 });
 
+test("the side rails fit the empty margin they are meant to sit in", () => {
+  // 1024px of page content plus a 160px rail and a gap on each side is 1392,
+  // which is why the component renders nothing below 1440px. A rail that
+  // overlapped the text would be worse than no rail, so if either of these
+  // numbers is ever changed the other has to move with it.
+  const CONTENT = 1024;
+  const MIN_WIDTH = 1440;
+  for (const slot of ["railLeft", "railRight"]) {
+    assert.equal(AD_SLOTS[slot].banner, "160x600");
+    assert.equal(AD_SLOTS[slot].maxWidth, 160);
+    assert.ok(AD_SLOTS[slot].height >= 600);
+  }
+  const needed = CONTENT + 2 * (AD_SLOTS.railLeft.maxWidth + 24);
+  assert.ok(MIN_WIDTH >= needed, `rails need ${needed}px but only wait for ${MIN_WIDTH}px`);
+  // And the component has to be asking for that same width.
+  const source = fs.readFileSync("src/components/ads/SideRails.tsx", "utf8");
+  assert.match(source, new RegExp(`MIN_WIDTH = ${MIN_WIDTH};`));
+});
+
 test("native places reserve a sensible box", () => {
   for (const [key, cfg] of Object.entries(NATIVE_SLOTS)) {
     assert.ok(cfg.height >= 120 && cfg.height <= 600, `${key}: ${cfg.height}`);
