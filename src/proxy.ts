@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import type { NextURL } from "next/dist/server/web/next-url";
 import { adPolicy } from "@/lib/ad-policy";
 import { countryOf } from "@/lib/geoip";
 import { clientIp } from "@/lib/rate-limit";
@@ -63,6 +64,27 @@ function wantedLocale(request: NextRequest): { locale: Locale; remember: boolean
   const testCountry = isDev ? request.cookies.get("test-country")?.value : undefined;
   const country = testCountry ?? countryOf(clientIp(request));
   return { locale: pickLocale(country, request.headers.get("accept-language")), remember: true };
+}
+
+/**
+ * Where a language prefixed address is really served from: the same address
+ * without the prefix.
+ *
+ * Built by cloning the request's own URL rather than from request.url. Behind
+ * nginx the two disagree: the proxy forwards over http and says so with
+ * X-Forwarded-Proto, so request.url is the http one while Next works in
+ * https. A rewrite whose target does not match the origin Next thinks it is
+ * on is treated as a different site, and Next tries to proxy the request out
+ * to it instead of serving it. That failed with "Cannot find module
+ * next/dist/compiled/httpxy" and every /es, /pt and /id address answered 500,
+ * while the same addresses were fine when asked for directly on the port.
+ * Cloning keeps the origin Next is already using, so it stays an internal
+ * rewrite.
+ */
+function localeTarget(url: NextURL, rest: string): NextURL {
+  const target = url.clone();
+  target.pathname = rest;
+  return target;
 }
 
 export function proxy(request: NextRequest) {
@@ -167,7 +189,7 @@ export function proxy(request: NextRequest) {
   // /es/tiktok-video-downloader is served by the same page as
   // /tiktok-video-downloader, which reads the language from x-locale.
   const response = prefixed
-    ? NextResponse.rewrite(new URL(`${rest}${url.search}`, request.url), { request: { headers } })
+    ? NextResponse.rewrite(localeTarget(url, rest), { request: { headers } })
     : NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", csp);
   return response;
