@@ -18,6 +18,9 @@
 # Build output the deploy swaps in and the copy it keeps for one cycle.
 /.next.build/
 /.next.previous/
+# Any build directory, whatever NEXT_DIST_DIR was set to for it. A build run
+# to verify a change before pushing used to land in the commit.
+/.next.*/
 /out/
 
 # production
