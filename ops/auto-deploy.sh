@@ -69,7 +69,18 @@ git reset --hard "origin/$BRANCH" --quiet || { echo "$(stamp) checkout failed"; 
 # npm skip devDependencies on its own — a plain `npm ci` installs a tree that
 # cannot build. The runtime bundle stays lean regardless, because
 # output: standalone copies only what the server actually needs.
-if ! npm ci --include=dev --silent 2>/dev/null; then
+#
+# Only when the dependencies actually changed. npm ci empties node_modules
+# before it refills it, and the running server reads its code from that same
+# folder, lazily, as requests arrive. So every deploy used to spend most of a
+# minute answering 5xx to whoever asked for a page whose code had not been
+# loaded yet. On 2026-11-26 Googlebot asked during that window, got the
+# error, and refused to index the page it was testing. Most deploys change no
+# dependency at all, so most deploys no longer need to take that risk.
+lockfile_changed() { ! git diff --quiet "$local_sha" "$remote_sha" -- package-lock.json package.json; }
+if ! lockfile_changed && [ -d node_modules/next ] && [ -d node_modules/typescript ]; then
+  echo "$(stamp) dependencies unchanged, keeping the installed tree"
+elif ! npm ci --include=dev --silent 2>/dev/null; then
   npm install --include=dev --silent || {
     echo "$(stamp) dependency install failed"
     alert "deploy blocked: dependency install failed" \
