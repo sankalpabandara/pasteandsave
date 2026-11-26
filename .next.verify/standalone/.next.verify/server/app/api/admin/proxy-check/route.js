@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/proxy-check/route.js")
+R.c("server/chunks/[root-of-the-server]__0-mh6iv._.js")
+R.c("server/chunks/_0htkyro._.js")
+R.c("server/chunks/_1-hxvjr._.js")
+R.c("server/chunks/[root-of-the-server]__15bjnu5._.js")
+R.c("server/chunks/node_modules_next_dist_11w3z5e._.js")
+R.c("server/chunks/[root-of-the-server]__0_mlcv6._.js")
+R.c("server/chunks/_next-internal_server_app_api_admin_proxy-check_route_actions_1apicqb.js")
+R.m(36687)
+module.exports=R.m(36687).exports

@@ -30,7 +30,15 @@ BASE_PORT="${WARP_POOL_BASE_PORT:-40001}"
 IMAGE="pasteandsave-warp"
 STATE_DIR="${WARP_POOL_STATE:-/var/lib/pasteandsave/warp-pool}"
 POOL_FILE="${WARP_POOL_FILE:-$APP_DIR/data/warp-pool.json}"
-SUSPECT_DIR="${WARP_POOL_SUSPECT_DIR:-$APP_DIR/data/warp-pool-suspect}"
+# Outside the application directory, next to the pool's other state.
+#
+# These notes are written and deleted every minute. While they lived in
+# data/ they sat inside the directory a production build copies into its
+# output, and on 2026-11-26 one was deleted between the build listing it and
+# copying it. The build died with ENOENT on a file it never needed, and the
+# deploy was blocked until the next commit. Runtime scratch does not belong
+# under the directory being built.
+SUSPECT_DIR="${WARP_POOL_SUSPECT_DIR:-/var/lib/pasteandsave/warp-pool-suspect}"
 # Shared with warp-rotate.sh: address blocks YouTube refused recently.
 FLAGGED="${WARP_FLAGGED_BLOCKS:-/var/lib/pasteandsave/warp-refused-blocks}"
 FLAGGED_TTL="${WARP_FLAGGED_TTL:-21600}"

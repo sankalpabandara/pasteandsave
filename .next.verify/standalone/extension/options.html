@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>PasteAndSave settings</title>
+    <style>
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        max-width: 480px;
+        margin: 40px auto;
+        padding: 0 20px;
+        color: #1a1625;
+        background: #f4f2fa;
+      }
+      h1 {
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .badge {
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+        display: inline-grid;
+        place-items: center;
+        background: linear-gradient(135deg, #8b5cf6, #d946ef 55%, #38bdf8);
+      }
+      label {
+        display: block;
+        margin-top: 22px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .hint {
+        margin-top: 4px;
+        font-size: 12px;
+        color: #6b6580;
+        font-weight: 400;
+      }
+      input, select {
+        margin-top: 8px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 9px 11px;
+        font-size: 13px;
+        border: 1px solid #d8d3e6;
+        border-radius: 9px;
+        background: #fff;
+      }
+      button {
+        margin-top: 22px;
+        padding: 9px 22px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        background: #7c3aed;
+        border: 0;
+        border-radius: 9px;
+        cursor: pointer;
+      }
+      button:hover { background: #6d28d9; }
+      #status {
+        margin-left: 10px;
+        font-size: 12px;
+        color: #059669;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>
+      <span class="badge">
+        <svg width="16" height="16" viewBox="0 0 40 40" fill="none">
+          <path d="M20 9.5 V22" stroke="#fff" stroke-width="3.4" stroke-linecap="round" />
+          <path d="M14.3 16.7 L20 22.6 L25.7 16.7" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M12 27.5 H28" stroke="#fff" stroke-width="3.4" stroke-linecap="round" />
+        </svg>
+      </span>
+      PasteAndSave settings
+    </h1>
+
+    <label>
+      Site address
+      <p class="hint">
+        Where streams and page links open. Leave the default unless you run
+        your own copy of the site, for example http://localhost:3030 during
+        development.
+      </p>
+      <input id="site" type="url" placeholder="https://pasteandsave.com" />
+    </label>
+
+    <label>
+      Ignore files smaller than
+      <select id="min">
+        <option value="51200">50 KB</option>
+        <option value="204800">200 KB</option>
+        <option value="1048576">1 MB</option>
+      </select>
+    </label>
+
+    <button id="save">Save</button><span id="status"></span>
+
+    <script src="options.js"></script>
+  </body>
+</html>

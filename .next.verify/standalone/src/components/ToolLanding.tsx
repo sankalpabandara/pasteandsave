@@ -1,0 +1,213 @@
+import Link from "next/link";
+import DownloaderForm from "@/components/DownloaderForm";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import JsonLd from "@/components/JsonLd";
+import AdSlot from "@/components/ads/AdSlot";
+import NativeSlot from "@/components/ads/NativeSlot";
+import BlogTeaser from "@/components/BlogTeaser";
+import { getPost, postsForTool } from "@/lib/blog";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { TOOL_PAGES, type ToolPage } from "@/lib/seo-pages";
+import { fill, linkFor, localePath, type Locale } from "@/lib/i18n";
+import { downloaderText, getDict, toolName } from "@/i18n";
+
+export default function ToolLanding({ tool, locale = "en" }: { tool: ToolPage; locale?: Locale }) {
+  const dict = getDict(locale);
+  const t = dict.tool;
+  const path = `/${tool.slug}`;
+  const pageUrl = `${SITE_URL.replace(/\/$/, "")}${linkFor(locale, path)}`;
+  const homeUrl = `${SITE_URL.replace(/\/$/, "")}${locale === "en" ? "" : localePath(locale, "/")}`;
+
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      name: `${SITE_NAME} ${tool.h1}`,
+      url: pageUrl,
+      inLanguage: locale,
+      applicationCategory: "MultimediaApplication",
+      operatingSystem: "Any",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      description: tool.description,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "HowTo",
+      name: fill(t.howTo, { name: tool.h1 }),
+      step: tool.steps.map((s, i) => ({
+        "@type": "HowToStep",
+        position: i + 1,
+        name: s.title,
+        text: s.body,
+      })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: tool.faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: SITE_NAME, item: homeUrl },
+        { "@type": "ListItem", position: 2, name: tool.h1, item: pageUrl },
+      ],
+    },
+  ];
+
+  const otherTools = TOOL_PAGES.filter((other) => other.slug !== tool.slug);
+
+  return (
+    <>
+      {jsonLd.map((data, i) => (
+        <JsonLd key={i} data={data} />
+      ))}
+      <Header path={path} />
+      <main>
+        <section className="px-4 pb-14 pt-12 sm:pb-20 sm:pt-16">
+          <div className="mx-auto max-w-2xl text-center">
+            <span
+              className={`inline-flex items-center rounded-full bg-gradient-to-br ${tool.badge.color} px-3 py-1 text-xs font-semibold text-white shadow-sm`}
+            >
+              {tool.badge.label}
+            </span>
+            <h1 className="font-display mt-3 text-3xl font-bold tracking-tight text-neutral-900 sm:text-5xl dark:text-white">
+              {tool.h1}
+            </h1>
+            <p className="mx-auto mt-3 max-w-lg text-neutral-600 dark:text-neutral-400">
+              {tool.tagline}
+            </p>
+          </div>
+          <div className="mt-8">
+            <DownloaderForm placeholder={tool.placeholder} locale={locale} text={downloaderText(locale)} />
+          </div>
+        </section>
+
+        <AdSlot slot="toolTop" className="px-4 py-6" label={dict.ads.label} />
+
+        <section className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
+          <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
+            {fill(t.why, { site: SITE_NAME, name: tool.h1 })}
+          </h2>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {tool.features.map((f) => (
+              <div
+                key={f.title}
+                className="glass glass-hairline rounded-2xl p-5"
+              >
+                <h3 className="font-semibold text-neutral-900 dark:text-white">
+                  {f.title}
+                </h3>
+                <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                  {f.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+
+        <section id="how" className="py-12 sm:py-16">
+          <div className="mx-auto max-w-5xl px-4">
+            <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
+              {tool.stepsHeading}
+            </h2>
+            <div className="mt-8 grid gap-4 sm:grid-cols-3 sm:gap-6">
+              {tool.steps.map((s, i) => (
+                <div
+                  key={s.title}
+                  className="glass glass-hairline rounded-2xl p-6"
+                >
+                  <span className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 text-sm font-bold text-white">
+                    {i + 1}
+                  </span>
+                  <h3 className="mt-4 font-semibold dark:text-white">{s.title}</h3>
+                  <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                    {s.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="mx-auto mt-6 max-w-2xl text-center text-sm text-neutral-500 dark:text-neutral-400">
+              {tool.deviceNote}
+            </p>
+          </div>
+        </section>
+
+        <AdSlot slot="toolMid" className="px-4 py-8" label={dict.ads.label} />
+
+        <section id="faq" className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
+          <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
+            {t.faqHeading}
+          </h2>
+          <div className="glass glass-hairline mt-6 divide-y divide-[var(--hairline)] overflow-hidden rounded-2xl">
+            {tool.faqs.map((f) => (
+              <details key={f.q} className="group p-5 open:bg-white/40 dark:open:bg-white/5">
+                <summary className="cursor-pointer list-none font-medium text-neutral-900 marker:content-none dark:text-white">
+                  <span className="flex items-center justify-between gap-4">
+                    {f.q}
+                    <span className="text-neutral-400 transition group-open:rotate-45 dark:text-neutral-500">
+                      +
+                    </span>
+                  </span>
+                </summary>
+                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+                  {f.a}
+                </p>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        <NativeSlot slot="toolNative" className="px-4 pb-8" />
+
+        {/* Guides written for this downloader, or general ones where there
+            are none yet, so every downloader page links into the blog. */}
+        {locale === "en" && (() => {
+          const own = postsForTool(`/${tool.slug}`);
+          return (
+            <BlogTeaser
+              heading={own.length > 0 ? "Guides for this downloader" : "Helpful guides"}
+              posts={
+                own.length > 0
+                  ? own
+                  : [
+                      getPost("save-videos-on-iphone-and-android"),
+                      getPost("video-quality-explained"),
+                      getPost("video-wont-download"),
+                    ]
+              }
+            />
+          );
+        })()}
+
+        <section className="mx-auto max-w-5xl px-4 pb-12 sm:pb-16">
+          <h2 className="font-display text-center text-lg font-bold dark:text-white">
+            {t.others}
+          </h2>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {otherTools.map((other) => (
+              <Link
+                key={other.slug}
+                href={linkFor(locale, `/${other.slug}`)}
+                className="glass glass-hairline rounded-full px-4 py-2 text-sm font-medium text-neutral-700 transition hover:-translate-y-0.5 hover:text-violet-700 dark:text-neutral-300 dark:hover:text-violet-300"
+              >
+                {toolName(other.slug, locale).navLabel}
+              </Link>
+            ))}
+          </div>
+        </section>
+
+
+        <AdSlot slot="toolBottom" className="px-4 pb-10" label={dict.ads.label} />
+      </main>
+      <Footer />
+    </>
+  );
+}

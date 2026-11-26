@@ -1,0 +1,108 @@
+import type { NextConfig } from "next";
+
+const isProd = process.env.NODE_ENV === "production";
+
+// Security headers applied to every response. The strict Content-Security
+// Policy is production-only so it doesn't interfere with the dev server's
+// hot-reload (which needs eval and websockets).
+// Bump on each release so a deploy can be verified from the response headers.
+const APP_VERSION = "2026.07.30";
+
+// The Content-Security-Policy is not here. It carries a per-request nonce, so
+// it is built in middleware.ts, where a fresh value can be generated for each
+// response; anything set in this file is fixed at build time.
+//
+// Extra hosts an ad network needs before its code can run. The policy here is
+// strict on purpose, which means a freshly pasted embed is blocked until its
+// domains are listed — and a blocked ad looks identical to a network that is
+// not paying, so it is worth setting before wondering why nothing appears.
+//
+// Space or comma separated, in .env.local, then restart:
+//   AD_NETWORK_DOMAINS="https://*.adsterra.com https://*.hilltopads.com"
+const adDomains = (process.env.AD_NETWORK_DOMAINS || "")
+  .split(/[\s,]+/)
+  .map((d) => d.trim())
+  .filter(Boolean);
+const adHosts = adDomains.length > 0 ? " " + adDomains.join(" ") : "";
+
+const securityHeaders = [
+  { key: "X-App-Version", value: APP_VERSION },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+  },
+  ...(isProd
+    ? [
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=31536000; includeSubDomains",
+        },
+      ]
+    : []),
+];
+
+const nextConfig: NextConfig = {
+  // Where the build output goes, overridable so a deploy can build into a fresh
+  // directory and swap it in rather than writing over the copy that is serving.
+  // Building in place is what produced "the client reference manifest for route
+  // /terms does not exist" after a Next upgrade: leftovers from the previous
+  // version sat alongside the new output and the server read both.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
+  // Produces a self-contained server bundle for easy VPS/Docker deployment.
+  output: "standalone",
+
+  // Keep the runtime data folder out of the bundle.
+  //
+  // A standalone build copies the files it traced into the output, and one
+  // module builds a path into data/ at runtime, so the tracer took the whole
+  // folder. That folder is live state: the settings file, the analytics log,
+  // the geoip database, and the WARP pool's notes on which exits are
+  // misbehaving. The pool rewrites those while the build is running, so a file
+  // that existed when the tracer listed it can be gone by the time the copy
+  // reaches it, and the build dies with ENOENT on a file nothing needed. That
+  // is what blocked the deploy on 2026-11-26.
+  //
+  // Nothing in there belongs in a build anyway: the server reads it from the
+  // working directory at runtime, where the real folder is.
+  outputFileTracingExcludes: { "*": ["data/**/*", "./data/**/*", "data/**"] },
+  poweredByHeader: false,
+  // Nothing here uses next/image, but the framework still ships sharp, and
+  // sharp carries whatever libvips CVEs are open at the time. Turning
+  // optimisation off means the image route never hands a file to libvips, so
+  // those advisories cannot apply to this site whatever their state.
+  images: { unoptimized: true },
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
+  // The certificate covers both hostnames, so https://www served the whole
+  // site as a second copy. Everything belongs on the apex domain that the
+  // canonical tags and sitemap already point at.
+  // IndexNow only accepts URLs in the key file's folder or below, so the key
+  // must be served from the root (see src/lib/site-paths.ts). beforeFiles, so
+  // the [tool] page never sees the request.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: "/:key([a-fA-F0-9-]{8,64}).txt", destination: "/indexnow/:key" },
+      ],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.pasteandsave.com" }],
+        destination: "https://pasteandsave.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
+};
+
+export default nextConfig;

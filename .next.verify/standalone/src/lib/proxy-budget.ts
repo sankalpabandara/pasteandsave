@@ -1,0 +1,124 @@
+import fsp from "node:fs/promises";
+import path from "node:path";
+
+// Spend-guard for the metered residential proxy. Only downloads that actually
+// go through the proxy (YouTube and friends) count here, so the many sites
+// that work direct are never limited. A daily bandwidth ceiling means a
+// traffic spike or abuse can't drain the proxy balance overnight.
+
+const DATA_DIR = path.join(process.cwd(), "data");
+const FILE = path.join(DATA_DIR, "proxy-usage.json");
+
+// No daily ceiling by default.
+//
+// The cap existed because a lookup cost tens of megabytes of somebody's home
+// connection, so an unlimited site meant an unlimited bill. It does not any
+// more: enumerating HLS was doing that, skipping it took a lookup from 44 MB to
+// 0.2 MB, and media is fetched by the server straight from the CDN rather than
+// pulled through the relay. A day of heavy use is now measured in megabytes.
+//
+// So the ceiling was costing more than it saved. Visitors were told YouTube had
+// hit its limit for the day, which is a bad thing to tell someone about a
+// downloader, and it was triggered by an accounting estimate rather than by
+// anything actually being spent. Set YTDLP_PROXY_DAILY_MB to a number to put a
+// ceiling back; the counting still runs either way, so /admin keeps showing
+// what is being used.
+export const PROXY_DAILY_MB = (() => {
+  const n = Number(process.env.YTDLP_PROXY_DAILY_MB);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+})();
+
+// We don't know a download's exact size when it starts, so estimate
+// conservatively (better to pause a little early than overspend).
+//
+// "metadata" is the page read that the proxy genuinely has to carry. Media
+// only appears here when the CDN refused to serve this server directly and
+// the file had to come through the proxy as well; when it goes direct, which
+// is the normal case, none of those bytes are metered and none are charged.
+const EST_BYTES = {
+  // Measured against the relay's own byte counters rather than guessed. The
+  // previous figures were written when the proxy carried metadata only, and
+  // once media started going through it they undercounted by roughly ten
+  // times: the ledger read 500 MB for a day in which 5.2 GB had actually
+  // crossed the connection, so a cap meant to protect a home line let ten
+  // times the intended amount through before it stopped anything.
+  //
+  // Erring high on purpose. Being wrong in this direction pauses downloads a
+  // little early; being wrong the other way spends somebody's data allowance
+  // without telling them.
+  metadata: 1 * 1024 * 1024,
+  audio: 12 * 1024 * 1024,
+  video: 120 * 1024 * 1024,
+};
+
+export type ProxySpend = keyof typeof EST_BYTES;
+
+type Usage = { day: string; downloads: number; bytes: number };
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function read(): Promise<Usage> {
+  try {
+    const u = JSON.parse(await fsp.readFile(FILE, "utf8")) as Usage;
+    if (u && u.day === today()) return u;
+  } catch {
+    // no file yet, or a new day, start fresh
+  }
+  return { day: today(), downloads: 0, bytes: 0 };
+}
+
+async function write(u: Usage): Promise<void> {
+  try {
+    await fsp.mkdir(DATA_DIR, { recursive: true });
+    await fsp.writeFile(FILE, JSON.stringify(u), "utf8");
+  } catch {
+    // best effort; never block a download on a write failure
+  }
+}
+
+/** False once today's proxied bandwidth has reached the cap. */
+export async function proxyBudgetOk(): Promise<boolean> {
+  if (PROXY_DAILY_MB === 0) return true;
+  return (await read()).bytes < PROXY_DAILY_MB * 1024 * 1024;
+}
+
+/** Add one proxied download's estimated size to today's running total. */
+// Every update runs to completion before the next one starts.
+//
+// Read-modify-write on a shared file is lossy the moment two downloads
+// overlap: both read the same total, both add their own size, and whichever
+// writes last erases the other. Downloads run concurrently here by design, so
+// the day's total drifted below the truth and the cap let more through than
+// it was set to allow. Chaining the writes is enough, because this process is
+// the only writer.
+let writeQueue: Promise<void> = Promise.resolve();
+
+export function recordProxyUsage(mode: ProxySpend): Promise<void> {
+  writeQueue = writeQueue
+    .catch(() => {})
+    .then(async () => {
+      const u = await read();
+      // Metadata is part of a download already counted, not a download of
+      // its own, so it adds bytes without inflating the number of downloads.
+      if (mode !== "metadata") u.downloads += 1;
+      u.bytes += EST_BYTES[mode] ?? EST_BYTES.video;
+      await write(u);
+    });
+  return writeQueue;
+}
+
+/** For the admin panel: how much proxied data has been used today. */
+export async function proxyUsageToday(): Promise<{
+  downloads: number;
+  usedMb: number;
+  capMb: number;
+}> {
+  const u = await read();
+  return {
+    downloads: u.downloads,
+    usedMb: Math.round(u.bytes / 1024 / 1024),
+    capMb: PROXY_DAILY_MB,
+  };
+}

@@ -1,0 +1,275 @@
+// Popup logic: shows what the background worker found on the active tab,
+// downloads plain files directly, and routes pages or streams to the site
+// (which does the heavy lifting — including YouTube, via its server proxy).
+
+// chrome first: Firefox's browser.* namespace ignores callbacks, but its
+// chrome.* namespace supports them, so this order works in both browsers.
+const api = globalThis.chrome ?? globalThis.browser;
+
+let site = "https://pasteandsave.com";
+let allItems = [];
+let activeFilter = "all";
+let pageUrl = "";
+let pageIsHttp = false;
+
+function fmtSize(bytes) {
+  if (!bytes) return "size unknown";
+  if (bytes >= 1024 * 1024 * 1024) return (bytes / 1024 ** 3).toFixed(1) + " GB";
+  if (bytes >= 1024 * 1024) return (bytes / 1024 ** 2).toFixed(1) + " MB";
+  return Math.round(bytes / 1024) + " KB";
+}
+
+function categoryOf(item) {
+  if (item.kind === "stream") return "stream";
+  if (
+    (item.contentType || "").startsWith("audio/") ||
+    /\.(mp3|m4a|aac|ogg|opus|wav|flac)([?#]|$)/i.test(item.url)
+  ) {
+    return "audio";
+  }
+  return "video";
+}
+
+let activeTabId = null;
+
+function openSite(url, mp3) {
+  const param = mp3 ? "&mp3=1" : "";
+  api.tabs.create({ url: `${site}/?url=${encodeURIComponent(url)}${param}` });
+  window.close();
+}
+
+// Sends whatever is playing on this tab. On a feed the page address is the
+// feed, which the site cannot use, so the worker asks the page which clip is
+// on screen first, exactly as the in-page button does.
+function sendThisPage() {
+  if (activeTabId === null || !pageIsHttp) return;
+  api.runtime.sendMessage({ type: "sendTabToSite", tabId: activeTabId, url: pageUrl }, () => {
+    void api.runtime.lastError;
+    window.close();
+  });
+}
+
+function download(btn, item) {
+  btn.disabled = true;
+  api.runtime.sendMessage(
+    { type: "download", url: item.url, filename: item.filename },
+    (res) => {
+      btn.textContent = res?.ok ? "Saved" : "Retry";
+      btn.classList.toggle("done", !!res?.ok);
+      btn.disabled = false;
+    },
+  );
+}
+
+function render() {
+  const list = document.getElementById("media-list");
+  list.textContent = "";
+  const visible = allItems
+    .filter((it) => activeFilter === "all" || categoryOf(it) === activeFilter)
+    .sort((a, b) => b.size - a.size);
+
+  for (const item of visible) {
+    const li = document.createElement("li");
+    const cat = categoryOf(item);
+
+    const chip = document.createElement("span");
+    chip.className = "kind " + cat;
+    chip.textContent = cat.toUpperCase();
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const name = document.createElement("p");
+    name.className = "name";
+    name.textContent = item.filename;
+    name.title = item.url;
+    const size = document.createElement("p");
+    size.className = "size";
+    size.textContent = item.kind === "stream" ? "via PasteAndSave" : fmtSize(item.size);
+    meta.append(name, size);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+
+    const copy = document.createElement("button");
+    copy.className = "icon-btn";
+    copy.title = "Copy link";
+    copy.textContent = "⧉";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(item.url);
+        copy.textContent = "✓";
+        setTimeout(() => (copy.textContent = "⧉"), 1200);
+      } catch {
+        copy.textContent = "!";
+      }
+    });
+
+    const btn = document.createElement("button");
+    btn.className = "save";
+    btn.textContent = "Save";
+    btn.addEventListener("click", () => {
+      if (item.kind === "stream") {
+        // Raw stream chunks aren't a playable file; the site fetches it whole.
+        if (pageIsHttp) sendThisPage();
+        else openSite(item.url);
+        return;
+      }
+      download(btn, item);
+    });
+
+    actions.append(copy, btn);
+
+    // "Get as MP3" routes a plain video file to the site to transcode.
+    if (cat === "video" && item.kind === "file") {
+      const mp3 = document.createElement("button");
+      mp3.className = "icon-btn";
+      mp3.title = "Get as MP3 via PasteAndSave";
+      mp3.textContent = "♪";
+      mp3.addEventListener("click", () => openSite(pageIsHttp ? pageUrl : item.url, true));
+      actions.prepend(mp3);
+    }
+
+    li.append(chip, meta, actions);
+    list.append(li);
+  }
+
+  // Everything that is a video, however it has to be fetched. Plain files go
+  // straight through the browser; streams open on the site, which is the only
+  // way they become one whole file.
+  const allVideos = allItems.filter((it) => categoryOf(it) === "video" || it.kind === "stream");
+  const grab = document.getElementById("grab-videos");
+  grab.hidden = allVideos.length < 2;
+  grab.textContent = `Save every video found (${allVideos.length})`;
+  grab.onclick = () => {
+    grab.disabled = true;
+    grab.textContent = "Starting...";
+    const streams = allVideos.filter((it) => it.kind === "stream");
+    const plain = allVideos.filter((it) => it.kind === "file");
+    for (const item of plain) {
+      api.runtime.sendMessage({ type: "download", url: item.url, filename: item.filename });
+    }
+    // One tab per stream would bury the user, so the page itself is handed
+    // over once and the site resolves whatever is on it.
+    if (streams.length > 0) {
+      if (pageIsHttp) sendThisPage();
+      else openSite(streams[0].url);
+      return;
+    }
+    grab.textContent = `Saving ${plain.length}...`;
+  };
+
+  const directFiles = visible.filter((it) => it.kind === "file");
+  const saveAll = document.getElementById("save-all");
+  saveAll.hidden = directFiles.length < 2;
+  saveAll.onclick = () => {
+    saveAll.disabled = true;
+    saveAll.textContent = "Saving...";
+    let left = directFiles.length;
+    for (const item of directFiles) {
+      api.runtime.sendMessage(
+        { type: "download", url: item.url, filename: item.filename },
+        () => {
+          if (--left === 0) {
+            saveAll.textContent = "All saved";
+          }
+        },
+      );
+    }
+  };
+}
+
+async function init() {
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+
+  pageUrl = tab.url ?? "";
+  pageIsHttp = /^https?:/i.test(pageUrl);
+  activeTabId = tab.id;
+  const saveBtn = document.getElementById("save-page");
+  const hostEl = document.getElementById("page-host");
+
+  if (pageIsHttp) {
+    try {
+      hostEl.textContent = "from " + new URL(pageUrl).hostname.replace(/^www\./, "");
+    } catch {
+      hostEl.textContent = "";
+    }
+    // Every video page, YouTube, TikTok, Facebook and the rest, is handed to
+    // the site, which resolves the actual download (YouTube via its proxy).
+    saveBtn.addEventListener("click", sendThisPage);
+  } else {
+    saveBtn.disabled = true;
+    document.getElementById("save-page-label").textContent = "Open a video page first";
+  }
+
+  let pageHost = "";
+  try {
+    pageHost = new URL(pageUrl).hostname.replace(/^www\./, "");
+  } catch {
+    pageHost = "";
+  }
+
+  const {
+    items = [],
+    minBytes,
+    siteBase,
+    siteEnabled = true,
+    offLimits = false,
+  } = await new Promise((resolve) =>
+    api.runtime.sendMessage({ type: "getMedia", tabId: tab.id, host: pageHost }, (res) =>
+      resolve(res ?? {}),
+    ),
+  );
+  allItems = items;
+  if (siteBase) site = siteBase;
+
+  // A site this copy of the extension is built to leave alone (the store
+  // copy and YouTube): say so plainly instead of a button that does nothing.
+  if (offLimits) {
+    saveBtn.disabled = true;
+    document.getElementById("save-page-label").textContent = "Not available on this site";
+    document.getElementById("empty").textContent =
+      "This version of the extension doesn't work on this site. It works on most other video sites.";
+  }
+
+  // Per-site switch. Turning it off stops both the capture and the in-page
+  // button, for people who want the extension quiet on a particular site.
+  if (pageHost && !offLimits) {
+    const wrap = document.getElementById("site-toggle-wrap");
+    const toggle = document.getElementById("site-toggle");
+    document.getElementById("toggle-host").textContent = pageHost;
+    wrap.hidden = false;
+    toggle.checked = siteEnabled !== false;
+    toggle.addEventListener("change", () => {
+      api.runtime.sendMessage({
+        type: "setSiteEnabled",
+        host: pageHost,
+        enabled: toggle.checked,
+      });
+    });
+  }
+
+  const minSel = document.getElementById("min-size");
+  if (minBytes) minSel.value = String(minBytes);
+  minSel.addEventListener("change", () => {
+    api.runtime.sendMessage({ type: "setMinBytes", minBytes: Number(minSel.value) });
+  });
+
+  document.getElementById("filters").addEventListener("click", (e) => {
+    const btn = e.target.closest(".filter");
+    if (!btn) return;
+    activeFilter = btn.dataset.filter;
+    for (const f of document.querySelectorAll(".filter")) {
+      f.classList.toggle("active", f === btn);
+    }
+    render();
+  });
+
+  if (allItems.length === 0) return; // empty state stays visible
+
+  document.getElementById("empty").hidden = true;
+  document.getElementById("media-section").hidden = false;
+  render();
+}
+
+init();

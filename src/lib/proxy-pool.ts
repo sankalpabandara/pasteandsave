@@ -63,6 +63,14 @@ export function poolFile(): string {
   return process.env.WARP_POOL_FILE || path.join(process.cwd(), "data", "warp-pool.json");
 }
 
+// Where the pool keeps its notes on exits that misbehaved recently.
+//
+// The default is inside data/ so a checkout works with no setup, but the
+// server sets WARP_POOL_SUSPECT_DIR to a directory outside the application,
+// and ops/warp-pool.sh defaults there too. These files are written and
+// deleted every minute, and data/ is inside the directory a production build
+// copies into its output: a file deleted between being listed and being
+// copied kills the build. That blocked a deploy on 2026-11-26.
 function suspectDir(): string {
   return process.env.WARP_POOL_SUSPECT_DIR || path.join(process.cwd(), "data", "warp-pool-suspect");
 }
