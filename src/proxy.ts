@@ -81,9 +81,21 @@ function wantedLocale(request: NextRequest): { locale: Locale; remember: boolean
  * Cloning keeps the origin Next is already using, so it stays an internal
  * rewrite.
  */
-function localeTarget(url: NextURL, rest: string): NextURL {
+function localeTarget(request: NextRequest, url: NextURL, rest: string): NextURL {
   const target = url.clone();
   target.pathname = rest;
+  // Behind nginx the application itself speaks plain http, and nginx says the
+  // visitor arrived over https with X-Forwarded-Proto. Next believes the
+  // header, so the address it builds is https with the internal host:
+  // https://localhost:4100. That is not the origin the server is listening
+  // on, so Next decided the rewrite pointed at another site and tried to
+  // proxy it, opening a TLS connection to a port that speaks none, which
+  // failed with "write EPROTO ... wrong version number" and answered 500 for
+  // every /es, /pt and /id address.
+  //
+  // Putting the target back on the protocol the server actually speaks makes
+  // the origins match again, so the rewrite is served from inside.
+  if (request.headers.get("x-forwarded-proto")) target.protocol = "http:";
   return target;
 }
 
@@ -189,7 +201,7 @@ export function proxy(request: NextRequest) {
   // /es/tiktok-video-downloader is served by the same page as
   // /tiktok-video-downloader, which reads the language from x-locale.
   const response = prefixed
-    ? NextResponse.rewrite(localeTarget(url, rest), { request: { headers } })
+    ? NextResponse.rewrite(localeTarget(request, url, rest), { request: { headers } })
     : NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", csp);
   return response;
