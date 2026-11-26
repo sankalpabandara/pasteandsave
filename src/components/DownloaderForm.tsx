@@ -6,6 +6,27 @@ import { useAdGate } from "@/components/ads/AdProvider";
 import DownloadWait from "@/components/ads/DownloadWait";
 import ReviewPrompt from "@/components/ReviewPrompt";
 import { browserStore, takeReviewTurn } from "@/lib/review";
+import { fill, type Locale } from "@/lib/i18n";
+import type { DownloaderText } from "@/i18n";
+
+/**
+ * The message for a failed request. English pages show the server's own
+ * wording, which can be more specific than the general one for its code;
+ * other languages show the translation for the code, since the server only
+ * speaks English.
+ */
+function apiError(
+  data: { error?: unknown; code?: unknown },
+  status: number,
+  locale: Locale,
+  t: DownloaderText,
+  fallback: string,
+): string {
+  if (locale === "en" && typeof data.error === "string") return data.error;
+  const code =
+    typeof data.code === "string" ? data.code : status === 429 ? "TOO_MANY" : status === 503 ? "BUSY" : "";
+  return (code in t.errors ? t.errors[code as keyof DownloaderText["errors"]] : "") || fallback;
+}
 
 type VideoTier = {
   formatId: string;
@@ -79,14 +100,14 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function statusLabel(job: JobState): string {
+function statusLabel(job: JobState, t: DownloaderText): string {
   switch (job.status) {
     case "starting":
-      return "Starting…";
+      return t.starting;
     case "downloading":
-      return `Downloading ${Math.round(job.percent)}%`;
+      return fill(t.downloading, { n: Math.round(job.percent) });
     case "converting":
-      return "Converting…";
+      return t.converting;
     case "error":
       return job.message;
     default:
@@ -103,9 +124,9 @@ type UrlCheck = { url: string } | { error: string };
 
 // Catches the obvious mistakes before spending a slow round trip on them, and
 // forgives a pasted address that is missing its https:// prefix.
-function checkUrl(raw: string): UrlCheck {
+function checkUrl(raw: string, t: DownloaderText): UrlCheck {
   const trimmed = raw.trim();
-  if (!trimmed) return { error: "Paste a video link first." };
+  if (!trimmed) return { error: t.emptyLink };
 
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
     ? trimmed
@@ -115,18 +136,15 @@ function checkUrl(raw: string): UrlCheck {
   try {
     parsed = new URL(withScheme);
   } catch {
-    return {
-      error:
-        "That doesn't look like a link. Copy the address from your browser and paste the whole thing.",
-    };
+    return { error: t.notALink };
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return { error: "Only web links starting with http or https can be downloaded." };
+    return { error: t.notHttp };
   }
   // A hostname with no dot is either a typo or a machine on the local
   // network, neither of which is something to download from.
   if (!parsed.hostname.includes(".")) {
-    return { error: "That link is missing a website name. Check it and try again." };
+    return { error: t.noHost };
   }
   return { url: parsed.toString() };
 }
@@ -145,11 +163,9 @@ function postJson(path: string, body: unknown): Promise<Response> {
 }
 
 // Anything that stops the request reaching a real answer, said plainly.
-function networkErrorMessage(err: unknown): string {
-  if (err instanceof DOMException && err.name === "AbortError") {
-    return "That link took too long to read. The site may be busy right now, please try again.";
-  }
-  return "Couldn't reach the server. Check your connection and try again.";
+function networkErrorMessage(err: unknown, t: DownloaderText): string {
+  if (err instanceof DOMException && err.name === "AbortError") return t.tooSlow;
+  return t.offline;
 }
 
 // Every row in both tabs looks and behaves the same: a title, an optional
@@ -160,19 +176,21 @@ function DownloadRow({
   size,
   job,
   onClick,
+  t,
 }: {
   label: string;
   note: string;
   size: string;
   job: JobState;
   onClick: () => void;
+  t: DownloaderText;
 }) {
   const active = job.status !== "idle" && job.status !== "error";
   return (
     <div className="relative">
       {active && "percent" in job && (
         <div
-          className="absolute inset-y-0 left-0 bg-violet-50 transition-all dark:bg-violet-900/30"
+          className="absolute inset-y-0 start-0 bg-violet-50 transition-all dark:bg-violet-900/30"
           style={{ width: `${job.percent}%` }}
         />
       )}
@@ -180,12 +198,12 @@ function DownloadRow({
         type="button"
         onClick={onClick}
         disabled={active}
-        className="relative flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm hover:bg-neutral-50 disabled:hover:bg-transparent dark:hover:bg-white/5"
+        className="relative flex w-full items-center justify-between gap-4 px-4 py-3 text-start text-sm hover:bg-neutral-50 disabled:hover:bg-transparent dark:hover:bg-white/5"
       >
         <span className="font-medium text-neutral-800 dark:text-neutral-200">
           {label}
           {note && (
-            <span className="ml-2 text-xs font-normal text-neutral-400 dark:text-neutral-500">
+            <span className="ms-2 text-xs font-normal text-neutral-400 dark:text-neutral-500">
               {note}
             </span>
           )}
@@ -193,13 +211,13 @@ function DownloadRow({
         <span className="flex shrink-0 items-center gap-3 text-neutral-500 dark:text-neutral-400">
           {active ? (
             <span className="text-xs font-medium text-violet-700 dark:text-violet-300">
-              {statusLabel(job)}
+              {statusLabel(job, t)}
             </span>
           ) : (
             <>
               {size}
               <span className="rounded-lg bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                Save
+                {t.save}
               </span>
             </>
           )}
@@ -215,10 +233,18 @@ function DownloadRow({
 }
 
 export default function DownloaderForm({
-  placeholder = "Paste your video link here",
+  placeholder,
+  locale = "en",
+  text: t,
 }: {
   placeholder?: string;
+  locale?: Locale;
+  /** Every string the downloader shows, in the page's language. */
+  text: DownloaderText;
 }) {
+  // A server label such as "Photo (JPG) 1080x1350" names the kind in English.
+  const rowLabel = (label: string) =>
+    locale === "en" ? label : label.replace(/^Photo\b/, t.photo).replace(/^Image\b/, t.image);
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -262,7 +288,7 @@ export default function DownloaderForm({
         const res = await infoPromise;
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setError(data.error ?? "Something went wrong. Please try again.");
+          setError(apiError(data, res.status, locale, t, t.genericError));
           return;
         }
         setResult(data);
@@ -285,12 +311,12 @@ export default function DownloaderForm({
                 : "video",
         );
       } catch (err) {
-        setError(networkErrorMessage(err));
+        setError(networkErrorMessage(err, t));
       } finally {
         setLoading(false);
       }
     },
-    [gate, armDownload],
+    [gate, armDownload, locale, t],
   );
 
   const lookupPlaylist = useCallback(
@@ -306,24 +332,24 @@ export default function DownloaderForm({
         const res = await promise;
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          setError(data.error ?? "Couldn't read that playlist.");
+          setError(apiError(data, res.status, locale, t, t.playlistError));
           return;
         }
         setPlaylist(data);
       } catch (err) {
-        setError(networkErrorMessage(err));
+        setError(networkErrorMessage(err, t));
       } finally {
         setLoading(false);
       }
     },
-    [gate],
+    [gate, locale, t],
   );
 
   const runLookup = useCallback(
     async (target: string) => {
       // Reject what is plainly not a link here, so an obvious typo costs
       // nothing and gets a straight answer instead of a slow generic failure.
-      const checked = checkUrl(target);
+      const checked = checkUrl(target, t);
       if ("error" in checked) {
         setResult(null);
         setPlaylist(null);
@@ -344,7 +370,7 @@ export default function DownloaderForm({
         await lookupSingle(clean);
       }
     },
-    [lookupSingle, lookupPlaylist],
+    [lookupSingle, lookupPlaylist, t],
   );
 
   // Deep link / bookmarklet support: a ?url= (or ?u=) query prefills the box
@@ -361,8 +387,8 @@ export default function DownloaderForm({
     if (params.get("mp3") === "1") mp3PrefRef.current = true;
     // Defer a tick so the lookup's state updates don't run synchronously
     // inside the effect.
-    const t = setTimeout(() => void runLookup(shared), 0);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => void runLookup(shared), 0);
+    return () => clearTimeout(timer);
   }, [runLookup]);
 
   function handleSubmit(e: FormEvent) {
@@ -393,7 +419,7 @@ export default function DownloaderForm({
         if (!res.ok) {
           setJobs((prev) => ({
             ...prev,
-            [key]: { status: "error", message: data.error ?? "Failed to start." },
+            [key]: { status: "error", message: apiError(data, res.status, locale, t, t.startFailed) },
           }));
           return;
         }
@@ -405,7 +431,11 @@ export default function DownloaderForm({
           if (payload.status === "error") {
             setJobs((prev) => ({
               ...prev,
-              [key]: { status: "error", message: payload.error ?? "Something went wrong." },
+              // A failed download carries English text and no code.
+              [key]: {
+                status: "error",
+                message: (locale === "en" && payload.error) || t.jobFailed,
+              },
             }));
             source.close();
             return;
@@ -435,7 +465,7 @@ export default function DownloaderForm({
       .catch(() => {
         setJobs((prev) => ({
           ...prev,
-          [key]: { status: "error", message: "Couldn't reach the server." },
+          [key]: { status: "error", message: t.serverUnreachable },
         }));
       });
   }
@@ -504,22 +534,24 @@ export default function DownloaderForm({
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             type="text"
+            // Web addresses read left to right, also on the Arabic page.
+            dir="ltr"
             inputMode="url"
             autoComplete="url"
             spellCheck={false}
-            placeholder={placeholder}
-            aria-label="Paste video URL"
+            placeholder={placeholder ?? t.placeholder}
+            aria-label={t.inputLabel}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? "downloader-error" : undefined}
-            className="w-full rounded-xl border border-black/10 bg-white/70 py-3 pl-4 pr-10 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-black/30 dark:text-white dark:placeholder:text-neutral-400"
+            className="w-full rounded-xl border border-black/10 bg-white/70 py-3 pe-10 ps-4 text-base outline-none focus:border-violet-500 sm:text-sm dark:border-white/10 dark:bg-black/30 dark:text-white dark:placeholder:text-neutral-400"
           />
           {url && (
             <button
               type="button"
               onClick={clearAll}
-              aria-label="Clear the link"
-              title="Clear"
-              className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+              aria-label={t.clear}
+              title={t.clearTitle}
+              className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                 <path
@@ -538,7 +570,7 @@ export default function DownloaderForm({
             onClick={handlePaste}
             className="rounded-xl border border-black/10 px-4 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/5"
           >
-            Paste
+            {t.paste}
           </button>
           <button
             type="submit"
@@ -569,10 +601,10 @@ export default function DownloaderForm({
                     strokeLinecap="round"
                   />
                 </svg>
-                Looking up...
+                {t.lookingUp}
               </span>
             ) : (
-              "Download"
+              t.download
             )}
           </button>
         </div>
@@ -591,7 +623,7 @@ export default function DownloaderForm({
       )}
 
       <p role="status" aria-live="polite" className="sr-only">
-        {loading ? "Reading that link, please wait." : ""}
+        {loading ? t.reading : ""}
       </p>
 
 
@@ -603,9 +635,9 @@ export default function DownloaderForm({
                 {playlist.title}
               </p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {playlist.entries.length} videos
-                {playlist.truncated ? ` (showing the first ${playlist.entries.length})` : ""}{" "}
-                · pick one to download
+                {fill(t.videosCount, { n: playlist.entries.length })}
+                {playlist.truncated ? fill(t.showingFirst, { n: playlist.entries.length }) : ""}{" "}
+                · {t.pickOne}
               </p>
             </div>
           </div>
@@ -615,7 +647,7 @@ export default function DownloaderForm({
                 <button
                   type="button"
                   onClick={() => lookupSingle(entry.url, true)}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-white/5 ${
+                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm hover:bg-neutral-50 dark:hover:bg-white/5 ${
                     selectedUrl === entry.url ? "bg-violet-50 dark:bg-violet-900/20" : ""
                   }`}
                 >
@@ -692,7 +724,7 @@ export default function DownloaderForm({
                       : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/5"
                   }`}
                 >
-                  Video
+                  {t.video}
                 </button>
               )}
               {result.audio.length > 0 && (
@@ -705,7 +737,7 @@ export default function DownloaderForm({
                       : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/5"
                   }`}
                 >
-                  Audio
+                  {t.audio}
                 </button>
               )}
             </div>
@@ -720,6 +752,7 @@ export default function DownloaderForm({
                   size={formatBytes(f.filesize)}
                   job={jobs[f.formatId] ?? { status: "idle" }}
                   onClick={() => downloadFormat(f)}
+                  t={t}
                 />
               ))}
             {tab === "audio" &&
@@ -731,13 +764,15 @@ export default function DownloaderForm({
                   size=""
                   job={jobs[a.id] ?? { status: "idle" }}
                   onClick={() => downloadAudio(a)}
+                  t={t}
                 />
               ))}
             {(tab === "video" || tab === "photos") &&
               result.images.map((img) => (
                 <DownloadRow
                   key={img.formatId}
-                  label={img.label}
+                  label={rowLabel(img.label)}
+                  t={t}
                   note=""
                   size={formatBytes(img.filesize)}
                   job={jobs[img.formatId] ?? { status: "idle" }}
@@ -757,7 +792,7 @@ export default function DownloaderForm({
               result.audio.length === 0 &&
               result.images.length === 0 && (
                 <p className="px-4 py-3 text-sm text-neutral-500 dark:text-neutral-400">
-                  No downloadable formats were found for this link.
+                  {t.noFormats}
                 </p>
               )}
           </div>
@@ -767,7 +802,7 @@ export default function DownloaderForm({
       {/* Fills the wait while the server makes the file, and only then. */}
       <DownloadWait active={busy} />
 
-      {askReview && <ReviewPrompt onClose={closeReview} />}
+      {askReview && <ReviewPrompt onClose={closeReview} text={t.review} />}
     </div>
   );
 }

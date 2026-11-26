@@ -26,7 +26,14 @@ function countReview(action: ReviewAction) {
  * ("Not now", Escape, or a click outside) leaves everything as it was.
  * Nothing is offered for a review and nothing depends on one.
  */
-export default function ReviewPrompt({ onClose }: { onClose: () => void }) {
+export default function ReviewPrompt({
+  onClose,
+  text,
+}: {
+  onClose: () => void;
+  /** The four strings of the box, in the page's language. */
+  text: { title: string; body: string; write: string; notNow: string };
+}) {
   const primary = useRef<HTMLAnchorElement>(null);
   const secondary = useRef<HTMLButtonElement>(null);
   const counted = useRef(false);
@@ -86,11 +93,10 @@ export default function ReviewPrompt({ onClose }: { onClose: () => void }) {
         className="glass-strong w-full max-w-md rounded-2xl p-6 text-center shadow-2xl transition-[opacity,scale] duration-200 ease-out starting:scale-95 starting:opacity-0 motion-reduce:transition-none"
       >
         <p id="review-prompt-title" className="font-display text-xl font-bold text-neutral-900 dark:text-white">
-          How did it go?
+          {text.title}
         </p>
         <p id="review-prompt-text" className="mt-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
-          Your download has started. If you have a minute, tell others what you
-          think of PasteAndSave on Trustpilot. Good or bad, every review helps.
+          {text.body}
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
           <a
@@ -105,7 +111,7 @@ export default function ReviewPrompt({ onClose }: { onClose: () => void }) {
             }}
             className="flex-1 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-700"
           >
-            Write a review
+            {text.write}
           </a>
           <button
             ref={secondary}
@@ -113,7 +119,7 @@ export default function ReviewPrompt({ onClose }: { onClose: () => void }) {
             onClick={close}
             className="flex-1 rounded-xl border border-black/10 px-4 py-3 text-sm font-medium text-neutral-700 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/5"
           >
-            Not now
+            {text.notNow}
           </button>
         </div>
       </div>

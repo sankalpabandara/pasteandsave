@@ -9,9 +9,15 @@ import BlogTeaser from "@/components/BlogTeaser";
 import { getPost, postsForTool } from "@/lib/blog";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { TOOL_PAGES, type ToolPage } from "@/lib/seo-pages";
+import { fill, linkFor, localePath, type Locale } from "@/lib/i18n";
+import { downloaderText, getDict, toolName } from "@/i18n";
 
-export default function ToolLanding({ tool }: { tool: ToolPage }) {
-  const pageUrl = `${SITE_URL}/${tool.slug}`;
+export default function ToolLanding({ tool, locale = "en" }: { tool: ToolPage; locale?: Locale }) {
+  const dict = getDict(locale);
+  const t = dict.tool;
+  const path = `/${tool.slug}`;
+  const pageUrl = `${SITE_URL.replace(/\/$/, "")}${linkFor(locale, path)}`;
+  const homeUrl = `${SITE_URL.replace(/\/$/, "")}${locale === "en" ? "" : localePath(locale, "/")}`;
 
   const jsonLd = [
     {
@@ -19,6 +25,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
       "@type": "WebApplication",
       name: `${SITE_NAME} ${tool.h1}`,
       url: pageUrl,
+      inLanguage: locale,
       applicationCategory: "MultimediaApplication",
       operatingSystem: "Any",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
@@ -27,7 +34,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
     {
       "@context": "https://schema.org",
       "@type": "HowTo",
-      name: `How to use the ${tool.h1}`,
+      name: fill(t.howTo, { name: tool.h1 }),
       step: tool.steps.map((s, i) => ({
         "@type": "HowToStep",
         position: i + 1,
@@ -48,20 +55,20 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
       itemListElement: [
-        { "@type": "ListItem", position: 1, name: SITE_NAME, item: SITE_URL },
+        { "@type": "ListItem", position: 1, name: SITE_NAME, item: homeUrl },
         { "@type": "ListItem", position: 2, name: tool.h1, item: pageUrl },
       ],
     },
   ];
 
-  const otherTools = TOOL_PAGES.filter((t) => t.slug !== tool.slug);
+  const otherTools = TOOL_PAGES.filter((other) => other.slug !== tool.slug);
 
   return (
     <>
       {jsonLd.map((data, i) => (
         <JsonLd key={i} data={data} />
       ))}
-      <Header />
+      <Header path={path} />
       <main>
         <section className="px-4 pb-14 pt-12 sm:pb-20 sm:pt-16">
           <div className="mx-auto max-w-2xl text-center">
@@ -78,15 +85,15 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
             </p>
           </div>
           <div className="mt-8">
-            <DownloaderForm placeholder={tool.placeholder} />
+            <DownloaderForm placeholder={tool.placeholder} locale={locale} text={downloaderText(locale)} />
           </div>
         </section>
 
-        <AdSlot slot="toolTop" className="px-4 py-6" />
+        <AdSlot slot="toolTop" className="px-4 py-6" label={dict.ads.label} />
 
         <section className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
           <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
-            {`Why use the ${SITE_NAME} ${tool.h1}?`}
+            {fill(t.why, { site: SITE_NAME, name: tool.h1 })}
           </h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {tool.features.map((f) => (
@@ -133,11 +140,11 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
           </div>
         </section>
 
-        <AdSlot slot="toolMid" className="px-4 py-8" />
+        <AdSlot slot="toolMid" className="px-4 py-8" label={dict.ads.label} />
 
         <section id="faq" className="mx-auto max-w-3xl px-4 py-12 sm:py-16">
           <h2 className="font-display text-center text-xl font-bold sm:text-2xl dark:text-white">
-            Frequently asked questions
+            {t.faqHeading}
           </h2>
           <div className="glass glass-hairline mt-6 divide-y divide-[var(--hairline)] overflow-hidden rounded-2xl">
             {tool.faqs.map((f) => (
@@ -162,7 +169,7 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
 
         {/* Guides written for this downloader, or general ones where there
             are none yet, so every downloader page links into the blog. */}
-        {(() => {
+        {locale === "en" && (() => {
           const own = postsForTool(`/${tool.slug}`);
           return (
             <BlogTeaser
@@ -182,23 +189,23 @@ export default function ToolLanding({ tool }: { tool: ToolPage }) {
 
         <section className="mx-auto max-w-5xl px-4 pb-12 sm:pb-16">
           <h2 className="font-display text-center text-lg font-bold dark:text-white">
-            Other free downloaders
+            {t.others}
           </h2>
           <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {otherTools.map((t) => (
+            {otherTools.map((other) => (
               <Link
-                key={t.slug}
-                href={`/${t.slug}`}
+                key={other.slug}
+                href={linkFor(locale, `/${other.slug}`)}
                 className="glass glass-hairline rounded-full px-4 py-2 text-sm font-medium text-neutral-700 transition hover:-translate-y-0.5 hover:text-violet-700 dark:text-neutral-300 dark:hover:text-violet-300"
               >
-                {t.navLabel}
+                {toolName(other.slug, locale).navLabel}
               </Link>
             ))}
           </div>
         </section>
 
 
-        <AdSlot slot="toolBottom" className="px-4 pb-10" />
+        <AdSlot slot="toolBottom" className="px-4 pb-10" label={dict.ads.label} />
       </main>
       <Footer />
     </>

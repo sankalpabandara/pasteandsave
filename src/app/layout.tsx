@@ -8,6 +8,8 @@ import StickyBanner from "@/components/ads/StickyBanner";
 import SideRails from "@/components/ads/SideRails";
 import { readSettings } from "@/lib/ads-store";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { dirOf } from "@/lib/i18n";
+import { getLocale } from "@/i18n/server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -78,10 +80,12 @@ export default async function RootLayout({
   // banners arrive.
   const { snippets, adsterra, socialBar, popunder, interstitial, inPagePush, native } =
     await readSettings();
+  const locale = await getLocale();
 
   return (
     <html
-      lang="en"
+      lang={locale}
+      dir={dirOf(locale)}
       className={`${geistSans.variable} ${spaceGrotesk.variable} h-full antialiased`}
       suppressHydrationWarning
     >

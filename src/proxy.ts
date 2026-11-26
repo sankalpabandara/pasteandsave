@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { adPolicy } from "@/lib/ad-policy";
+import { countryOf } from "@/lib/geoip";
+import { clientIp } from "@/lib/rate-limit";
+import {
+  DEFAULT_LOCALE,
+  LANG_COOKIE,
+  isBot,
+  isLocale,
+  isTranslatedPath,
+  localePath,
+  pickLocale,
+  splitLocalePath,
+  type Locale,
+} from "@/lib/i18n";
 
 // Issues a fresh nonce per request and builds the Content-Security-Policy
 // around it, so script-src no longer needs 'unsafe-inline'.
@@ -26,7 +39,57 @@ const AD_DOMAINS = (process.env.AD_NETWORK_DOMAINS || "")
 
 const isDev = process.env.NODE_ENV !== "production";
 
+const YEAR_SECONDS = 365 * 24 * 60 * 60;
+
+/** A page load typed or clicked by a person, as opposed to the router fetching data for one. */
+function isPageLoad(request: NextRequest): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  if (request.headers.get("rsc") || request.headers.get("next-router-prefetch")) return false;
+  const dest = request.headers.get("sec-fetch-dest");
+  if (dest) return dest === "document";
+  return (request.headers.get("accept") ?? "").includes("text/html");
+}
+
+/**
+ * The language a visitor arriving at an English address should see: the one
+ * they chose before (the cookie), or for a first visit the one their country
+ * speaks. Search engine bots always get English, so every language stays
+ * reachable by its own address and none hides another.
+ */
+function wantedLocale(request: NextRequest): { locale: Locale; remember: boolean } {
+  const saved = request.cookies.get(LANG_COOKIE)?.value;
+  if (isLocale(saved)) return { locale: saved, remember: false };
+  // Lets a developer try a country without travelling. Never in production.
+  const testCountry = isDev ? request.cookies.get("test-country")?.value : undefined;
+  const country = testCountry ?? countryOf(clientIp(request));
+  return { locale: pickLocale(country, request.headers.get("accept-language")), remember: true };
+}
+
 export function proxy(request: NextRequest) {
+  const url = request.nextUrl;
+  const { locale: prefixed, rest } = splitLocalePath(url.pathname);
+
+  // English has no prefix, so /en/... is the unprefixed page under another
+  // name, and a prefixed address for a page that is English only goes to it.
+  if (prefixed === DEFAULT_LOCALE || (prefixed && !isTranslatedPath(rest))) {
+    const target = url.clone();
+    target.pathname = rest;
+    return NextResponse.redirect(target, 308);
+  }
+
+  if (!prefixed && isTranslatedPath(url.pathname) && isPageLoad(request) && !isBot(request.headers.get("user-agent"))) {
+    const { locale, remember } = wantedLocale(request);
+    if (locale !== DEFAULT_LOCALE) {
+      const target = url.clone();
+      target.pathname = localePath(locale, url.pathname);
+      const redirect = NextResponse.redirect(target, 307);
+      if (remember) {
+        redirect.cookies.set(LANG_COOKIE, locale, { path: "/", maxAge: YEAR_SECONDS, sameSite: "lax" });
+      }
+      return redirect;
+    }
+  }
+
   const nonce = crypto.randomUUID().replace(/-/g, "");
   const path = request.nextUrl.pathname;
 
@@ -98,8 +161,14 @@ export function proxy(request: NextRequest) {
   // inline scripts, and set on the response for the browser to enforce.
   const headers = new Headers(request.headers);
   headers.set("x-nonce", nonce);
+  // Always set, so a visitor cannot pick a language by sending the header.
+  headers.set("x-locale", prefixed ?? DEFAULT_LOCALE);
 
-  const response = NextResponse.next({ request: { headers } });
+  // /es/tiktok-video-downloader is served by the same page as
+  // /tiktok-video-downloader, which reads the language from x-locale.
+  const response = prefixed
+    ? NextResponse.rewrite(new URL(`${rest}${url.search}`, request.url), { request: { headers } })
+    : NextResponse.next({ request: { headers } });
   response.headers.set("Content-Security-Policy", csp);
   return response;
 }
@@ -112,5 +181,9 @@ export const config = {
       source: "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|zip|txt|xml)$).*)",
       missing: [{ type: "header", key: "next-router-prefetch" }],
     },
+    // A language prefix has to be rewritten on prefetches too: without it the
+    // router would prefetch /es/..., find no such route, and keep the miss.
+    "/:locale(es|pt|id|hi|ar|si)",
+    "/:locale(es|pt|id|hi|ar|si)/:path*",
   ],
 };

@@ -26,14 +26,14 @@ function setTheme(dark: boolean) {
   listeners.forEach((listener) => listener());
 }
 
-export default function ThemeToggle() {
+export default function ThemeToggle({ label = "Toggle dark mode" }: { label?: string }) {
   const dark = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   return (
     <button
       type="button"
       onClick={() => setTheme(!dark)}
-      aria-label="Toggle dark mode"
+      aria-label={label}
       className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-black/10 text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/5"
     >
       {dark ? (

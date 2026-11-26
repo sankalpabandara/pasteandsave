@@ -2,53 +2,56 @@ import type { MetadataRoute } from "next";
 import { TOOL_PAGES } from "@/lib/seo-pages";
 import { SITE_URL } from "@/lib/site";
 import { POSTS, postImages } from "@/lib/blog";
+import { LOCALES, isTranslatedPath, localePath } from "@/lib/i18n";
+
+const base = SITE_URL.replace(/\/$/, "");
+
+/** Every language's address for a translated page, so each is listed and linked to the others. */
+function languages(path: string): Record<string, string> {
+  return Object.fromEntries(LOCALES.map((l) => [l, `${base}${localePath(l, path)}`]));
+}
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [
+  const now = new Date();
+  const pages: {
+    path: string;
+    priority: number;
+    changeFrequency: "weekly" | "monthly" | "yearly";
+    lastModified?: Date;
+    images?: string[];
+  }[] = [
+    { path: "/", priority: 1, changeFrequency: "weekly" },
+    ...TOOL_PAGES.map((t) => ({ path: `/${t.slug}`, priority: 0.9, changeFrequency: "weekly" as const })),
     {
-      url: SITE_URL,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 1,
-    },
-    ...TOOL_PAGES.map((t) => ({
-      url: `${SITE_URL}/${t.slug}`,
-      lastModified: new Date(),
-      changeFrequency: "weekly" as const,
-      priority: 0.9,
-    })),
-    {
-      url: `${SITE_URL}/blog`,
-      lastModified: new Date(
-        Math.max(...POSTS.map((p) => Date.parse(p.updated))),
-      ),
-      changeFrequency: "weekly",
+      path: "/blog",
       priority: 0.8,
+      changeFrequency: "weekly",
+      lastModified: new Date(Math.max(...POSTS.map((p) => Date.parse(p.updated)))),
     },
     ...POSTS.map((p) => ({
-      url: `${SITE_URL}/blog/${p.slug}`,
-      lastModified: new Date(p.updated),
-      changeFrequency: "monthly" as const,
+      path: `/blog/${p.slug}`,
       priority: 0.7,
-      images: postImages(p).map((img) => `${SITE_URL.replace(/\/$/, "")}${img.src}`),
+      changeFrequency: "monthly" as const,
+      lastModified: new Date(p.updated),
+      images: postImages(p).map((img) => `${base}${img.src}`),
     })),
-    {
-      url: `${SITE_URL}/extension`,
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
-      url: `${SITE_URL}/terms`,
-      lastModified: new Date(),
-      changeFrequency: "yearly",
-      priority: 0.2,
-    },
-    {
-      url: `${SITE_URL}/privacy`,
-      lastModified: new Date(),
-      changeFrequency: "yearly",
-      priority: 0.2,
-    },
+    { path: "/extension", priority: 0.8, changeFrequency: "monthly" },
+    { path: "/terms", priority: 0.2, changeFrequency: "yearly" },
+    { path: "/privacy", priority: 0.2, changeFrequency: "yearly" },
   ];
+
+  return pages.flatMap(({ path, priority, changeFrequency, lastModified = now, images }) => {
+    if (!isTranslatedPath(path)) {
+      return [{ url: path === "/" ? SITE_URL : `${base}${path}`, lastModified, changeFrequency, priority, images }];
+    }
+    const alternates = { languages: languages(path) };
+    return LOCALES.map((l) => ({
+      url: l === "en" && path === "/" ? SITE_URL : `${base}${localePath(l, path)}`,
+      lastModified,
+      changeFrequency,
+      priority: l === "en" ? priority : Math.max(0.1, priority - 0.1),
+      alternates,
+      images,
+    }));
+  });
 }

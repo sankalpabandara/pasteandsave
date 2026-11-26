@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { linkFor } from "@/lib/i18n";
+import { getLocale } from "@/i18n/server";
+import { getDict } from "@/i18n";
 
 const PLATFORMS: { name: string; color: string; initial: string; href?: string }[] = [
   { name: "Instagram", color: "from-pink-500 to-orange-400", initial: "IG", href: "/instagram-video-downloader" },
@@ -17,16 +20,16 @@ const PLATFORMS: { name: string; color: string; initial: string; href?: string }
 const tileClass =
   "glass glass-hairline flex flex-col items-center gap-3 rounded-2xl p-5 transition hover:-translate-y-0.5 hover:shadow-lg sm:p-6";
 
-export default function Platforms() {
+export default async function Platforms() {
+  const locale = await getLocale();
+  const t = getDict(locale).platforms;
   return (
     <section id="platforms" className="mx-auto max-w-5xl px-4 py-12 sm:py-16">
       <h2 className="font-display text-center text-xl font-bold sm:text-3xl dark:text-white">
-        Works with more than 1,200 sites
+        {t.heading}
       </h2>
       <p className="mx-auto mt-2 max-w-xl text-center text-sm text-neutral-600 sm:text-base dark:text-neutral-400">
-        You never have to choose a platform. Paste the link, and
-        PasteAndSave works out which site it came from and shows the
-        quality options. These are the popular ones.
+        {t.intro}
       </p>
       <div className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:grid-cols-4 sm:gap-4">
         {PLATFORMS.map((p) => {
@@ -43,7 +46,7 @@ export default function Platforms() {
             </>
           );
           return p.href ? (
-            <Link key={p.name} href={p.href} className={tileClass}>
+            <Link key={p.name} href={linkFor(locale, p.href)} className={tileClass}>
               {inner}
             </Link>
           ) : (
@@ -53,10 +56,7 @@ export default function Platforms() {
           );
         })}
       </div>
-      <p className="mt-6 text-center text-sm text-neutral-500 dark:text-neutral-400">
-        Snapchat, Twitch, Bluesky, Tumblr, Bandcamp, Mixcloud, Rumble, Imgur,
-        VK and Bilibili work too, along with many smaller sites.
-      </p>
+      <p className="mt-6 text-center text-sm text-neutral-500 dark:text-neutral-400">{t.more}</p>
     </section>
   );
 }

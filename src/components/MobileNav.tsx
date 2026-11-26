@@ -5,11 +5,15 @@ import { useEffect, useRef, useState } from "react";
 
 // Phone and tablet navigation: a hamburger that opens a glass dropdown with
 // full width touch targets. Wide screens keep the inline links; this renders
-// only below lg.
+// only below lg, where the header has room for them.
 export default function MobileNav({
   links,
+  openLabel = "Open menu",
+  closeLabel = "Close menu",
 }: {
   links: { label: string; href: string }[];
+  openLabel?: string;
+  closeLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -37,7 +41,7 @@ export default function MobileNav({
     <div ref={rootRef} className="lg:hidden">
       <button
         type="button"
-        aria-label={open ? "Close menu" : "Open menu"}
+        aria-label={open ? closeLabel : openLabel}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
         className="grid h-9 w-9 place-items-center rounded-xl text-neutral-700 transition hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10"

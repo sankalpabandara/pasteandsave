@@ -84,17 +84,20 @@ export default function Analytics() {
     // Referrer is only useful on the landing pageview; after an internal
     // navigation it would just be our own host.
     const ref = isLanding && document.referrer ? document.referrer : "";
+    // The address in the bar, which keeps its language prefix (/es/...); the
+    // router's own pathname can be the page it was rewritten to.
+    const shown = window.location.pathname;
 
     fetch("/api/track", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: pathname, ref }),
+      body: JSON.stringify({ path: shown, ref }),
       keepalive: true,
     }).catch(() => {});
 
     if (gaRef.current && typeof window !== "undefined") {
       const w = window as unknown as { gtag?: (...args: unknown[]) => void };
-      w.gtag?.("event", "page_view", { page_path: pathname });
+      w.gtag?.("event", "page_view", { page_path: shown });
     }
   }, [pathname]);
 
