@@ -384,7 +384,31 @@ api.tabs.onRemoved.addListener((tabId) => {
 
 function openOnSite(target) {
   if (offLimits(target)) return;
+  noteSiteVisit();
   quiet(api.tabs.create({ url: `${siteBase}/?url=${encodeURIComponent(target)}` }));
+}
+
+// A plain file saves straight to the downloads folder and the in-page button
+// fetches through the API with no page shown, so someone can lean on the
+// extension for weeks and never once see the site that pays to keep it free
+// and the servers running. After a save, and no more often than this, the
+// home page opens in a background tab: the file still lands exactly as before
+// and the tab waits quietly behind the one they are on until they look. The
+// address carries nothing about what was saved, it is just the home page.
+// Streams and YouTube already open the site and share this timer, so a save
+// that just went through the site does not also do this, and a burst like
+// "Save all" opens one tab, not one per file.
+const SITE_VISIT_COOLDOWN_MS = 2 * 60 * 1000;
+let lastSiteVisit = 0;
+
+function noteSiteVisit() {
+  lastSiteVisit = Date.now();
+}
+
+function visitSiteAfterSave() {
+  if (Date.now() - lastSiteVisit < SITE_VISIT_COOLDOWN_MS) return;
+  noteSiteVisit();
+  quiet(api.tabs.create({ url: `${siteBase}/`, active: false }));
 }
 
 // --- talking to tabs -------------------------------------------------------
@@ -658,6 +682,7 @@ async function runDownload(tabId, jobBody, requestId) {
   const outcome = await whenDownloadEnds(id);
   if (outcome !== "complete") throw new Error("The browser didn't finish saving the file.");
   tellTab(tabId, { type: "downloadProgress", requestId, status: "saved", percent: 100 });
+  visitSiteAfterSave();
 }
 
 // Right-click entries: page, link, or the media element itself.
@@ -689,6 +714,7 @@ function deliver(target) {
   if (!target || offLimits(target.url)) return;
   if (target.kind === "file" || isPlainFileUrl(target.url)) {
     quiet(startBrowserDownload({ url: target.url, filename: filenameFrom(target.url, "") }).catch(() => {}));
+    visitSiteAfterSave();
     return;
   }
   openOnSite(target.url);
@@ -773,7 +799,10 @@ function handleMessage(msg, sender, sendResponse) {
   }
   if (type === "download") {
     startBrowserDownload({ url: msg.url, filename: msg.filename ? safeFilename(msg.filename) : undefined })
-      .then(() => sendResponse({ ok: true }))
+      .then(() => {
+        visitSiteAfterSave();
+        sendResponse({ ok: true });
+      })
       .catch(() => sendResponse({ ok: false }));
     return;
   }
@@ -859,7 +888,10 @@ function handleMessage(msg, sender, sendResponse) {
   if (type === "saveFile") {
     if (!isPlainFileUrl(msg.url)) return sendResponse({ ok: false });
     startBrowserDownload({ url: msg.url, filename: filenameFrom(msg.url, "") })
-      .then(() => sendResponse({ ok: true }))
+      .then(() => {
+        visitSiteAfterSave();
+        sendResponse({ ok: true });
+      })
       .catch(() => sendResponse({ ok: false }));
     return;
   }

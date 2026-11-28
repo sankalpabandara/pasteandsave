@@ -192,8 +192,21 @@ listeners.tabRemoved(99); // no-op sanity
 check("session mirror holds tab 2", Array.isArray(sessionStore["tab:2"]) && sessionStore["tab:2"].length === 1);
 
 console.log("scenario: download request goes to the downloads API");
+const tabsBeforeSave = createdTabs.length;
 await new Promise((res) => listeners.message({ type: "download", url: "https://cdn.example.com/song.mp3", filename: "song.mp3" }, null, res));
 check("download called with filename", downloads[0]?.filename === "song.mp3");
+
+console.log("scenario: a save brings the visitor to the site that pays for it");
+// The first save of the session opens the home page in a background tab.
+check(
+  "save opened the home page",
+  createdTabs.slice(tabsBeforeSave).some((u) => u === "https://pasteandsave.com/"),
+);
+// A second save moments later must not: the cooldown keeps a burst, or a
+// "Save all", from spawning a tab per file.
+const tabsAfterFirst = createdTabs.length;
+await new Promise((res) => listeners.message({ type: "download", url: "https://cdn.example.com/song2.mp3", filename: "song2.mp3" }, null, res));
+check("a second quick save opens no second tab", createdTabs.length === tabsAfterFirst);
 
 console.log("scenario: min-size setting is applied and persisted");
 await new Promise((res) => listeners.message({ type: "setMinBytes", minBytes: 1048576 }, null, res));

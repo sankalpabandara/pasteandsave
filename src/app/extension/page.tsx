@@ -126,7 +126,7 @@ export default function ExtensionPage() {
           downloadUrl: CHROME_STORE_URL,
           installUrl: CHROME_STORE_URL,
           sameAs: [CHROME_STORE_URL, FIREFOX_ADDON_URL],
-          softwareVersion: "2.3.0",
+          softwareVersion: "2.4.0",
         }}
       />
       <Header />
@@ -257,9 +257,11 @@ export default function ExtensionPage() {
               Finding media happens locally in your browser. When you send a
               link here, our server fetches that video for you, so the link and
               your request reach us the same way they would if you pasted it on
-              the site. Nothing else is sent. The source is plain readable
-              JavaScript inside the zip, so you can check every line before
-              installing.
+              the site. Nothing else is sent. Every so often, saving a file also
+              opens our home page in a background tab, the site that keeps this
+              free; it is a plain page load, and nothing about what you saved
+              goes with it. The source is plain readable JavaScript inside the
+              zip, so you can check every line before installing.
             </p>
           </div>
         </section>
