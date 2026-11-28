@@ -160,7 +160,11 @@ export default function ExtensionPage() {
             </a>
           </div>
           <p className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
-            One click, no account, no tracking. For YouTube on Chrome,{" "}
+            One click, no account, no tracking.
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            The Chrome store version cannot save from YouTube, which is
+            Google&apos;s rule, not ours. For YouTube on Chrome,{" "}
             <a
               href="/pasteandsave-extension.zip"
               download
@@ -168,7 +172,7 @@ export default function ExtensionPage() {
             >
               download the {zipSizeLabel()} zip
             </a>{" "}
-            instead.
+            instead. Firefox saves from YouTube either way.
           </p>
         </section>
 
