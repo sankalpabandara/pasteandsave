@@ -3,6 +3,18 @@
 Everything the Chrome Web Store and addons.mozilla.org (AMO) forms ask for,
 ready to paste. Store facing text has no dashes or hyphens, like the site.
 
+## Both listings are live (2.3.0)
+
+| Store | Address |
+| --- | --- |
+| Chrome Web Store | https://chromewebstore.google.com/detail/pasteandsave-video-downlo/pfagibejkjibihkkmkeabianjndeannf |
+| Firefox Add-ons | https://addons.mozilla.org/en-US/firefox/addon/pasteandsave-video-downloader/ |
+
+Both are linked from https://pasteandsave.com/extension and named in that
+page's SoftwareApplication markup, which a test checks. When a release goes
+out, update both stores and the version on that page together, or the test
+fails.
+
 Build the packages and images first:
 
     node extension/build-store.mjs     -> store/pasteandsave-chrome-store-<v>.zip, store/pasteandsave-firefox-<v>.zip
