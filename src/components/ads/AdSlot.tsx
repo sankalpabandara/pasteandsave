@@ -75,6 +75,10 @@ export default function AdSlot({
   // down to a strip. The frame measures itself and the box follows.
   const frame = useRef<HTMLIFrameElement>(null);
   const [grown, setGrown] = useState<number | null>(null);
+  // The frame says so when neither the banner nor the stand in drew anything.
+  // The box then goes, rather than keeping a grey rectangle with the word
+  // Advertisement over empty space.
+  const [empty, setEmpty] = useState(false);
   useEffect(() => {
     // The frame is sandboxed without allow-same-origin, so it has no origin to
     // check the message against. It is trusted only as coming from this
@@ -82,7 +86,13 @@ export default function AdSlot({
     const onMessage = (event: MessageEvent) => {
       if (!frame.current || event.source !== frame.current.contentWindow) return;
       const data = event.data as { type?: unknown; h?: unknown } | null;
-      if (!data || data.type !== "pas-ad-height" || typeof data.h !== "number") return;
+      if (!data) return;
+      if (data.type === "pas-ad-empty") {
+        setEmpty(true);
+        return;
+      }
+      if (data.type !== "pas-ad-height" || typeof data.h !== "number") return;
+      setEmpty(false);
       setGrown(Math.min(1400, Math.max(cfg.height, Math.round(data.h))));
     };
     window.addEventListener("message", onMessage);
@@ -120,6 +130,7 @@ export default function AdSlot({
   // Returning null takes the slot's own spacing with it, so a slot with
   // nothing to show leaves no empty band behind.
   if (!ADS_ENABLED) return null;
+  if (empty) return null;
   if (!snippet && !usesAdsterra && !SHOW_AD_PLACEHOLDERS) return null;
 
   return (

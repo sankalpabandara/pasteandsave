@@ -135,6 +135,27 @@ test("only a box that can grow is offered a stand in", () => {
   assert.match(route, /placement\.fixedBox \? "" : settings\.native/);
 });
 
+test("a slot that draws nothing takes itself off the page", () => {
+  // The network fills a banner about one time in fifty here. An unfilled slot
+  // used to leave a grey box with the word Advertisement over empty space,
+  // which costs room on the page and earns nothing. The frame reports it and
+  // every holder of a frame has to act on that report.
+  const route = fs.readFileSync("src/app/ads/frame/route.ts", "utf8");
+  assert.match(route, /pas-ad-empty/, "the frame must report an empty slot");
+  // Both kinds of document: a banner and a native widget.
+  assert.equal((route.match(/emptyReporter\(\)/g) || []).length >= 3, true);
+
+  for (const file of [
+    "src/components/ads/AdSlot.tsx",
+    "src/components/ads/NativeSlot.tsx",
+    "src/components/ads/SideRails.tsx",
+    "src/components/ads/StickyBanner.tsx",
+  ]) {
+    const source = fs.readFileSync(file, "utf8");
+    assert.match(source, /pas-ad-empty/, `${file} must listen for the empty report`);
+  }
+});
+
 test("native places reserve a sensible box", () => {
   for (const [key, cfg] of Object.entries(NATIVE_SLOTS)) {
     assert.ok(cfg.height >= 120 && cfg.height <= 600, `${key}: ${cfg.height}`);

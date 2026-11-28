@@ -29,6 +29,20 @@ export default function StickyBanner() {
   // A ref, not state: the scroll listener has to see the close immediately,
   // and a closed bar must not come back on the next scroll.
   const dismissed = useRef(false);
+  // The bar covers part of the page, so an unfilled one is the worst of the
+  // empty boxes. The frame says when it drew nothing and the bar goes.
+  const frame = useRef<HTMLIFrameElement>(null);
+  const [empty, setEmpty] = useState(false);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!frame.current || event.source !== frame.current.contentWindow) return;
+      const data = event.data as { type?: unknown } | null;
+      if (data && data.type === "pas-ad-empty") setEmpty(true);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   useEffect(() => {
     // Closing it is remembered for the rest of the visit, not for ever: the
@@ -74,6 +88,7 @@ export default function StickyBanner() {
   if (!ADS_ENABLED) return null;
   if (pathname.startsWith("/admin")) return null;
   if (!adsterraSizes.includes(SIZE)) return null;
+  if (empty) return null;
   if (!visible) return null;
 
   return (
@@ -83,6 +98,7 @@ export default function StickyBanner() {
         style={{ height: BAR_HEIGHT }}
       >
         <iframe
+          ref={frame}
           title="Advertisement"
           src={`/ads/frame?slot=${SLOT}&size=${SIZE}`}
           // Same sealed frame as every other banner: served from this site, so

@@ -131,6 +131,32 @@ function heightReporter(containerId: string): string {
 })();`;
 }
 
+/**
+ * Says so when the frame ended up with nothing in it.
+ *
+ * The network fills a banner about one time in fifty here, and a slot that
+ * does not fill used to leave a grey box with the word Advertisement over
+ * empty space. That is worse than no slot: it takes room on the page, it
+ * tells a visitor an ad failed, and it earns nothing either way. So the
+ * frame waits for the banner, then for the stand in where there is one, and
+ * if neither drew anything it tells the page, which takes the box away.
+ */
+function emptyReporter(): string {
+  return `
+(function () {
+  function drawn() { return !!document.querySelector("iframe, img, ins"); }
+  var waited = 0;
+  var timer = setInterval(function () {
+    waited += 500;
+    if (drawn()) { clearInterval(timer); return; }
+    if (waited >= 6000) {
+      clearInterval(timer);
+      parent.postMessage({ type: "pas-ad-empty" }, "*");
+    }
+  }, 500);
+})();`;
+}
+
 export async function GET(request: NextRequest) {
   // Set on the request by proxy.ts, which also sets the policy that enforces
   // it. Without the nonce the scripts below are blocked and the slot is blank.
@@ -219,7 +245,8 @@ export async function GET(request: NextRequest) {
 <script nonce="${attr(nonce)}">
 atOptions = { key: ${jsString(unit.key)}, format: "iframe", height: ${height}, width: ${width}, params: {} };
 </script>
-<script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>${fallback}`;
+<script nonce="${attr(nonce)}" data-cfasync="false" src="${attr(unit.src)}"></script>${fallback}
+<script nonce="${attr(nonce)}">${emptyReporter()}</script>`;
 
   return htmlDocument(body, nonce);
 }
@@ -238,7 +265,8 @@ async function nativeDocument(slot: string, nonce: string): Promise<Response> {
   const body = `
 <script nonce="${attr(nonce)}" async data-cfasync="false" src="${attr(native)}"></script>
 <div id="container-${attr(key)}"></div>
-<script nonce="${attr(nonce)}">${heightReporter(`container-${key}`)}</script>`;
+<script nonce="${attr(nonce)}">${heightReporter(`container-${key}`)}</script>
+<script nonce="${attr(nonce)}">${emptyReporter()}</script>`;
 
   return htmlDocument(body, nonce, NATIVE_CSS);
 }

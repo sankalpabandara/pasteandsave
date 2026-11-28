@@ -29,6 +29,8 @@ export default function NativeSlot({
   const { native } = useAdConfig();
   const frame = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState<number>(NATIVE_SLOTS[slot].height);
+  // Reported by the frame when the widget drew nothing at all.
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     if (!native) return;
@@ -38,7 +40,13 @@ export default function NativeSlot({
     const onMessage = (event: MessageEvent) => {
       if (!frame.current || event.source !== frame.current.contentWindow) return;
       const data = event.data as { type?: unknown; h?: unknown } | null;
-      if (!data || data.type !== "pas-ad-height" || typeof data.h !== "number") return;
+      if (!data) return;
+      if (data.type === "pas-ad-empty") {
+        setEmpty(true);
+        return;
+      }
+      if (data.type !== "pas-ad-height" || typeof data.h !== "number") return;
+      setEmpty(false);
       setHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(data.h))));
     };
     window.addEventListener("message", onMessage);
@@ -46,6 +54,7 @@ export default function NativeSlot({
   }, [native]);
 
   if (!ADS_ENABLED) return null;
+  if (empty) return null;
   if (!native && !SHOW_AD_PLACEHOLDERS) return null;
 
   return (
