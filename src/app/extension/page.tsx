@@ -145,21 +145,31 @@ export default function ExtensionPage() {
           </p>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a
-              href="/pasteandsave-extension.zip"
-              download
+              href={CHROME_STORE_URL}
+              rel="noopener"
               className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:bg-violet-700"
             >
-              <svg width="16" height="16" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                <path d="M20 9.5 V22" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-                <path d="M14.3 16.7 L20 22.6 L25.7 16.7" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M12 27.5 H28" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
-              </svg>
-              Download the extension
+              Add to Chrome
             </a>
-            <span className="text-xs text-neutral-500 dark:text-neutral-400">
-              {zipSizeLabel()} zip · no account · no tracking
-            </span>
+            <a
+              href={FIREFOX_ADDON_URL}
+              rel="noopener"
+              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-violet-600/25 transition hover:bg-violet-700"
+            >
+              Add to Firefox
+            </a>
           </div>
+          <p className="mt-4 text-xs text-neutral-500 dark:text-neutral-400">
+            One click, no account, no tracking. For YouTube on Chrome,{" "}
+            <a
+              href="/pasteandsave-extension.zip"
+              download
+              className="font-semibold text-violet-600 hover:underline dark:text-violet-400"
+            >
+              download the {zipSizeLabel()} zip
+            </a>{" "}
+            instead.
+          </p>
         </section>
 
         <AdSlot slot="extensionTop" className="px-4 py-6" />
