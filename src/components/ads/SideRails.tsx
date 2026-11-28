@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ADS_ENABLED, AD_SLOTS } from "@/lib/ads";
 import { useAdConfig } from "@/components/ads/AdProvider";
@@ -28,6 +29,8 @@ const RAILS = ["railLeft", "railRight"] as const;
 export default function SideRails() {
   const { adsterraSizes } = useAdConfig();
   const pathname = usePathname();
+  // The card sells the extension, so it never appears on the extension page.
+  const onExtensionPage = pathname.startsWith("/extension");
   const [wide, setWide] = useState(false);
   // A rail the network never filled. These sit in the margin at a fixed size
   // and are not offered a stand in, so when the banner does not arrive there
@@ -68,8 +71,56 @@ export default function SideRails() {
   if (!adsterraSizes.includes(SIZE)) return null;
   if (!wide) return null;
 
+  // One empty rail carries a word about the extension instead of nothing.
+  //
+  // The network fills a banner here about one time in fifty, so without this
+  // the margin is simply blank most of the time. The extension earns nothing
+  // directly, but it is the thing that brings a visitor back without a search
+  // engine in between, which is worth more here than a banner that does not
+  // arrive. Only one rail, because the same card twice reads as a page
+  // selling itself, and never on the page it is selling.
+  const promoRail = onExtensionPage
+    ? null
+    : emptyRails.includes("railRight")
+      ? "railRight"
+      : emptyRails.includes("railLeft")
+        ? "railLeft"
+        : null;
+
   return (
     <>
+      {promoRail && (
+        <div
+          className={`fixed top-1/2 z-30 -translate-y-1/2 ${
+            promoRail === "railLeft" ? "left-6" : "right-6"
+          }`}
+        >
+          {/* No "Advertisement" label on this one. It is not an ad, it is
+              this site talking about itself, and labelling it as an ad would
+              be a lie to the visitor and to the network. */}
+          <div
+            className="flex flex-col justify-between rounded-xl border border-black/10 bg-white p-4 text-center dark:border-white/10 dark:bg-neutral-950"
+            style={{ width: AD_SLOTS.railLeft.maxWidth, height: AD_SLOTS.railLeft.height }}
+          >
+            <div>
+              <p className="font-display text-base font-bold leading-tight text-neutral-900 dark:text-white">
+                Save without copying links
+              </p>
+              <p className="mt-3 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+                The free extension puts a save button on the videos you already
+                watch. It works in Chrome, Edge and Firefox, and installs from
+                this site.
+              </p>
+            </div>
+            <Link
+              href="/extension"
+              className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700"
+            >
+              Get the extension
+            </Link>
+          </div>
+        </div>
+      )}
       {RAILS.filter((slot) => !emptyRails.includes(slot)).map((slot) => (
         <div
           key={slot}
