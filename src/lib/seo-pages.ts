@@ -17,6 +17,19 @@ export type ToolPage = {
   keywords: string[];
   h1: string;
   tagline: string;
+  /**
+   * A direct answer to the question the page is for, in about fifty words,
+   * placed right under the paste box.
+   *
+   * Half of this site's visitors now arrive from ChatGPT, and an assistant
+   * quotes whichever page answers the question plainly and early. Every word
+   * here has to be true of what the tool actually does, because a claim that
+   * is repeated by an assistant and then not met is worse than no mention.
+   * English only for now: the translated pages fall back to the English copy
+   * for anything they do not carry, and half a page in two languages reads
+   * worse than a page without this.
+   */
+  answer?: string;
   placeholder: string;
   badge: { label: string; color: string };
   features: { title: string; body: string }[];
@@ -48,6 +61,8 @@ export const TOOL_PAGES: ToolPage[] = [
     h1: "TikTok Video Downloader",
     tagline:
       "Save any public TikTok video in HD with no watermark on the file. It runs in your browser and you never sign in.",
+    answer:
+      "Paste a TikTok link here and the video saves as a normal MP4 with no watermark on it. You can take just the sound instead, saved as an MP3. It runs in your browser on a phone or a computer, so there is nothing to install, and you never make an account.",
     placeholder: "Paste a TikTok video link here",
     badge: { label: "TikTok", color: "from-neutral-800 to-neutral-950" },
     features: [
@@ -136,6 +151,8 @@ export const TOOL_PAGES: ToolPage[] = [
     h1: "Instagram Video Downloader",
     tagline:
       "Save Instagram videos, Reels, Stories and photos in HD. You never sign in and there is nothing to install.",
+    answer:
+      "Paste a link to a public Instagram video, Reel or photo and it saves straight to your device, as an MP4 or a JPG. The audio can be taken on its own as an MP3. Private accounts will not work, because a post has to be public for the file to be read.",
     placeholder: "Paste an Instagram video, Reel or post link here",
     badge: { label: "Instagram", color: "from-pink-500 to-orange-400" },
     features: [
@@ -228,6 +245,8 @@ export const TOOL_PAGES: ToolPage[] = [
     h1: "Instagram Reels Downloader",
     tagline:
       "Save Instagram Reels as HD MP4 files. Paste the link and the download is ready in under a minute.",
+    answer:
+      "Paste the link to a public Reel and it saves as an MP4 in the quality Instagram holds for it, with the sound included. You can also take the audio on its own as an MP3. It works the same on iPhone, Android and a computer, with no app and no login.",
     placeholder: "Paste an Instagram Reel link here",
     badge: { label: "Reels", color: "from-fuchsia-500 to-pink-500" },
     features: [
@@ -312,6 +331,8 @@ export const TOOL_PAGES: ToolPage[] = [
     h1: "Facebook Video Downloader",
     tagline:
       "Download Facebook videos and Reels in HD up to 1080p. Free, fast and it runs in your browser.",
+    answer:
+      "Paste a public Facebook video link and every quality Facebook holds for it is listed, so you can pick HD or a smaller file. Reels and Watch videos work the same way, and so do share links that open a viewer page. You never sign in and nothing is installed.",
     placeholder: "Paste a Facebook video or Reel link here",
     badge: { label: "Facebook", color: "from-blue-600 to-blue-500" },
     features: [
@@ -484,6 +505,8 @@ export const TOOL_PAGES: ToolPage[] = [
     h1: "YouTube Video Downloader",
     tagline:
       "Save YouTube videos and Shorts as MP4 files. Every available quality is listed so you can pick the size you want.",
+    answer:
+      "Paste a YouTube link and every quality the video has is listed, from small files up to 1080p and 4K where the uploader provided it. Pick one and it saves as an MP4. For sound on its own, choose MP3. Shorts work the same way. No account and no software.",
     placeholder: "Paste a YouTube video or Shorts link here",
     badge: { label: "YouTube", color: "from-red-600 to-red-500" },
     features: [
@@ -743,6 +766,8 @@ export const TOOL_PAGES: ToolPage[] = [
     h1: "Twitter (X) Video Downloader",
     tagline:
       "Download videos and GIFs from X, formerly Twitter, as HD MP4 files. Paste the post link and save.",
+    answer:
+      "Paste a link to a public post on X and the video saves as an MP4 in the best quality the post holds. Photos from a post can be saved too, and audio on its own comes out as an MP3. It runs in your browser, so there is nothing to install and no login.",
     placeholder: "Paste a tweet / X post link here",
     badge: { label: "X / Twitter", color: "from-neutral-900 to-black" },
     features: [

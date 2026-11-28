@@ -87,6 +87,16 @@ export default function ToolLanding({ tool, locale = "en" }: { tool: ToolPage; l
           <div className="mt-8">
             <DownloaderForm placeholder={tool.placeholder} locale={locale} text={downloaderText(locale)} />
           </div>
+          {/* The plain answer to what this page is for, under the box rather
+              than above it: the tool stays the first thing a visitor meets,
+              and the answer still sits near the top of the document, which is
+              where an assistant reads. English only, because the translated
+              pages fall back to English for anything they do not carry. */}
+          {locale === "en" && tool.answer && (
+            <p className="mx-auto mt-8 max-w-2xl text-center text-neutral-600 dark:text-neutral-400">
+              {tool.answer}
+            </p>
+          )}
         </section>
 
         <AdSlot slot="toolTop" className="px-4 py-6" label={dict.ads.label} />
