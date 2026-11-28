@@ -84,11 +84,18 @@ const CHROME_STEPS = [
   "Click Load unpacked and pick the unzipped folder. The icon appears next to the address bar.",
 ];
 
+// Mozilla reviewed and published the add-on on 1 November 2026, and the copy
+// they host is the same build as the zip here, YouTube included, because
+// Mozilla's rules allow it where Chrome's do not. So Firefox users get a
+// proper one click install that survives a restart and updates itself, and
+// the sideload instructions they used to need are gone.
+export const FIREFOX_ADDON_URL =
+  "https://addons.mozilla.org/en-US/firefox/addon/pasteandsave-video-downloader/";
+
 const FIREFOX_STEPS = [
-  "Download the extension and unzip it.",
-  "Open about:debugging#/runtime/this-firefox in a new tab.",
-  "Click Load Temporary Add-on.",
-  "Pick the manifest.json file inside the unzipped folder.",
+  "Open the add-on page on Mozilla's site with the button above.",
+  "Click Add to Firefox, then Add again when Firefox asks.",
+  "The icon appears next to the address bar and stays there.",
 ];
 
 export default function ExtensionPage() {
@@ -103,6 +110,10 @@ export default function ExtensionPage() {
           applicationCategory: "BrowserApplication",
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           url: `${SITE_URL.replace(/\/$/, "")}/extension`,
+          // Mozilla's listing is the one third party page that vouches for
+          // this extension, so it is named here as well as linked below.
+          downloadUrl: FIREFOX_ADDON_URL,
+          sameAs: [FIREFOX_ADDON_URL],
         }}
       />
       <Header />
@@ -161,9 +172,10 @@ export default function ExtensionPage() {
             How to install
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-center text-sm text-neutral-600 dark:text-neutral-400">
-            The extension installs from this site rather than the web stores,
-            because store rules do not allow YouTube downloads. It takes about
-            a minute either way.
+            On Firefox it is one click from Mozilla's own add-on site. On
+            Chrome it installs from here instead, because the Chrome Web Store
+            does not accept extensions that save YouTube videos. Either way it
+            takes about a minute.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <div className="glass glass-hairline rounded-2xl p-6">
@@ -178,14 +190,22 @@ export default function ExtensionPage() {
             </div>
             <div className="glass glass-hairline rounded-2xl p-6">
               <h3 className="font-semibold dark:text-white">Firefox</h3>
-              <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-neutral-600 dark:text-neutral-400">
+              <a
+                href={FIREFOX_ADDON_URL}
+                rel="noopener"
+                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
+              >
+                Add to Firefox
+              </a>
+              <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-neutral-600 dark:text-neutral-400">
                 {FIREFOX_STEPS.map((s) => (
                   <li key={s}>{s}</li>
                 ))}
               </ol>
               <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
-                Firefox removes temporary add-ons when it closes, so you may
-                need to load it again after a restart.
+                Mozilla reviewed this build and hosts it themselves, so it
+                stays installed and updates on its own. It is the same
+                extension as the zip above, YouTube included.
               </p>
             </div>
           </div>
