@@ -36,6 +36,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       images: postImages(p).map((img) => `${base}${img.src}`),
     })),
     { path: "/extension", priority: 0.8, changeFrequency: "monthly" },
+    { path: "/supported-sites", priority: 0.8, changeFrequency: "monthly" },
     { path: "/terms", priority: 0.2, changeFrequency: "yearly" },
     { path: "/privacy", priority: 0.2, changeFrequency: "yearly" },
   ];

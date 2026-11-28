@@ -12,15 +12,15 @@ export const dict = {
   meta: {
     homeTitle: "Free Online Video Downloader - MP4 & MP3 from Any Link",
     homeDescription:
-      "Paste a link to save video or audio from TikTok, Instagram, Facebook, X and 1,200+ other sites. Free HD MP4 and MP3, no login, nothing to install.",
+      "Paste a link to save video or audio from TikTok, Instagram, Facebook, X and 1,000+ other sites. Free HD MP4 and MP3, no login, nothing to install.",
     ogTitle: "{site} - Free Online Video Downloader",
     ogDescription:
-      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites. Free, HD, no login required.",
+      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,000 other sites. Free, HD, no login required.",
     twitterDescription:
-      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites.",
+      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,000 other sites.",
     appName: "{site} Video Downloader",
     appDescription:
-      "Free online video downloader for TikTok, Instagram, Facebook, YouTube, X and more than 1,200 other sites. Download video from a link as MP4 or MP3.",
+      "Free online video downloader for TikTok, Instagram, Facebook, YouTube, X and more than 1,000 other sites. Download video from a link as MP4 or MP3.",
     ogLocale: "en_US",
   },
   nav: {
@@ -39,10 +39,10 @@ export const dict = {
   home: {
     h1Line1: "Free Online",
     h1Line2: "Video Downloader",
-    lead: "Paste a video link from TikTok, Instagram, Facebook, YouTube, X or any of 1,200+ other sites and download it as MP4 or MP3. Free, in HD, with no signup and no software to install.",
+    lead: "Paste a video link from TikTok, Instagram, Facebook, YouTube, X or any of 1,000+ other sites and download it as MP4 or MP3. Free, in HD, with no signup and no software to install.",
     aboutHeading: "Download video from a link, from any social media site",
     about1:
-      "{site} is a free online video downloader that works with more than 1,200 websites. Paste a public link from TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud or one of the smaller platforms. The site is detected for you, so there is no menu to pick from. Every available quality shows up in a list, from small SD files up to full HD and, where the source offers it, 4K. Files save as normal MP4s that play on any device, no separate MP4 downloader software needed.",
+      "{site} is a free online video downloader that works with more than 1,000 websites. Paste a public link from TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud or one of the smaller platforms. The site is detected for you, so there is no menu to pick from. Every available quality shows up in a list, from small SD files up to full HD and, where the source offers it, 4K. Files save as normal MP4s that play on any device, no separate MP4 downloader software needed.",
     about2Before:
       "If you only need the audio, each page here doubles as an MP3 downloader. One button converts the video to MP3, encoded at the best bitrate the source offers, up to 320kbps. People use this to save TikTok sounds, YouTube music, podcasts and voice clips from Reels. There is also a dedicated ",
     about2Link: "video to MP3 converter",
@@ -53,10 +53,11 @@ export const dict = {
     about3After: " explain the rules.",
   },
   platforms: {
-    heading: "Works with more than 1,200 sites",
+    heading: "Works with more than 1,000 sites",
     intro:
       "You never have to choose a platform. Paste the link, and PasteAndSave works out which site it came from and shows the quality options. These are the popular ones.",
     more: "Snapchat, Twitch, Bluesky, Tumblr, Bandcamp, Mixcloud, Rumble, Imgur, VK and Bilibili work too, along with many smaller sites.",
+    seeAll: "See the full list of supported sites",
   },
   how: {
     heading: "How it works",
@@ -88,7 +89,7 @@ export const dict = {
       },
       {
         q: "Which sites are supported?",
-        a: "More than 1,200 sites work here, including Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud and Twitch. The site is detected from the link you paste.",
+        a: "More than 1,000 sites work here, including Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud and Twitch. The site is detected from the link you paste.",
       },
       {
         q: "What am I allowed to download?",
@@ -112,7 +113,7 @@ export const dict = {
   },
   footer: {
     about:
-      "A free online video downloader that works with more than 1,200 sites. Paste a link, pick a quality and save the file.",
+      "A free online video downloader that works with more than 1,000 sites. Paste a link, pick a quality and save the file.",
     downloaders: "Downloaders",
     moreTools: "More tools",
     extension: "Browser Extension",

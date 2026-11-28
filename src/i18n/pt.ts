@@ -6,15 +6,15 @@ export const dict: Dict = {
   meta: {
     homeTitle: "Baixar vídeos grátis online: MP4 e MP3 de qualquer link",
     homeDescription:
-      "Cole um link e salve vídeo ou áudio do TikTok, Instagram, Facebook, X e mais de 1200 sites. MP4 em HD e MP3 grátis, sem cadastro e sem instalar nada.",
+      "Cole um link e salve vídeo ou áudio do TikTok, Instagram, Facebook, X e mais de 1000 sites. MP4 em HD e MP3 grátis, sem cadastro e sem instalar nada.",
     ogTitle: "{site}: baixador de vídeos grátis online",
     ogDescription:
-      "Cole um link e salve vídeo ou áudio do TikTok, Instagram, Facebook, X e mais de 1200 sites. Grátis, em HD e sem cadastro.",
+      "Cole um link e salve vídeo ou áudio do TikTok, Instagram, Facebook, X e mais de 1000 sites. Grátis, em HD e sem cadastro.",
     twitterDescription:
-      "Cole um link e salve vídeo ou áudio do TikTok, Instagram, Facebook, X e mais de 1200 sites.",
+      "Cole um link e salve vídeo ou áudio do TikTok, Instagram, Facebook, X e mais de 1000 sites.",
     appName: "{site}, baixador de vídeos",
     appDescription:
-      "Baixador de vídeos online e grátis para TikTok, Instagram, Facebook, YouTube, X e mais de 1200 sites. Baixe um vídeo pelo link em MP4 ou MP3.",
+      "Baixador de vídeos online e grátis para TikTok, Instagram, Facebook, YouTube, X e mais de 1000 sites. Baixe um vídeo pelo link em MP4 ou MP3.",
     ogLocale: "pt_BR",
   },
   nav: {
@@ -33,10 +33,10 @@ export const dict: Dict = {
   home: {
     h1Line1: "Baixador de vídeos",
     h1Line2: "grátis e online",
-    lead: "Cole o link de um vídeo do TikTok, Instagram, Facebook, YouTube, X ou de qualquer um dos mais de 1200 sites compatíveis e baixe em MP4 ou MP3. Grátis, em HD, sem cadastro e sem instalar nenhum programa.",
+    lead: "Cole o link de um vídeo do TikTok, Instagram, Facebook, YouTube, X ou de qualquer um dos mais de 1000 sites compatíveis e baixe em MP4 ou MP3. Grátis, em HD, sem cadastro e sem instalar nenhum programa.",
     aboutHeading: "Baixe vídeos a partir de um link, de qualquer rede social",
     about1:
-      "O {site} é um baixador de vídeos online e gratuito que funciona com mais de 1200 sites. Cole um link público do TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud ou de uma plataforma menor. O site é detectado sozinho, então não há menu para escolher. Todas as qualidades disponíveis aparecem em uma lista, de arquivos SD pequenos até Full HD e, quando o original oferece, 4K. Os arquivos são salvos como MP4 comuns, que tocam em qualquer aparelho, sem precisar de outro programa.",
+      "O {site} é um baixador de vídeos online e gratuito que funciona com mais de 1000 sites. Cole um link público do TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud ou de uma plataforma menor. O site é detectado sozinho, então não há menu para escolher. Todas as qualidades disponíveis aparecem em uma lista, de arquivos SD pequenos até Full HD e, quando o original oferece, 4K. Os arquivos são salvos como MP4 comuns, que tocam em qualquer aparelho, sem precisar de outro programa.",
     about2Before:
       "Se você só precisa do áudio, cada página daqui também serve para baixar MP3. Um botão converte o vídeo em MP3 com a melhor qualidade que o original oferece, até 320 kbps. As pessoas usam isso para salvar sons do TikTok, músicas do YouTube, podcasts e áudios de Reels. Também existe um ",
     about2Link: "conversor de vídeo para MP3",
@@ -47,10 +47,11 @@ export const dict: Dict = {
     about3After: " explicam as regras.",
   },
   platforms: {
-    heading: "Funciona com mais de 1200 sites",
+    heading: "Funciona com mais de 1000 sites",
     intro:
       "Você nunca precisa escolher uma plataforma. Cole o link e o PasteAndSave descobre de qual site ele veio e mostra as opções de qualidade. Estes são os mais usados.",
     more: "Snapchat, Twitch, Bluesky, Tumblr, Bandcamp, Mixcloud, Rumble, Imgur, VK e Bilibili também funcionam, junto com muitos sites menores.",
+    seeAll: "Ver a lista completa de sites compatíveis",
   },
   how: {
     heading: "Como funciona",
@@ -82,7 +83,7 @@ export const dict: Dict = {
       },
       {
         q: "Quais sites são compatíveis?",
-        a: "Mais de 1200 sites funcionam aqui, entre eles Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud e Twitch. O site é detectado pelo link que você cola.",
+        a: "Mais de 1000 sites funcionam aqui, entre eles Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud e Twitch. O site é detectado pelo link que você cola.",
       },
       {
         q: "O que eu posso baixar?",
@@ -106,7 +107,7 @@ export const dict: Dict = {
   },
   footer: {
     about:
-      "Um baixador de vídeos online e gratuito que funciona com mais de 1200 sites. Cole um link, escolha a qualidade e salve o arquivo.",
+      "Um baixador de vídeos online e gratuito que funciona com mais de 1000 sites. Cole um link, escolha a qualidade e salve o arquivo.",
     downloaders: "Baixadores",
     moreTools: "Mais ferramentas",
     extension: "Extensão para navegador",

@@ -41,6 +41,11 @@ export default async function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/supported-sites" className="hover:text-neutral-900 dark:hover:text-white">
+                  Supported sites
+                </Link>
+              </li>
+              <li>
                 <Link href="/blog" className="hover:text-neutral-900 dark:hover:text-white">
                   Blog and guides
                 </Link>

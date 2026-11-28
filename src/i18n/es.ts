@@ -5,15 +5,15 @@ export const dict: Dict = {
   meta: {
     homeTitle: "Descargador de videos gratis: MP4 y MP3 desde cualquier enlace",
     homeDescription:
-      "Pega un enlace y guarda video o audio de TikTok, Instagram, Facebook, X y más de 1200 sitios. MP4 en HD y MP3 gratis, sin registro y sin instalar nada.",
+      "Pega un enlace y guarda video o audio de TikTok, Instagram, Facebook, X y más de 1000 sitios. MP4 en HD y MP3 gratis, sin registro y sin instalar nada.",
     ogTitle: "{site}: descargador de videos gratis online",
     ogDescription:
-      "Pega un enlace y guarda video o audio de TikTok, Instagram, Facebook, X y más de 1200 sitios. Gratis, en HD y sin registro.",
+      "Pega un enlace y guarda video o audio de TikTok, Instagram, Facebook, X y más de 1000 sitios. Gratis, en HD y sin registro.",
     twitterDescription:
-      "Pega un enlace y guarda video o audio de TikTok, Instagram, Facebook, X y más de 1200 sitios.",
+      "Pega un enlace y guarda video o audio de TikTok, Instagram, Facebook, X y más de 1000 sitios.",
     appName: "{site}, descargador de videos",
     appDescription:
-      "Descargador de videos online y gratis para TikTok, Instagram, Facebook, YouTube, X y más de 1200 sitios. Descarga un video desde su enlace en MP4 o MP3.",
+      "Descargador de videos online y gratis para TikTok, Instagram, Facebook, YouTube, X y más de 1000 sitios. Descarga un video desde su enlace en MP4 o MP3.",
     ogLocale: "es_ES",
   },
   nav: {
@@ -32,10 +32,10 @@ export const dict: Dict = {
   home: {
     h1Line1: "Descargador de videos",
     h1Line2: "gratis y online",
-    lead: "Pega el enlace de un video de TikTok, Instagram, Facebook, YouTube, X o de cualquiera de los más de 1200 sitios compatibles y descárgalo en MP4 o MP3. Gratis, en HD, sin registro y sin instalar ningún programa.",
+    lead: "Pega el enlace de un video de TikTok, Instagram, Facebook, YouTube, X o de cualquiera de los más de 1000 sitios compatibles y descárgalo en MP4 o MP3. Gratis, en HD, sin registro y sin instalar ningún programa.",
     aboutHeading: "Descarga videos desde un enlace, de cualquier red social",
     about1:
-      "{site} es un descargador de videos online y gratuito que funciona con más de 1200 sitios web. Pega un enlace público de TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud o de una plataforma más pequeña. El sitio se detecta solo, así que no hay ningún menú para elegir. Todas las calidades disponibles aparecen en una lista, desde archivos SD pequeños hasta Full HD y, cuando el original lo ofrece, 4K. Los archivos se guardan como MP4 normales que se reproducen en cualquier dispositivo, sin necesidad de otro programa.",
+      "{site} es un descargador de videos online y gratuito que funciona con más de 1000 sitios web. Pega un enlace público de TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud o de una plataforma más pequeña. El sitio se detecta solo, así que no hay ningún menú para elegir. Todas las calidades disponibles aparecen en una lista, desde archivos SD pequeños hasta Full HD y, cuando el original lo ofrece, 4K. Los archivos se guardan como MP4 normales que se reproducen en cualquier dispositivo, sin necesidad de otro programa.",
     about2Before:
       "Si solo necesitas el audio, cada página de aquí también sirve para descargar MP3. Un botón convierte el video a MP3 con la mejor calidad que ofrece el original, hasta 320 kbps. La gente lo usa para guardar sonidos de TikTok, música de YouTube, podcasts y notas de voz de Reels. También hay un ",
     about2Link: "convertidor de video a MP3",
@@ -46,10 +46,11 @@ export const dict: Dict = {
     about3After: " explican las reglas.",
   },
   platforms: {
-    heading: "Funciona con más de 1200 sitios",
+    heading: "Funciona con más de 1000 sitios",
     intro:
       "Nunca tienes que elegir una plataforma. Pega el enlace y PasteAndSave detecta de qué sitio viene y te muestra las calidades disponibles. Estos son los más usados.",
     more: "Snapchat, Twitch, Bluesky, Tumblr, Bandcamp, Mixcloud, Rumble, Imgur, VK y Bilibili también funcionan, junto con muchos sitios más pequeños.",
+    seeAll: "Ver la lista completa de sitios compatibles",
   },
   how: {
     heading: "Cómo funciona",
@@ -81,7 +82,7 @@ export const dict: Dict = {
       },
       {
         q: "¿Qué sitios son compatibles?",
-        a: "Funcionan más de 1200 sitios, entre ellos Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud y Twitch. El sitio se detecta a partir del enlace que pegas.",
+        a: "Funcionan más de 1000 sitios, entre ellos Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud y Twitch. El sitio se detecta a partir del enlace que pegas.",
       },
       {
         q: "¿Qué puedo descargar?",
@@ -105,7 +106,7 @@ export const dict: Dict = {
   },
   footer: {
     about:
-      "Un descargador de videos online y gratuito que funciona con más de 1200 sitios. Pega un enlace, elige una calidad y guarda el archivo.",
+      "Un descargador de videos online y gratuito que funciona con más de 1000 sitios. Pega un enlace, elige una calidad y guarda el archivo.",
     downloaders: "Descargadores",
     moreTools: "Más herramientas",
     extension: "Extensión para el navegador",

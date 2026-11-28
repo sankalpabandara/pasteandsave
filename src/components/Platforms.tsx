@@ -57,6 +57,14 @@ export default async function Platforms() {
         })}
       </div>
       <p className="mt-6 text-center text-sm text-neutral-500 dark:text-neutral-400">{t.more}</p>
+      <p className="mt-2 text-center text-sm">
+        <Link
+          href="/supported-sites"
+          className="font-semibold text-violet-600 hover:underline dark:text-violet-400"
+        >
+          {t.seeAll}
+        </Link>
+      </p>
     </section>
   );
 }

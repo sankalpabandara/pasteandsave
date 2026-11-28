@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   title:
     "Free Online Video Downloader - MP4 & MP3 from Any Link",
   description:
-    "Paste a link to save video or audio from TikTok, Instagram, Facebook, X and 1,200+ other sites. Free HD MP4 and MP3, no login, nothing to install.",
+    "Paste a link to save video or audio from TikTok, Instagram, Facebook, X and 1,000+ other sites. Free HD MP4 and MP3, no login, nothing to install.",
   keywords: [
     "free video downloader",
     "online video downloader",
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: `${SITE_NAME} - Free Online Video Downloader`,
     description:
-      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites. Free, HD, no login required.",
+      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,000 other sites. Free, HD, no login required.",
     url: "/",
     siteName: SITE_NAME,
     type: "website",
@@ -60,7 +60,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `${SITE_NAME} - Free Online Video Downloader`,
     description:
-      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,200 other sites.",
+      "Paste a link and save video or audio from TikTok, Instagram, Facebook, X and more than 1,000 other sites.",
   },
   robots: { index: true, follow: true },
   other: {

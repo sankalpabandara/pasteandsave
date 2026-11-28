@@ -5,15 +5,15 @@ export const dict: Dict = {
   meta: {
     homeTitle: "Download Video Gratis Online: MP4 dan MP3 dari Link Apa Saja",
     homeDescription:
-      "Tempel link dan simpan video atau audio dari TikTok, Instagram, Facebook, X dan lebih dari 1200 situs. MP4 HD dan MP3 gratis, tanpa daftar dan tanpa install.",
+      "Tempel link dan simpan video atau audio dari TikTok, Instagram, Facebook, X dan lebih dari 1000 situs. MP4 HD dan MP3 gratis, tanpa daftar dan tanpa install.",
     ogTitle: "{site}: download video gratis online",
     ogDescription:
-      "Tempel link dan simpan video atau audio dari TikTok, Instagram, Facebook, X dan lebih dari 1200 situs. Gratis, HD, tanpa daftar.",
+      "Tempel link dan simpan video atau audio dari TikTok, Instagram, Facebook, X dan lebih dari 1000 situs. Gratis, HD, tanpa daftar.",
     twitterDescription:
-      "Tempel link dan simpan video atau audio dari TikTok, Instagram, Facebook, X dan lebih dari 1200 situs.",
+      "Tempel link dan simpan video atau audio dari TikTok, Instagram, Facebook, X dan lebih dari 1000 situs.",
     appName: "{site}, pengunduh video",
     appDescription:
-      "Pengunduh video online gratis untuk TikTok, Instagram, Facebook, YouTube, X dan lebih dari 1200 situs. Download video dari link sebagai MP4 atau MP3.",
+      "Pengunduh video online gratis untuk TikTok, Instagram, Facebook, YouTube, X dan lebih dari 1000 situs. Download video dari link sebagai MP4 atau MP3.",
     ogLocale: "id_ID",
   },
   nav: {
@@ -32,10 +32,10 @@ export const dict: Dict = {
   home: {
     h1Line1: "Download Video",
     h1Line2: "Gratis dan Online",
-    lead: "Tempel link video dari TikTok, Instagram, Facebook, YouTube, X atau salah satu dari lebih dari 1200 situs lain, lalu download sebagai MP4 atau MP3. Gratis, kualitas HD, tanpa daftar dan tanpa perlu install aplikasi.",
+    lead: "Tempel link video dari TikTok, Instagram, Facebook, YouTube, X atau salah satu dari lebih dari 1000 situs lain, lalu download sebagai MP4 atau MP3. Gratis, kualitas HD, tanpa daftar dan tanpa perlu install aplikasi.",
     aboutHeading: "Download video dari link, dari media sosial mana saja",
     about1:
-      "{site} adalah pengunduh video online gratis yang bisa dipakai di lebih dari 1200 situs. Tempel link publik dari TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud atau platform yang lebih kecil. Situsnya dikenali otomatis, jadi tidak ada menu yang perlu dipilih. Semua kualitas yang tersedia muncul dalam daftar, dari file SD kecil sampai Full HD dan, kalau sumbernya menyediakan, 4K. File tersimpan sebagai MP4 biasa yang bisa diputar di perangkat apa pun, tanpa perlu aplikasi lain.",
+      "{site} adalah pengunduh video online gratis yang bisa dipakai di lebih dari 1000 situs. Tempel link publik dari TikTok, Instagram, Facebook, YouTube, X, Pinterest, Reddit, LinkedIn, Threads, Vimeo, SoundCloud atau platform yang lebih kecil. Situsnya dikenali otomatis, jadi tidak ada menu yang perlu dipilih. Semua kualitas yang tersedia muncul dalam daftar, dari file SD kecil sampai Full HD dan, kalau sumbernya menyediakan, 4K. File tersimpan sebagai MP4 biasa yang bisa diputar di perangkat apa pun, tanpa perlu aplikasi lain.",
     about2Before:
       "Kalau kamu hanya butuh audionya, setiap halaman di sini juga bisa dipakai untuk download MP3. Satu tombol mengubah video menjadi MP3 dengan kualitas terbaik dari sumbernya, sampai 320 kbps. Orang memakainya untuk menyimpan sound TikTok, musik YouTube, podcast dan rekaman suara dari Reels. Ada juga ",
     about2Link: "konverter video ke MP3",
@@ -46,10 +46,11 @@ export const dict: Dict = {
     about3After: " kami menjelaskan aturannya.",
   },
   platforms: {
-    heading: "Bisa dipakai di lebih dari 1200 situs",
+    heading: "Bisa dipakai di lebih dari 1000 situs",
     intro:
       "Kamu tidak perlu memilih platform. Tempel link, lalu PasteAndSave mengenali asal situsnya dan menampilkan pilihan kualitas. Ini yang paling populer.",
     more: "Snapchat, Twitch, Bluesky, Tumblr, Bandcamp, Mixcloud, Rumble, Imgur, VK dan Bilibili juga bisa, begitu juga banyak situs kecil lainnya.",
+    seeAll: "Lihat daftar lengkap situs yang didukung",
   },
   how: {
     heading: "Cara kerjanya",
@@ -81,7 +82,7 @@ export const dict: Dict = {
       },
       {
         q: "Situs apa saja yang didukung?",
-        a: "Lebih dari 1200 situs bisa dipakai di sini, termasuk Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud dan Twitch. Situsnya dikenali dari link yang kamu tempel.",
+        a: "Lebih dari 1000 situs bisa dipakai di sini, termasuk Instagram, TikTok, Facebook, X, YouTube, Pinterest, Reddit, Vimeo, SoundCloud dan Twitch. Situsnya dikenali dari link yang kamu tempel.",
       },
       {
         q: "Apa yang boleh saya download?",
@@ -105,7 +106,7 @@ export const dict: Dict = {
   },
   footer: {
     about:
-      "Pengunduh video online gratis yang bisa dipakai di lebih dari 1200 situs. Tempel link, pilih kualitas dan simpan filenya.",
+      "Pengunduh video online gratis yang bisa dipakai di lebih dari 1000 situs. Tempel link, pilih kualitas dan simpan filenya.",
     downloaders: "Pengunduh",
     moreTools: "Alat lainnya",
     extension: "Ekstensi Browser",

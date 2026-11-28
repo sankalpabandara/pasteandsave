@@ -128,7 +128,7 @@ export default function Image() {
 
         {/* feature chips */}
         <div style={{ display: "flex", gap: 16, marginTop: 42 }}>
-          {["1,200+ sites", "HD MP4", "MP3", "No signup"].map((label) => (
+          {["1,000+ sites", "HD MP4", "MP3", "No signup"].map((label) => (
             <div
               key={label}
               style={{

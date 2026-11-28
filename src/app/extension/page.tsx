@@ -28,7 +28,7 @@ const FEATURES = [
   },
   {
     title: "YouTube, TikTok, Instagram and more",
-    body: "On any supported video page, hit the extension and it hands the link to PasteAndSave, which fetches the real file, YouTube included. One button, no copying links, works across 1,200+ sites.",
+    body: "On any supported video page, hit the extension and it hands the link to PasteAndSave, which fetches the real file, YouTube included. One button, no copying links, works across 1,000+ sites.",
   },
   {
     title: "Finds media on its own",

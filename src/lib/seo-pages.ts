@@ -690,7 +690,7 @@ export const TOOL_PAGES: ToolPage[] = [
     features: [
       {
         title: "Any supported site",
-        body: "This is not limited to one platform. Paste a link from TikTok, Instagram, Facebook, YouTube, SoundCloud or any of the 1,200+ sites this tool supports.",
+        body: "This is not limited to one platform. Paste a link from TikTok, Instagram, Facebook, YouTube, SoundCloud or any of the 1,000+ sites this tool supports.",
       },
       {
         title: "Up to 320kbps",
@@ -729,7 +729,7 @@ export const TOOL_PAGES: ToolPage[] = [
       },
       {
         q: "Which sites work with this MP3 converter?",
-        a: "Any of the 1,200+ sites this tool supports, including TikTok, Instagram, Facebook, YouTube, X and SoundCloud.",
+        a: "Any of the 1,000+ sites this tool supports, including TikTok, Instagram, Facebook, YouTube, X and SoundCloud.",
       },
       {
         q: "What is the maximum MP3 quality?",
