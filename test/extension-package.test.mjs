@@ -13,9 +13,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
+import { extensionFiles } from "../extension/zip.mjs";
 
 const root = process.cwd();
-const extDir = path.join(root, "extension");
 const zipPath = path.join(root, "public", "pasteandsave-extension.zip");
 
 // Just enough of the ZIP format to read entries back: the central directory at
@@ -43,21 +43,14 @@ function readZip(buf) {
   return entries;
 }
 
-// The same selection build-zip.mjs packages: everything except the test
-// harness and the build script itself.
-function sourceFiles(dir, prefix = "") {
-  const out = new Map();
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.isDirectory()) {
-      if (entry.name === "test") continue;
-      for (const [k, v] of sourceFiles(path.join(dir, entry.name), `${prefix}${entry.name}/`)) {
-        out.set(k, v);
-      }
-    } else if (entry.name !== "build-zip.mjs") {
-      out.set(`${prefix}${entry.name}`, fs.readFileSync(path.join(dir, entry.name)));
-    }
-  }
-  return out;
+// Taken from the builder rather than copied, because a copy drifts. This one
+// did: it was written when build-zip.mjs was the only script in the folder,
+// then zip.mjs and build-store.mjs arrived beside it, and the test went on
+// demanding both be inside the zip. It failed for weeks over a zip that was
+// correct, and what it was asking for was to ship our build tooling to every
+// person who installs the extension.
+function sourceFiles() {
+  return new Map(extensionFiles().map((f) => [f.name, f.data]));
 }
 
 // Git checks text out with CRLF on Windows and LF on the server, so line
@@ -67,10 +60,27 @@ function normalise(name, buf) {
 }
 
 const zipped = readZip(fs.readFileSync(zipPath));
-const source = sourceFiles(extDir);
+const source = sourceFiles();
 
 test("the published zip holds exactly the extension's files", () => {
   assert.deepEqual([...zipped.keys()].sort(), [...source.keys()].sort());
+});
+
+// Taking the file list from the builder means the two tests above would pass
+// just as happily if the builder started packaging the wrong things. This is
+// the part that does not depend on it: whatever ships, none of it is ours.
+test("no build script or test file is handed to the people installing it", () => {
+  for (const name of zipped.keys()) {
+    assert.ok(!name.startsWith("test/"), `${name} is our test harness, not the extension`);
+    assert.ok(
+      !/(^|\/)(zip|build-zip|build-store)\.mjs$/.test(name),
+      `${name} is our build tooling, not the extension`,
+    );
+  }
+  // And the files a browser needs are all there.
+  for (const needed of ["manifest.json", "manifest-firefox.json", "background.js", "content.js"]) {
+    assert.ok(zipped.has(needed), `the zip is missing ${needed}`);
+  }
 });
 
 test("every file in the published zip matches the source", () => {
@@ -79,6 +89,24 @@ test("every file in the published zip matches the source", () => {
     return !inZip || !normalise(name, inZip).equals(normalise(name, source.get(name)));
   });
   assert.deepEqual(stale, [], `out of date in the zip: ${stale.join(", ")}. Run node extension/build-zip.mjs`);
+});
+
+// The extension page states the version in its markup, where an assistant
+// reading the page can pick it up. A number read from a file would be safer,
+// but the standalone build does not carry extension/ with it, so the page
+// holds a literal and this keeps the literal honest.
+test("the version on the extension page is the version that ships", () => {
+  const page = fs.readFileSync(path.join(root, "src", "app", "extension", "page.tsx"), "utf8");
+  const stated = /softwareVersion:\s*"([^"]+)"/.exec(page);
+  assert.ok(stated, "the extension page no longer states a version");
+  const manifest = JSON.parse(source.get("manifest.json").toString("utf8"));
+  assert.equal(stated[1], manifest.version);
+});
+
+test("both store links on the page point at our own listings", () => {
+  const page = fs.readFileSync(path.join(root, "src", "app", "extension", "page.tsx"), "utf8");
+  assert.match(page, /chromewebstore\.google\.com\/detail\/[\w-]+\/pfagibejkjibihkkmkeabianjndeannf/);
+  assert.match(page, /addons\.mozilla\.org\/en-US\/firefox\/addon\/pasteandsave-video-downloader\//);
 });
 
 test("the Chrome and Firefox manifests carry the same version", () => {

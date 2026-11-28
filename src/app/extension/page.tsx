@@ -92,6 +92,15 @@ const CHROME_STEPS = [
 export const FIREFOX_ADDON_URL =
   "https://addons.mozilla.org/en-US/firefox/addon/pasteandsave-video-downloader/";
 
+// Google published the extension too, but the copy they host has YouTube
+// switched off for good, because the Chrome Web Store does not accept an
+// extension that saves YouTube videos (build-store.mjs is what takes it out).
+// So Chrome gets both routes and is told plainly which one does what, rather
+// than being sent to a store listing that quietly cannot do the thing most
+// people came for.
+export const CHROME_STORE_URL =
+  "https://chromewebstore.google.com/detail/pasteandsave-video-downlo/pfagibejkjibihkkmkeabianjndeannf";
+
 const FIREFOX_STEPS = [
   "Open the add-on page on Mozilla's site with the button above.",
   "Click Add to Firefox, then Add again when Firefox asks.",
@@ -110,10 +119,14 @@ export default function ExtensionPage() {
           applicationCategory: "BrowserApplication",
           offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
           url: `${SITE_URL.replace(/\/$/, "")}/extension`,
-          // Mozilla's listing is the one third party page that vouches for
-          // this extension, so it is named here as well as linked below.
-          downloadUrl: FIREFOX_ADDON_URL,
-          sameAs: [FIREFOX_ADDON_URL],
+          // The two store listings are the pages that vouch for this
+          // extension from outside, so they are named here as well as linked
+          // below: ask an assistant for a video downloader extension and the
+          // answer comes back as a list of store pages.
+          downloadUrl: CHROME_STORE_URL,
+          installUrl: CHROME_STORE_URL,
+          sameAs: [CHROME_STORE_URL, FIREFOX_ADDON_URL],
+          softwareVersion: "2.3.0",
         }}
       />
       <Header />
@@ -172,16 +185,28 @@ export default function ExtensionPage() {
             How to install
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-center text-sm text-neutral-600 dark:text-neutral-400">
-            On Firefox it is one click from Mozilla's own add-on site. On
-            Chrome it installs from here instead, because the Chrome Web Store
-            does not accept extensions that save YouTube videos. Either way it
-            takes about a minute.
+            It is on both stores, one click either way. The Chrome copy leaves
+            YouTube alone, because Google does not allow it there, so the zip
+            on this page is the one to use if YouTube is what you came for.
+            Firefox has no such rule and gets everything.
           </p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <div className="glass glass-hairline rounded-2xl p-6">
               <h3 className="font-semibold dark:text-white">
                 Chrome, Edge and Brave
               </h3>
+              <a
+                href={CHROME_STORE_URL}
+                rel="noopener"
+                className="mt-3 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700"
+              >
+                Add to Chrome
+              </a>
+              <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+                One click, and it updates on its own. The copy Google hosts
+                leaves YouTube alone, which is their rule and not ours. For
+                YouTube on Chrome, use the zip from the top of this page:
+              </p>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-neutral-600 dark:text-neutral-400">
                 {CHROME_STEPS.map((s) => (
                   <li key={s}>{s}</li>
